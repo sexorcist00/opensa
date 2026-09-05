@@ -30,6 +30,9 @@ export const LINK_NAMES = [
   'bloomhalf',
   'bloomboth',
   'bloomfull',
+  'bloomdual',
+  'bloomf16',
+  'bloomvendor',
   'night',
   'nighthalf',
   'noprobe',
@@ -139,9 +142,24 @@ export function consoleUrls(state = {}) {
     // The console's default became `bloomscale=0.5` on 2026-09-05 (the operator's night verdict), so THIS is
     // the arm that re-flies what `field` used to be. A default that moved without leaving its predecessor
     // reachable would make every row taken before it unrepeatable.
+    // THE TWO VENDOR ARMS (201/9, the Arm/Bjorge material in docs/links.md). Both are `field` plus ONE
+    // field, which is what makes them subtractable — and both are pitched at what the sweep found the frame
+    // to be, which is the post chain's per-pixel work rather than the world's per-triangle work.
+    //
+    //   bloomdual = the downsample's kernel: 13 taps -> 5 .... Bjorge, SIGGRAPH 2015; Arm's own for Mali
+    //   bloomf16  = the colour maths at half width ........... Arm prices mediump at ~2x on their ALUs
+    //   bloomvendor = both at once .......................... because neither alone can clear the floor
+    //
+    // The third one is not laziness. This device's ablation floor is 2.47 ms
+    // (docs/benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json) and neither lever is expected
+    // to be worth that alone, so the combined arm is the only one with a chance of reading above the noise.
+    // If it does not, the honest answer is that they are unmeasurable here rather than that they are zero.
+    bloomdual: `${app}?${empty}&bloomdown=dual5`,
+    bloomf16: `${app}?${empty}&postprec=f16`,
     bloomfull: `${app}?${empty}&bloomscale=1`,
     bloomhalf: `${app}?${empty}&bloomscale=0.5`,
     bloomrg11: `${app}?${empty}&bloomformat=rg11b10ufloat`,
+    bloomvendor: `${app}?${empty}&bloomdown=dual5&postprec=f16`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.

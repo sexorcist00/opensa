@@ -125,9 +125,15 @@ export async function initDevice(): Promise<EngineDevice> {
   // phone's frame is bandwidth (201/9's sweep — the bloom chain is 7.7 ms of a 23.4 ms frame, and its cheap
   // tail is free, so the cost is bytes moved by the big passes). Requesting it costs nothing where it is
   // absent; the budget reads `device.features` before it may pick the format.
+  //
+  // `shader-f16` joins them on Arm's own guidance: their ALUs run mediump at roughly twice the rate of
+  // highp, and the bloom and post chains are the fragment-heavy passes that can spend it. Same shape as the
+  // format above — a surface ASKS for half width and `resolveRenderBudget` drops it where the adapter has
+  // no such feature, so nothing here reads a vendor name to decide.
   const required: GPUFeatureName[] = (
     [
       'rg11b10ufloat-renderable',
+      'shader-f16',
       'texture-compression-astc',
       'texture-compression-bc',
       'texture-compression-etc2',

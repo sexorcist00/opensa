@@ -69,6 +69,7 @@ const CONTEXT = {
   pickingBytes: 0,
   surface: {
     ablated: 'none',
+    bloomDownsample: 'box13',
     bloomFormat: 'rgba16float',
     bloomMinLevelPx: 1,
     bloomPrefilterScale: 1,
@@ -78,6 +79,7 @@ const CONTEXT = {
     deviceWidth: 720,
     dpr: 2,
     pinned: false,
+    postPrecision: 'f32',
     probeFaces: 0,
     renderScale: 1,
     sampleCount: 4,

@@ -1055,6 +1055,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           // 9/05: the post chain's own budget, EFFECTIVE rather than asked — `rg11b10ufloat` falls back to
           // `rgba16float` on an adapter that cannot render it, and a row that did not state which one ran
           // would be a row about a frame nobody can identify.
+          bloomDownsample: engine.budget.bloomDownsample,
           bloomFormat: engine.budget.bloomFormat,
           bloomMinLevelPx: engine.budget.bloomMinLevelPx,
           bloomPrefilterScale: engine.budget.bloomPrefilterScale,
@@ -1068,6 +1069,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           // case on this console — it never sets `probeCenter`, so the pass is gated off one condition
           // earlier than the arm. A null arm is otherwise invisible: its capture is complete, consistent
           // and carries a believable number, and one was read as 1.6 ms for a day.
+          // 201/9, Arm's mediump guidance: EFFECTIVE rather than asked. A row that said `f16` on an
+          // adapter that was never granted `shader-f16` would be a row about a frame nobody can identify.
+          postPrecision: engine.budget.postPrecision,
           probeFaces: engine.stats.probeFacesRendered,
           renderScale: engine.renderScale,
           // 9/04: the attachment set this window was measured at. `workingSetBytes` is the number the arm is

@@ -33,6 +33,14 @@ export interface FakeGpu {
   readonly passes: RecordedPass[];
   /** Drop everything recorded so far — call between frames to assert one frame in isolation. */
   reset(): void;
+  /**
+   * Labels of every shader module compiled, in order.
+   *
+   * The store enumerates precision VARIANTS (`bloom` / `bloom-f16`, `post` / `post-f16`) and the label is
+   * the module name, so this is what distinguishes "the budget field was set" from "the budget field
+   * changed which WGSL the device compiled" — the difference 201/9's null arm is about.
+   */
+  readonly shaderModules: string[];
   /** `queue.writeTexture` calls, in order (085: the missing-texture repaint is asserted from here). */
   readonly textureWrites: RecordedTextureWrite[];
   /** `queue.writeBuffer` calls, in order. */
@@ -87,6 +95,7 @@ interface Recorder {
   destroyed: string[];
   draws: RecordedDraw[];
   passes: RecordedPass[];
+  shaderModules: string[];
   textures: Map<string, boolean>;
   textureWrites: RecordedTextureWrite[];
   writes: RecordedWrite[];
@@ -99,6 +108,7 @@ export function createFakeDevice(): FakeGpu {
     destroyed: [],
     draws: [],
     passes: [],
+    shaderModules: [],
     textures: new Map(),
     textureWrites: [],
     writes: [],
@@ -176,7 +186,11 @@ export function createFakeDevice(): FakeGpu {
     createRenderPipelineAsync: (descriptor: GPURenderPipelineDescriptor): Promise<unknown> =>
       Promise.resolve({ label: descriptor.label }),
     createSampler: (descriptor?: GPUSamplerDescriptor): unknown => ({ label: descriptor?.label }),
-    createShaderModule: (descriptor: GPUShaderModuleDescriptor): unknown => ({ label: descriptor.label }),
+    createShaderModule: (descriptor: GPUShaderModuleDescriptor): unknown => {
+      recorder.shaderModules.push(descriptor.label ?? 'shader');
+
+      return { label: descriptor.label };
+    },
     createTexture: texture,
     destroy: (): void => {},
     features: new Set<string>(['texture-compression-bc']),
@@ -237,6 +251,7 @@ export function createFakeDevice(): FakeGpu {
       recorder.textureWrites.length = 0;
       recorder.destroyed.length = 0;
     },
+    shaderModules: recorder.shaderModules,
     textureWrites: recorder.textureWrites,
     writes: recorder.writes,
   };

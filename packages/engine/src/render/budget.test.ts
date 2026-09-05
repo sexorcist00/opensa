@@ -13,9 +13,11 @@ import { DEFAULT_RENDER_BUDGET, resolveRenderBudget, sceneBytesPerPixel, sceneWo
 
 const ASKED: RenderBudget = {
   ...DEFAULT_RENDER_BUDGET,
+  bloomDownsample: 'dual5',
   bloomFormat: 'rg11b10ufloat',
   bloomMinLevelPx: 16,
   bloomPrefilterScale: 0.5,
+  postPrecision: 'f16',
 };
 
 describe('resolveRenderBudget', () => {
@@ -30,12 +32,21 @@ describe('resolveRenderBudget', () => {
       expect(resolveRenderBudget(asked, []).sceneFormat).toBe('rgba16float');
     });
 
-    it('never touches the look — the pyramid keeps the base and the floor it was asked for', () => {
+    it('never touches the look — the pyramid keeps the base, the floor and the KERNEL it was asked for', () => {
       const resolved = resolveRenderBudget(ASKED, []);
 
       expect(resolved.bloomPrefilterScale).toBe(0.5);
       expect(resolved.bloomMinLevelPx).toBe(16);
       expect(resolved.sampleCount).toBe(ASKED.sampleCount);
+      // The downsample kernel is a LOOK decision (five taps blur less than thirteen), so it belongs to the
+      // surface and its operator. A device may refuse a capability; it may not pick a picture.
+      expect(resolved.bloomDownsample).toBe('dual5');
+    });
+
+    it('drops half-width colour maths on an adapter that was never granted shader-f16', () => {
+      // Arm's mediump lever is a CAPABILITY, so unlike the kernel above it is the device's to refuse — and
+      // the refusal has to be visible, or a row could claim an arm the hardware never ran.
+      expect(resolveRenderBudget(ASKED, ['rg11b10ufloat-renderable']).postPrecision).toBe('f32');
     });
   });
 
@@ -46,8 +57,21 @@ describe('resolveRenderBudget', () => {
       expect(resolved.bloomFormat).toBe('rg11b10ufloat');
     });
 
+    it('grants half-width colour maths where the adapter offers shader-f16', () => {
+      const resolved = resolveRenderBudget(ASKED, ['rg11b10ufloat-renderable', 'shader-f16']);
+
+      expect(resolved.postPrecision).toBe('f16');
+    });
+
     it('leaves a budget that asks for nothing narrow exactly as it was', () => {
       expect(resolveRenderBudget(DEFAULT_RENDER_BUDGET, [])).toEqual(DEFAULT_RENDER_BUDGET);
+    });
+
+    it('ships the game on the kernel and the precision it has always run', () => {
+      // DEFAULT_RENDER_BUDGET is what apps/web reads. Neither vendor lever is a default anywhere until a
+      // verdict says so, and the f16 one cannot even be measured on the console's device.
+      expect(DEFAULT_RENDER_BUDGET.bloomDownsample).toBe('box13');
+      expect(DEFAULT_RENDER_BUDGET.postPrecision).toBe('f32');
     });
   });
 });

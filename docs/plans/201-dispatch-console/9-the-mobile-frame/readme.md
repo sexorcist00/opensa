@@ -486,9 +486,13 @@ so the arms are subtracted from the one in their own thermal window and not from
 **`bloomhalf` is the first change measured on this device to put roughly nine frames in ten on ONE display
 interval** (p90 22 ms against 36), and neither arm buys that with resolution, sampling or anti-aliasing: the
 world is still drawn at full size into a 4× MSAA `rgba16float` scene and the post pass still writes every
-pixel. **They do NOT stack**: the combined arm reads 17.38 ms against half-res alone at 17.16 — the same number.
-Once the pyramid starts at half size, what remains of the chain is small enough that halving its bytes buys
-nothing on top, so the two are ALTERNATIVES rather than a sum. And the ladder says why that is a floor rather
+pixel. ~~**They do NOT stack**: the combined arm reads 17.38 ms against half-res alone at 17.16 — the same
+number.~~ **RETRACTED 2026-09-05 by the null arm.** That sentence rested on a **0.22 ms** difference, and this
+device's ablation floor is **2.47 ms**
+([the row](../../../benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json)) — the two arms are
+indistinguishable, which is not the same claim as "they are the same number". Whether the format stacks on
+top of half-res is **unmeasured**, and on the code argument it should: `rg11b10ufloat` halves the bytes of
+every pass in the chain whatever resolution the chain starts at. And the ladder says why that is a floor rather
 than a disappointment: 90–91 % of frames already sit on ONE display interval in both, and a mean cannot go
 far under 16.7 ms while the display is what it is. **Further bloom work on this device buys nothing** — the
 next millisecond has to come from somewhere else.
@@ -517,6 +521,52 @@ nothing else** ([1/02](../1-the-map-profile/protected-list.md)).
 overturns was written for a street camera, and the GAME still reads `DEFAULT_RENDER_BUDGET` untouched. The
 previous default stays reachable as `?bloomscale=1` (panel link `bloomfull`), because a default that moved
 without leaving its predecessor re-flyable would make every earlier row unrepeatable.
+
+### 05b — The vendor levers, adapted (Arm and Bjørge)
+
+**Built 2026-09-05, both as ARMS, neither as a default.** 201/9 was argued from vendor material recorded in
+[`docs/links.md`](../../../links.md), and two of its recommendations had been read but not implemented. They
+are now in the budget, reachable from the panel, and pinned by tests that assert they reach the FRAME rather
+than merely the report — the lesson of the null arm one step above.
+
+| lever | what it is | link | what it changes |
+| --- | --- | --- | --- |
+| `bloomDownsample: 'dual5'` | the downsample half of **dual filtering** — Bjørge, *Bandwidth-Efficient Rendering* (SIGGRAPH 2015), Arm's own kernel for this Mali family, URP 17's `Dual` mode | `bloomdual` | **13 taps → 5** at every level of the chain |
+| `postPrecision: 'f16'` | Arm's `mediump` guidance — their ALUs run half width at roughly 2× | `bloomf16` | the bloom and post COLOUR maths; every coordinate stays `f32` |
+| both | — | `bloomvendor` | the only arm with a chance of clearing the floor |
+
+**The adaptation is the point, and it is where the honesty is.** Dual filtering also replaces the UPSAMPLE
+with an 8-tap kernel and drops the per-level blend — and that half does not transfer, because our chain is
+already a pyramid whose look comes from `mix(support, tent, radius)` at every level, while Bjørge's headline
+speedup is measured against a Gaussian. So the downsample kernel comes across, where the argument is
+arithmetic (**eight fewer texture fetches per pixel per level**, on a chain this chain measured as
+bandwidth), and the upsample stays ours. That caveat was already written into `links.md` when the material
+was recorded; this step is what it looks like honoured.
+
+**The f16 half is scoped by the same discipline.** Colour is half width; **every coordinate is not**, and a
+test fails if one ever becomes so: an `f16` UV resolves to ~1/2048 near 0.5 against a texel offset of 1/1440
+here, so tap positions would collapse into each other and the kernel would sample the wrong texels. The
+godray walk — twenty accumulated steps — is `f32` for the same reason. Storage is untouched (the targets are
+already 16-bit float), so an f16 accumulator rounds to what the f32 one was stored as.
+
+**Neither ships as a default, and the reason is this session's own measurement rather than caution.** The
+device's ablation floor is **2.47 ms**. `dual5`'s saving is texture fetches on a chain that, after
+`bloomhalf`, is a few milliseconds whole; `f16`'s is ALU on a pass this chain established is *bandwidth*.
+Neither is expected to clear the floor alone, which is why `bloomvendor` exists — and if the combined arm
+does not read above the noise either, **the honest conclusion is that they are unmeasurable on this device,
+not that they are zero.** `dual5` additionally owes a LOOK verdict: five taps blur less than thirteen, so
+each level's support tightens, and the standing call sends that to the operator on the device.
+
+**Owes:** the `bloomvendor` arm against a `field` baseline flown in the same thermal window, with a null-arm
+control beside it; and a look pair for `dual5` if the frame time turns out to be worth anything.
+
+**What was checked and found ALREADY DONE**, so no work was spent on it: the tiler's attachment rules, which
+are Arm's first recommendation and the cheapest to get wrong. The world pass clears rather than loads
+(`loadOp: 'clear'` on every attachment in the engine), its 4× MSAA colour resolves and **discards** the
+samples, and `depth32float` is `depthStoreOp: 'discard'` — so nothing writes a multisample attachment back
+to memory. A compute-shader bloom was ruled out before it was written, and stays ruled out: AFBC cannot
+compress storage images, so a compute chain surrenders framebuffer compression exactly where a tiler is
+bandwidth-bound.
 
 ### 06 — The per-frame bakes that are already cached one line above
 

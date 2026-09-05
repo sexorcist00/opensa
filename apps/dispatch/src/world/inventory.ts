@@ -211,6 +211,9 @@ export interface InventoryReport {
      *  is the line that stops a row claiming an arm it did not take, exactly as `pinned` does for the
      *  buffer. Read it before believing any number in the file. */
     readonly ablated: string;
+    /** `?bloomdown=` — which kernel the chain's downsample ran: `box13` (Jimenez, thirteen taps) or `dual5`
+     *  (Bjorge/Arm, five). A vendor lever, and a LOOK change, so a row states which one it was taken at. */
+    readonly bloomDownsample: string;
     /** `?bloomformat=` — the format the BLOOM chain's own targets carry, EFFECTIVE rather than asked: a
      *  device that cannot render `rg11b10ufloat` falls back and this says which one actually ran (201/9-05). */
     readonly bloomFormat: string;
@@ -232,6 +235,9 @@ export interface InventoryReport {
      *  and returns mid-flight and the buffer moves with it — 1.9x of pixels inside one session on
      *  2026-08-31, which is what cost 201/9-01 its circuit. */
     readonly pinned: boolean;
+    /** `?postprec=` — the precision the bloom and post COLOUR maths ran at, EFFECTIVE rather than asked: an
+     *  adapter without `shader-f16` falls back to `f32` and this says which one the device actually gave. */
+    readonly postPrecision: string;
     /**
      * Env-probe FACES rendered over the window — the line that says whether `ablated: 'probe'` removed
      * anything at all.

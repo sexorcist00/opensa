@@ -74,5 +74,30 @@ has to beat that measurement first.
 
 **Caught:** n/a — a design decision, recorded so it is not re-proposed.
 
+## A half-precision variant may lower COLOUR and never a COORDINATE
+
+`enable f16` is Arm's own guidance for a fragment-heavy chain — their ALUs run half width at roughly twice
+the rate — and 201/9-05b takes it in the bloom and post shaders (`?postprec=f16`, `postPrecision` in the
+render budget). **What it may reach is the sampled colour, the weights and the accumulators. What it may
+never reach is a UV, a texel offset, or anything a loop accumulates a position into.**
+
+The arithmetic, on the surface the console actually measures at: an `f16` near 0.5 resolves to about
+**1/2048**, while one texel of a 720-wide target is **1/1440**. A tap offset is therefore SMALLER than the
+representable step around the coordinate it is added to, so neighbouring taps quantize onto the same texel
+and the kernel silently samples a different footprint than the one it was written as. The post pass's godray
+walk is the worse case of the same thing: twenty accumulated steps compound the error into visible banding
+along the rays.
+
+**SILENT, and in the most expensive shape.** It compiles, it validates, every test that asserts behaviour
+passes, and the frame is fractionally CHEAPER — so it presents as the optimisation working. The only symptom
+is that a blur is subtly the wrong blur, which is invisible without the A/B nobody thinks to shoot when the
+change was supposed to be a no-op.
+
+**Caught since 2026-09-05, at the one seam that has variants** (`shaders.test.ts`): the resolved f16 sources
+are asserted to keep `uv: vec2f`, `insideFrame(uv: vec2f) -> f32` and the godray walk's `f32` delta, and the
+two variants of each module are asserted to be byte-identical apart from their alias preamble — so a variant
+cannot drift from the source it wraps. **SILENT anywhere a new half-precision shader is written without
+those assertions.**
+
 Detail for all of the above: [`edge-cases/engine-rendering.md`](../edge-cases/engine-rendering.md),
 [`architecture/`](../architecture/).

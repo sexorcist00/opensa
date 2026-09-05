@@ -25,6 +25,7 @@ import { GpuTimers } from './debug/gpu-timers';
 import { RigidEntity, type RigidPartInit } from './entities/rigid';
 import { type FrameAblation, NOTHING_ABLATED } from './render/ablation';
 import {
+  type BloomDownsample,
   DEFAULT_RENDER_BUDGET,
   type RenderBudget,
   resolveRenderBudget,
@@ -613,6 +614,18 @@ const DEGENERATE_CLUTTER_MATRIX = new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0
  *  ~0.5 ms amortised (the plan gate); a full cube refresh is 12 frames = 100 ms at 120 Hz — invisible on
  *  blurred paint. 1 = every frame if the budget ever allows. */
 const PROBE_FRAME_INTERVAL = 2;
+
+/**
+ * Which downsample pipeline the bloom chain runs, from the budget's kernel (201/9).
+ *
+ * `dual5` is the downsample half of Bjørge's dual filtering (SIGGRAPH 2015) — Arm's own kernel for the Mali
+ * family this console's phone runs, five taps against Jimenez's thirteen. It is the half of the technique
+ * that transfers to a chain already shaped as a pyramid; the upsample blend stays ours
+ * ([the budget](./render/budget.ts)).
+ */
+function bloomDownsampleId(kernel: BloomDownsample): PipelineId {
+  return kernel === 'dual5' ? 'bloom-down-dual' : 'bloom-down';
+}
 
 /** Light-pool capacity (074/06 row 7) — mirrored by the WGSL loop bound. Holds HOST DYNAMICS only since
  *  2026-07-17 (static 2dfx lamps removed — their binary pool admission read as "lamps igniting ahead of
@@ -1545,8 +1558,9 @@ export class Engine {
         bloomChain.prefilterView,
         this.timers.postBeginTimestampWrites(),
       );
+      const downId = bloomDownsampleId(this.budget.bloomDownsample);
       for (let i = 0; i < bloomChain.downViews.length; i += 1) {
-        this.runFullscreenPass(encoder, 'bloom-down', bloomChain.downBindGroups[i], bloomChain.downViews[i], {});
+        this.runFullscreenPass(encoder, downId, bloomChain.downBindGroups[i], bloomChain.downViews[i], {});
       }
       for (let i = bloomChain.upViews.length - 1; i >= 0; i -= 1) {
         this.runFullscreenPass(encoder, 'bloom-up', bloomChain.upBindGroups[i], bloomChain.upViews[i], {});
@@ -1625,6 +1639,7 @@ export class Engine {
       this.engineDevice.colorFormat,
       this.budget.sampleCount,
       this.budget.bloomFormat,
+      this.budget.postPrecision,
     );
     at = bootPhase('init:pipelines', at);
     // Scene env probe (074/16 step 2) — fixed-size, allocated once, BEFORE any vehicle model binds its cube.

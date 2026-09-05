@@ -32,12 +32,21 @@
  * worth building). Every one of them is still a knob a capture records — what a SURFACE gets by default is
  * `deviceBudget`'s business, and that function derives it from the device rather than from a name.
  *
+ * **AND TWO VENDOR ARMS AFTER IT** (201/9, the Arm/Bjorge material in [links](../../../../docs/links.md)):
+ * `?bloomdown=dual5` swaps the downsample's thirteen taps for dual filtering's five — Arm's own kernel for
+ * this GPU family — and `?postprec=f16` runs the bloom and post COLOUR maths at half width, which Arm prices
+ * at roughly 2x on their ALUs. Both are arms rather than defaults: the first is a look change owed a verdict,
+ * and neither can be resolved by the mean on this device, whose ablation floor is
+ * [2.47 ms](../../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-ablation-null-arm.json).
+ *
  * The `base` argument is how the two meet: the derived budget goes in, the query overrides what it names,
  * and a run that pins one field keeps the device's answer for the rest.
  */
 import {
+  type BloomDownsample,
   type BloomPrefilterScale,
   DEFAULT_RENDER_BUDGET,
+  type PostPrecision,
   type RenderBudget,
   type SampleCount,
   type SceneFormat,
@@ -46,6 +55,8 @@ import {
 const SAMPLE_COUNTS: readonly SampleCount[] = [1, 4];
 const SCENE_FORMATS: readonly SceneFormat[] = ['rg11b10ufloat', 'rgb10a2unorm', 'rgba16float'];
 const BLOOM_SCALES: readonly BloomPrefilterScale[] = [0.5, 1];
+const BLOOM_DOWNSAMPLES: readonly BloomDownsample[] = ['box13', 'dual5'];
+const POST_PRECISIONS: readonly PostPrecision[] = ['f16', 'f32'];
 
 /**
  * Read `?msaa=` and `?scene=`.
@@ -56,9 +67,11 @@ const BLOOM_SCALES: readonly BloomPrefilterScale[] = [0.5, 1];
  */
 export function captureBudget(params: URLSearchParams, base: RenderBudget = DEFAULT_RENDER_BUDGET): RenderBudget {
   return {
+    bloomDownsample: parse(params.get('bloomdown'), BLOOM_DOWNSAMPLES, base.bloomDownsample, (raw) => raw),
     bloomFormat: parse(params.get('bloomformat'), SCENE_FORMATS, base.bloomFormat, (raw) => raw),
     bloomMinLevelPx: minLevel(params.get('bloomminpx'), base.bloomMinLevelPx),
     bloomPrefilterScale: parse(params.get('bloomscale'), BLOOM_SCALES, base.bloomPrefilterScale, Number),
+    postPrecision: parse(params.get('postprec'), POST_PRECISIONS, base.postPrecision, (raw) => raw),
     sampleCount: parse(params.get('msaa'), SAMPLE_COUNTS, base.sampleCount, Number),
     sceneFormat: parse(params.get('scene'), SCENE_FORMATS, base.sceneFormat, (raw) => raw),
   };
