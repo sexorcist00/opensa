@@ -945,3 +945,37 @@ into a message naming the failure (`apps/cutscene-converter/src/renderer/error-b
 `scripts/debug/cutscene-converter-drive.ts` reproduces the class in seconds by driving the built app. Read
 an effect's body before you shorten it.
 
+
+## A POSE that crosses a tool boundary is COMPLETED against the one the map holds, never cast
+
+**The rule.** A camera pose arriving as JSON — from the phone panel's `map_goto`, from a shared link, from
+anything outside this bundle — is read field by field and completed against the pose the camera is already
+holding. `args as MapPose` is the defect: an omitted field arrives as `undefined` inside a type whose every
+field is a required number, and TypeScript has already been told it cannot happen.
+
+**What each missing field does, and neither is a degraded picture — both are a wrong one:**
+
+- **`yaw: undefined`** → `forwardFrom(undefined, pitch)` is `[NaN, NaN, NaN]` → the eye is NaN → the view
+  matrix is NaN and **the map draws BLACK**, while the readout says `NaN, NaN` and the streamer keeps
+  working (it follows the FOCUS, which is still finite). So `cellsVisible`, `draws`, `triangles`, resident MB
+  and every millisecond in the report go on describing an ordinary frame — of nothing.
+- **`projection: undefined`** → `state()` tests `projection === 'perspective'`, reads false, and composes
+  the frame **orthographically** with `near = 2·distance − far`. A lens the operator never chose, reported
+  by nothing.
+
+**What it cost** (2026-09-05): two flights into [201/9](../plans/201-dispatch-console/9-the-mobile-frame/readme.md)'s
+ablation sweep. The tool's own schema is right to make `yaw`, `pitch`, `height` and `projection` optional —
+"fly to [1500, −1500] at 200 m" is a complete instruction from something that is not holding the camera — so
+the completion is the CONSOLE's job and it was not being done.
+
+**SILENT, and worse than silent for a measurement.** It typechecks (the cast is the bug), it lints, no test
+sees it (every caller inside this repo has a complete `MapPose`, which is what the camera's own tests pass),
+nothing is logged, and `map_snapshot` answers with a full, plausible report. A black frame is also a CHEAP
+frame — the geometry clips away — so a window flown through one does not look broken, it looks fast. It was
+found by the operator saying *"you moved the camera to a black screen"*.
+
+**Caught since 2026-09-05** at the one seam where untrusted JSON becomes a pose:
+`apps/dispatch/src/world/agent-pose.ts` and its tests — `at` must be two finite numbers or the command is
+refused by name, every other field falls back to the pose the map holds, and the answer states the pose that
+was FLOWN rather than the one that was asked for. Anywhere else a `MapPose` is cast rather than parsed, this
+is still silent.

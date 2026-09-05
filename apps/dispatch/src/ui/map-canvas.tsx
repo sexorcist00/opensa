@@ -167,6 +167,7 @@ export function MapCanvas({
             // of five would otherwise leave five entries for their Back button to walk out through.
             navigate: (url) => window.location.replace(url),
             ops: () => liveRef.current.read.ops(),
+            pose: () => handleRef.current?.pose() ?? null,
             readout: () => lastReadout.current,
             setMode: (wanted) => void switcher?.to(wanted),
           },

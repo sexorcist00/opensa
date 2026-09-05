@@ -28,6 +28,8 @@
 import type { MapPose } from '../map/map-camera';
 import type { MapMode } from './mode-switch';
 
+import { agentPose } from './agent-pose';
+
 /**
  * What the link is doing to this page, for the operator holding it.
  *
@@ -89,6 +91,11 @@ export interface AgentSurface {
   navigate: (url: string) => void;
   /** The board as the operator has it: units, calls, the selection. */
   ops: () => unknown;
+  /**
+   * The pose the map is holding, or null before a surface exists — what a partial `pose` command completes
+   * against ({@link agentPose}). A tool that omits the heading means "keep mine", never "yaw: undefined".
+   */
+  pose: () => MapPose | null;
   /** The per-frame readout the chrome shows — fps, draws, resident MB, the pose. */
   readout: () => unknown;
   setMode: (mode: MapMode) => void;
@@ -337,12 +344,17 @@ async function run(command: AgentCommand, surface: AgentSurface): Promise<unknow
     case 'ops':
       return surface.ops();
     case 'pose': {
-      const pose = command.args.pose as MapPose | undefined;
-      if (!pose) {
-        throw new Error('pose: no pose given');
+      const current = surface.pose();
+      if (current === null) {
+        throw new Error('pose: no map is drawing yet — there is no pose to fly from');
       }
+      // Completed against what the map is holding rather than cast into a MapPose: an omitted field used to
+      // arrive as `undefined` and paint the frame black. See `agent-pose.ts`.
+      const pose = agentPose(command.args.pose, current);
       surface.moveTo(pose);
 
+      // The pose that was FLOWN, not the one that was asked for, so an answer cannot claim a heading nobody
+      // sent — the same rule the capture parsers follow for a refused parameter.
       return { flyingTo: pose };
     }
     // The agent letting go. It answers with what the page will now be showing, so a tool that says "you can

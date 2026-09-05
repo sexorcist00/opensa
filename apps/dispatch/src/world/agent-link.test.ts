@@ -8,9 +8,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { MapPose } from '../map/map-camera';
 import type { AgentCommandReport, AgentStatus, AgentSurface } from './agent-link';
 
+import { MAP_YAW } from '../map/map-camera';
 import { describeCommand, startAgentLink } from './agent-link';
+
+/** The pose the stub console is holding — a partial `pose` command is completed against it. */
+const HELD: MapPose = { at: [1700, -1500], height: 900, pitch: -1.15, projection: 'perspective', yaw: MAP_YAW };
 
 /** A surface that answers everything with nothing: this suite is about the link, not the console. */
 const SURFACE: AgentSurface = {
@@ -21,6 +26,7 @@ const SURFACE: AgentSurface = {
   moveTo: (): void => undefined,
   navigate: (): void => undefined,
   ops: (): unknown => null,
+  pose: (): MapPose => HELD,
   readout: (): unknown => null,
   setMode: (): void => undefined,
 };
@@ -153,9 +159,9 @@ describe('startAgentLink', () => {
       await settle();
       link.stop();
 
-      // `pose` with no pose throws inside the page. The agent is handed the reason; so is the screen.
+      // `pose` with no ground point throws inside the page. The agent is handed the reason; so is the screen.
       expect(reports.map((report) => report.state)).toEqual(['running', 'failed']);
-      expect(last(reports)?.detail).toBe('pose: no pose given');
+      expect(last(reports)?.detail).toBe('pose: `at` must be two finite numbers — [x, y] in GTA coords');
     });
   });
 
