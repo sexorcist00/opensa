@@ -1,0 +1,21 @@
+{
+  "note": "THE DESK-SIDE CONTROL for 201/9-01's sprite change, and NOT a device row. The phone has no `timestamp-query`, so on the device a blit is priced by flying `nosprites` against `board` — which needs a settled window and a thermal bracket. This answers the narrower question at a desk: is a blit cheaper than rebuilding the path at all, and by how much. Its second reading is the one that mattered: it puts a SCALE under the device's number.",
+  "how": "scripts/debug/canvas-symbol-arms.mjs — headless Chromium, a real Canvas2D at 720x640, 150 marks a frame drawn both ways. Arms interleaved (path, blit, path, blit) and run twice per invocation; the whole thing run three times.",
+  "why": "apps/dispatch/src/map/symbol-sprites.ts bakes each mark once and blits it per instance instead of tessellating and filling its path every frame — MapLibre's icon atlas and deck.gl's IconLayer, taken for their reason rather than by analogy.",
+  "instrument": {
+    "clamp": "`performance.now()` is clamped to ~100 us in a browser, and one frame of 150 marks is 0.3 ms — three ticks. The FIRST version of this measurement timed single frames, and every sample quantized onto 0.3 / 0.4 / 0.5 so the arms overlapped on the mean while the p50 stayed one tick apart. Not a measurement.",
+    "fix": "a sample is a BLOCK of 40 frames, divided back down — two orders above the clamp.",
+    "reading": "the block form is what the numbers below come from; the single-frame form is recorded here because it looked like a clean 15 % result and was not."
+  },
+  "device": "desk container, headless Chromium /opt/pw-browsers/chromium — NOT the 2/03 phone",
+  "perFrameMs150Marks": {
+    "blit": { "p50": [0.275, 0.2725, 0.275, 0.275, 0.2825, 0.315] },
+    "path": { "p50": [0.3425, 0.3, 0.35, 0.305, 0.3425, 0.305] }
+  },
+  "reading": {
+    "verdict": "the blit arm is the cheaper of the two in every one of the three paired invocations, ~0.275 ms against ~0.32 ms for 150 marks — roughly 10-20 %, or 0.03-0.06 ms a frame at this count.",
+    "smallPrint": "the path arm's SECOND sample is consistently below its first (0.3425 -> 0.300, 0.35 -> 0.305, 0.3425 -> 0.305) while the blit arm does not move, so the honest comparison is against path's warmed sample and the win is at the low end of that range.",
+    "theOtherFinding": "150 marks cost ~0.3 ms HERE while the phone reports `overlay:symbols` at 7.37 ms at 192 symbols. Even at a 10x device penalty that leaves most of the span unexplained, so on the phone the DRAWING is a minority of that line and the next place to look is everything else the layer does per unit — two projections, a colour string, a cache key, a hit-area object and a rank object, 150 times a frame."
+  },
+  "owed": "the device arm. `?sprites=0` and the panel's `nosprites` link exist for it; the panel process has to be restarted before it serves the new link table."
+}
