@@ -522,6 +522,33 @@ overturns was written for a street camera, and the GAME still reads `DEFAULT_REN
 previous default stays reachable as `?bloomscale=1` (panel link `bloomfull`), because a default that moved
 without leaving its predecessor re-flyable would make every earlier row unrepeatable.
 
+**AND THE STEP'S OWN TARGET IS GONE, 2026-09-05 (late).** The sweep's **7.7 ms** — the number that made
+the post chain the frame's largest item and the thing every later step here was aimed at — was re-flown on
+the current app, against a baseline taken twice in the same session
+([the row](../../../benchmarks/opensa-engine/2026-09-05-mobile-nobloom-refly.json)):
+
+| arm | mean | p50 | p95 | rung 1 | moving frames |
+| --- | --- | --- | --- | --- | --- |
+| `field` #1 | 19.57 ms | 16 | 36 | 78 % | 3 854 |
+| `nobloom` | **16.80 ms** | 16 | **26** | **95 %** | 3 561 |
+| `field` #2 | 18.88 ms | 16 | 34 | 81 % | 3 077 |
+
+**The whole chain is 2.43 ms of 19.23.** The 7.7 was true of the app it was flown on — the half-resolution
+prefilter shipped that evening and took most of it, which `bloomhalf`'s separate −4.4 ms had implied without
+either number ever sitting on one baseline. **This is what the chain's own rule against subtracting across
+sessions is for**, and it is the second time in three days that following it changed an answer rather than
+merely confirming one.
+
+**2.43 is under the instrument's ~2.5 ms floor, so the row does not claim the mean** — it claims the ladder
+and the tail, which move together and by whole rungs, and the fact that the arm is BRACKETED rather than
+trailing (19.57 → 16.80 → 18.88 is not monotonic, which is exactly what the warm-up failures in this chain
+were). **The consequence for the plan is larger than the number**: removing the post chain entirely buys
+2.4 ms, so it is not where the frame is, every lever inside it is smaller than that, and 05b already showed
+two of those are unmeasurable on this device. What is left of the 19.2 ms is unattributed — the streamed
+world was 3.8, the CPU body is 3.1–3.5 — and with ~80 % of frames already on one display interval the next
+question is whether the device is presenting rather than computing, which is an INSTRUMENT question before
+it is an optimisation one.
+
 **AN EARLIER BUILD OF THIS STEP EXISTS AND IS SUPERSEDED — do not resurrect it (recorded 2026-09-05).**
 A branch (`claude/chain9-desk-work`, built 2026-09-02) carried a `bloomLevelsFor` that halved until the
 shorter edge fell under 16 px and made that the DEFAULT, plus a `?bloom=8` arm to put the constant back. It

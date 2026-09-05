@@ -1,7 +1,9 @@
 # 201 — the handoff spec
 
-**Rewritten 2026-09-05 (evening) for the agent taking the POST CHAIN.** The `## Status` table in
-[readme.md](readme.md) is the chain's state of record; this is the working spec it points at.
+**Rewritten 2026-09-05 (evening) for the agent taking the POST CHAIN; §3.1 was flown later the same day
+and CLOSED that direction** — read it before anything else here, because the rest of §3 was written on a
+premise it removes. The `## Status` table in [readme.md](readme.md) is the chain's state of record; this is
+the working spec it points at.
 
 Read [`CLAUDE.md`](../../../CLAUDE.md)'s chain first, then this.
 
@@ -27,8 +29,9 @@ is now **+3.6 ms over the empty map**, and it took three changes today to get th
 | `sym:units` ([per-unit allocation](../../benchmarks/opensa-engine/2026-09-05-mobile-per-unit-allocation.json)) | 4.04 ms | **1.62** |
 | board over empty | +6.1 ms | **+3.6** |
 
-**So the 20.2 ms empty map is the whole remaining budget, and the post chain is the biggest thing in it.**
-That is your work.
+**So the 20.2 ms empty map is the whole remaining budget** — and the post chain, which this spec first
+named as the biggest thing in it, **is not**: §3.1 has been flown since and the whole bloom chain is 2.4 ms.
+The budget is still the map's; what is in it is an open question again.
 
 ---
 
@@ -63,23 +66,39 @@ probe fetches now (throttled 60 s, bounded 8 s) and an unreachable origin shows 
 
 ---
 
-## 3. The work: the post chain
+## 3. The work: NOT the post chain — §3.1 was flown and closed it
 
-### 3.1 — The first thing to do is re-fly `nobloom`, because 7.7 ms is stale
+### 3.1 — ANSWERED, 2026-09-05 (late): the bloom chain is 2.4 ms, and the post chain is NOT where the frame is
 
-[201/9's sweep](../../benchmarks/opensa-engine/2026-09-05-mobile-map-ablation-sweep.json) priced the bloom
-chain at **7.7 ms of a 23.4 ms frame** — the largest single item in it, and more than the entire streamed
-city at 3.8. That is the number this step is aimed at, **and it prices a chain the console no longer runs.**
+The previous spec opened here with *"re-fly `nobloom` before designing anything, because 7.7 ms is stale"*.
+It was flown. [The row](../../benchmarks/opensa-engine/2026-09-05-mobile-nobloom-refly.json), against a
+baseline taken twice in the same session:
 
-The sweep was flown on app `5937214+`. The console's bloom default moved to a **half-resolution prefilter**
-later the same day (`7ffd681`, the operator's night verdict), and `git merge-base` confirms the sweep's app
-is an ancestor of that change. `bloomhalf` was separately measured at **−4.4 ms** off a 21.52 baseline. So
-the chain that costs 7.7 ms has not existed since; subtracting one from the other across two sessions and
-two baselines is arithmetic, not a measurement.
+| arm | mean | p50 | p95 | rung 1 | moving frames |
+| --- | --- | --- | --- | --- | --- |
+| `field` #1 | 19.57 ms | 16 | 36 | 78 % | 3 854 |
+| `nobloom` | **16.80 ms** | 16 | **26** | **95 %** | 3 561 |
+| `field` #2 | 18.88 ms | 16 | 34 | 81 % | 3 077 |
 
-**So: fly `nobloom` against `field` in one session before designing anything.** Both links exist. Until that
-number is on the table, the size of the prize is unknown — it could be ~3 ms, which is still the largest
-board-side term, or it could be less than the floor.
+**The whole bloom chain is 2.43 ms of a 19.23 ms frame** — against the 7.7 the sweep filed. The sweep was
+right about the app it was flown on; the half-resolution prefilter that shipped that evening took most of it,
+which `bloomhalf`'s separate −4.4 ms already implied. This is the first time the two have been on one
+baseline, and it is why the spec insisted the subtraction be re-taken rather than computed.
+
+**2.43 is UNDER the instrument's own ~2.5 ms floor, so this row does not claim the mean.** What it claims is
+the ladder and the tail, which move together and by whole rungs — rung-1 occupancy +14 points, p95 down 8–10
+ms — and the fact that the arm is **bracketed rather than trailing**: 19.57 → 16.80 → 18.88 is not monotonic,
+so the warm-up story that has produced three false results in this chain does not fit it.
+
+**So the premise this spec was written on is gone, and you should not spend a session on the post chain.**
+Removing it ENTIRELY buys 2.4 ms of a 19.2 ms frame, at the floor, on a device where ~80 % of frames already
+sit on one display interval. Every lever INSIDE the chain is necessarily smaller than that, and §3.2 already
+shows two of them are unmeasurable here. **What is left of the 19.2 ms is not attributed to anything** —
+the streamed world was 3.8 ms of a 23.4 ms frame in the sweep, the CPU body is 3.1–3.5, and the rest has no
+span in this repo naming it. That, not the post chain, is the next question: **find where the remaining
+~13 ms goes before optimising anything**, and note that a frame sitting on the vsync floor 80 % of the time
+may mean the honest answer is that the device is presenting, not computing — in which case the chain's
+instrument cannot see the work at all and the next step is a different instrument, not a different pass.
 
 ### 3.2 — What has already been tried, so you do not pay for it twice
 

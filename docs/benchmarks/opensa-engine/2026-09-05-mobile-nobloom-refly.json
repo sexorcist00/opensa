@@ -1,0 +1,78 @@
+{
+  "note": "201/9's POST CHAIN, THE RE-FLIGHT THE HANDOFF ASKED FOR FIRST — and it kills the number the chain was aimed at. The 2026-09-05 ablation sweep priced the bloom chain at 7.7 ms of a 23.4 ms frame, the largest single item in it. That sweep was flown on app `5937214+`, and the console's bloom default moved to a HALF-RESOLUTION PREFILTER later the same day, so the 7.7 ms priced a chain the console has not run since. Re-flown here on the current app against a baseline taken twice in the same session: THE WHOLE BLOOM CHAIN IS 2.43 ms of a 19.23 ms frame. Not the largest item in the frame; roughly a third of what the chain was planned around, and BELOW the instrument's own ~2.5 ms floor on the mean alone. What carries the finding instead is the vsync ladder and the tail, which move together and by whole rungs: rung-1 occupancy 78 % and 81 % on the two baselines against 95 % with the chain gone, and p95 36/34 against 26. Read those columns, not the mean.",
+  "app": "aa3d8ba+",
+  "appNote": "the archive is stamped one commit behind its tree, as always. `aa3d8ba+` is the tree at `57f27e4`; the checkout was at `c09255f`, which is docs-only on top of it, so the app carries the current code.",
+  "build": "07:40 05-09-2026",
+  "pak": {
+    "out": "./build/phone-cars",
+    "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre",
+    "reused": "the phone job matched the recipe and did not convert"
+  },
+  "device": "MGA-LX3 / ARM Bifrost @ DPR 2, ?surface=720x640 pinned on every arm",
+  "pose": "[1500,-1500] h900 pitch -1.15 yaw pi perspective",
+  "board": "EMPTY (units=0&calls=0) — this prices the map, not the shift",
+  "route": {
+    "warmup": "the rect's four corners, then the settle pose, before the first reading",
+    "legs": [[1380,-1620],[1620,-1380],[1380,-1380],[1620,-1620],[1380,-1500],[1620,-1500],[1500,-1620],[1500,-1380],[1380,-1620],[1620,-1380]],
+    "settle": [1500,-1500],
+    "rect": "x 1250..1750, y -1750..-1250 (cells 5,-7..6,-6 at CELL_SIZE 250)"
+  },
+  "howDerived": "per arm: delta of frame.dtHistogramMs between a post-warmup reading and a post-route reading, so no boot frame is in any window; moving = every bin below 100 ms (the render gate's idle wake) and no window here had any; vsyncLadder = each moving bin rounded to the nearest 1/60 s interval",
+  "arms": [
+    {
+      "arm": "field #1",
+      "url": "?units=0&calls=0&inventory=1&surface=720x640",
+      "ablated": "none",
+      "movingFrames": 3854,
+      "meanMs": 19.57,
+      "p50Ms": 16,
+      "p95Ms": 36,
+      "vsyncLadderPct": { "1": 78.0, "2": 21.7, "3": 0.2, "4": 0.1 },
+      "draws": 112,
+      "triangles": 277970,
+      "cssBox": "360x491 -> 360x609"
+    },
+    {
+      "arm": "nobloom",
+      "url": "field + &ablate=bloom",
+      "ablated": "bloom",
+      "movingFrames": 3561,
+      "meanMs": 16.80,
+      "p50Ms": 16,
+      "p95Ms": 26,
+      "vsyncLadderPct": { "1": 95.0, "2": 3.6, "3": 0.7, "4": 0.5, "5": 0.2 },
+      "draws": 112,
+      "triangles": 277970,
+      "cssBox": "360x550 -> 360x609"
+    },
+    {
+      "arm": "field #2",
+      "url": "same as field #1, fresh page",
+      "ablated": "none",
+      "movingFrames": 3077,
+      "meanMs": 18.88,
+      "p50Ms": 16,
+      "p95Ms": 34,
+      "vsyncLadderPct": { "1": 81.0, "2": 18.8, "3": 0.2 },
+      "draws": 112,
+      "triangles": 277970,
+      "cssBox": "360x491 -> 360x373"
+    }
+  ],
+  "reading": {
+    "baseline": "19.57 and 18.88 — a 0.69 ms spread across the session, wider than the evening series' 0.4 but well inside the floor. Mean baseline 19.23.",
+    "bloomChain": "19.23 - 16.80 = 2.43 ms. The sweep filed 7.7 ms for the same arm on the pre-half-res default. The half-resolution prefilter that shipped on 2026-09-05 evidently took most of it, which is what `bloomhalf`'s separately measured -4.4 ms already implied; this is the first time the two have been on one baseline.",
+    "whyItIsNotJustNoise": "the arm is BRACKETED rather than trailing: 19.57 -> 16.80 -> 18.88 is not monotonic, so the warm-up story that has produced three false results in this chain does not fit it. And the ladder and the tail move together and by whole rungs — rung-1 occupancy +14 points, p95 down 8-10 ms — which is the column this chain's own rule says to read when the mean sits inside the band.",
+    "whatItMeansForThePlan": "THE POST CHAIN IS NOT WHERE THE FRAME IS. The handoff opened with '20.2 ms empty map is the whole remaining budget, and the post chain is the biggest thing in it'. Removing the post chain ENTIRELY buys 2.4 ms of it, at the instrument's floor, on a device where ~80 % of frames already sit on one display interval. Every lever INSIDE the chain is necessarily smaller than that, and 9-05b already showed two of them are unmeasurable here."
+  },
+  "control": {
+    "ablatedReadBack": "every arm's surface.ablated was read out of the report before its numbers were kept — none / bloom / none",
+    "unchanged": "draws 112 and triangles 277 970 in all three windows; residency 66.6 MB; bloomPrefilterScale 0.5, sampleCount 4, sceneFormat rgba16float, pinned 720x640 throughout",
+    "cpuBody": "3.54 / 2.97 / 3.11 ms mean body — the CPU falls with the chain too, which is the pass recording going away rather than a second effect"
+  },
+  "caveats": {
+    "cssBox": "NOT held constant, and this is handoff §6's known unpaid gap: the browser chrome collapsed between 360x373, 360x491, 360x550 and 360x609 across the six readings. The pin holds the SCENE still, but the 2D overlay follows the displayed box. With an empty board the overlay is ~0.08 ms of the frame, so it cannot account for 2.4 ms — but it is why this row does not claim a tighter figure than the ladder supports.",
+    "floor": "the null arm put the instrument at ~2.5 ms on 2026-09-05. 2.43 is under it. This row does not claim the mean; it claims the ladder.",
+    "thermal": "no row here records battery, charging state or die temperature — still unpaid by everyone. The two baselines are the only thermal control this session has, and they drifted 0.69 ms downward across it."
+  }
+}
