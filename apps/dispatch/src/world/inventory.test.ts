@@ -49,6 +49,8 @@ function stats(overrides: Partial<EngineStats> = {}): EngineStats {
     submitMs: 0.4,
     swayVisible: false,
     trianglesRecorded: 120_000,
+    vehicleDrawsBlend: 0,
+    vehicleDrawsOpaque: 0,
     ...overrides,
   };
 }
@@ -535,6 +537,24 @@ describe('FrameInventory', () => {
       expect(report.bytes.cachedRequests).toBe(4);
     });
 
+    it('carries the rigid phases apart, so a fleet\u2019s draws have an owner', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(
+        16,
+        stats({ drawsRecorded: 3571, vehicleDrawsBlend: 3150, vehicleDrawsOpaque: 275 }),
+        NO_SPANS,
+        NO_CPU,
+        IDLE,
+      );
+
+      const { world } = inventory.report(CONTEXT);
+
+      expect(world.vehicleDrawsBlend).toBe(3150);
+      expect(world.vehicleDrawsOpaque).toBe(275);
+      // Everything that is not a car — the world, the sky, the post chain's own draws.
+      expect(world.draws - world.vehicleDrawsBlend - world.vehicleDrawsOpaque).toBe(146);
+    });
+
     it('carries the world counters and the context the capture must state', () => {
       const inventory = new FrameInventory();
       inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
@@ -550,6 +570,10 @@ describe('FrameInventory', () => {
         pickingMb: 2,
         residencyMb: 37,
         triangles: 120_000,
+        // Of `draws`, the two rigid phases apart (201/9-08) — the opaque one instances, the blend one
+        // cannot, so this is where a fleet's remaining draw count has to be read.
+        vehicleDrawsBlend: 0,
+        vehicleDrawsOpaque: 0,
       });
       expect(report.district).toBe('los-santos-centre');
       expect(report.build).toBe('original@test');

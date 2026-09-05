@@ -66,6 +66,38 @@ whether the draws are recorded:
 **Caught:** a MISSING entry is caught loudly (`createBindGroup` rejects a layout it does not satisfy). A
 stale BUNDLE is not the same failure — see the texture-array rule above for what that looks like.
 
+201/9-08 took that freedom again for `binding 11`, the per-draw PART — see the rule below, which is what
+that binding exists for.
+
+## The rigid per-instance buffers are SLOT-MAJOR, and an instanced draw addresses them from a slot + a part
+
+**The rule.** A vehicle's matrices, paint, lamps and plate live one INSTANCE at a time — slot `s` owns rows
+`[s × partCount, +partCount)`. Anything that adds per-instance state to the rigid path keeps that layout,
+and anything that wants to draw a whole model's instances in one call gets the row by ARITHMETIC rather than
+by indexing: the draw passes the slot through `firstInstance` and names its part in `binding 11`, and the
+shader computes `slot × partCount + part`.
+
+**Why the layout may not be flipped.** Part-major (`part × capacity + slot`) is what an instanced draw would
+naturally want — a fixed part's rows would be contiguous across slots and `instance_index` could index them
+directly. It is the wrong trade, because the WRITE side is the frequent one: `setRoot` sends a whole car's
+matrices in ONE `writeBuffer`, and part-major turns that into `partCount` writes per car per frame — ~80 of
+them, 150 times, every frame. The read side pays one multiply-add per vertex instead. Do not "simplify" the
+shader by moving the layout.
+
+**And an instanced RUN groups on the submesh SET, never on "nothing is hidden".** This is the half that is
+silent, and it shipped: the first version of 201/9-08 grouped slots whose every submesh was visible, which
+is a population of zero. `apps/dispatch` hides every submesh at claim and re-shows the body set (the `_dam`
+twins, the `_vlo` LOD and the unchosen extras ride in the same buffers, so a car whose visibility is never
+set draws its own wreck through itself), and `packages/game`'s handle does the same for extras, variants and
+damage. Every car failed the key, every car was drawn alone, and the change did nothing at all. The set is
+already derived and cached — `opaqueOrder` IS the list of submeshes an instance draws — so it is interned
+per model and compared as one integer.
+
+**Caught:** partly. `engine.vehicle-instancing.test.ts` pins the run lengths, the slot each draw starts at,
+the part offset it names, and the case that made the first version inert (five cars hiding the same
+submeshes must be two draws, not ten). What NOTHING catches is the inert direction itself — it typechecks,
+it lints, the picture is identical, and the only thing that said so was a draw count off the device.
+
 ## The one perf knob is `?scale=`
 
 Render scale. There is no quality tier ladder and there will not be one: the 2026-07-21 ladder run proved a

@@ -357,6 +357,14 @@ export interface InventoryReport {
     readonly pickingMb: number;
     readonly residencyMb: number;
     readonly triangles: number;
+    /** Of {@link draws}, the rigid BLEND phase — the half instancing cannot take (201/9-08), because its
+     *  submesh order is a function of the eye and differs per car. It stays one draw per car per submesh
+     *  while the opaque phase collapses to one per submesh per RUN, so this is where a fleet's remaining
+     *  draw count lives. Reported because the split was an inference from arithmetic until it was not. */
+    readonly vehicleDrawsBlend: number;
+    /** Of {@link draws}, the rigid OPAQUE phase — instanced, so roughly submeshes x MODELS rather than
+     *  x cars. `draws − vehicleDrawsBlend − vehicleDrawsOpaque` is everything that is not a car. */
+    readonly vehicleDrawsOpaque: number;
   };
 }
 
@@ -487,7 +495,15 @@ export class FrameInventory {
   };
   private readonly sums = new Map<string, number>();
 
-  private readonly worldLast = { cellsTotal: 0, cellsVisible: 0, draws: 0, residencyBytes: 0, triangles: 0 };
+  private readonly worldLast = {
+    cellsTotal: 0,
+    cellsVisible: 0,
+    draws: 0,
+    residencyBytes: 0,
+    triangles: 0,
+    vehicleDrawsBlend: 0,
+    vehicleDrawsOpaque: 0,
+  };
   /** The worst body seen, kept WITH its own segments — the mean cannot say which part of it grew. */
   private worst: InventoryWorstFrame = {
     atMs: 0,
@@ -634,6 +650,8 @@ export class FrameInventory {
         pickingMb: context.pickingBytes / (1024 * 1024),
         residencyMb: this.worldLast.residencyBytes / (1024 * 1024),
         triangles: this.worldLast.triangles,
+        vehicleDrawsBlend: this.worldLast.vehicleDrawsBlend,
+        vehicleDrawsOpaque: this.worldLast.vehicleDrawsOpaque,
       },
     };
   }
@@ -752,6 +770,8 @@ export class FrameInventory {
     this.worldLast.cellsTotal = stats.cellsTotal;
     this.worldLast.cellsVisible = stats.cellsVisible;
     this.worldLast.draws = stats.drawsRecorded;
+    this.worldLast.vehicleDrawsBlend = stats.vehicleDrawsBlend;
+    this.worldLast.vehicleDrawsOpaque = stats.vehicleDrawsOpaque;
     this.worldLast.residencyBytes = stats.residencyBytes;
     this.worldLast.triangles = stats.trianglesRecorded;
   }

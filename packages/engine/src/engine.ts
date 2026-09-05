@@ -234,6 +234,18 @@ export interface EngineStats {
    * the depth test.
    */
   trianglesRecorded: number;
+  /**
+   * Rigid draws of the BLEND phase this frame — the half instancing cannot take (201/9-08).
+   *
+   * The opaque phase collapses to one draw per submesh per run, so at the console's board it is a few
+   * hundred; the blend phase stays one draw per car per submesh because its order is a function of the EYE
+   * and differs per car (074/16 round 6 — unsorted, a steering wheel draws over its own windscreen). After
+   * instancing took the board from 11 810 draws to 3 571, WHICH of those two the remainder is was an
+   * inference from arithmetic rather than a reading. These two make it a reading.
+   */
+  vehicleDrawsBlend: number;
+  /** Rigid draws of the OPAQUE phase — instanced, so this is roughly submeshes x models rather than x cars. */
+  vehicleDrawsOpaque: number;
 }
 
 export interface Environment {
@@ -1019,6 +1031,8 @@ export class Engine {
     submitMs: 0,
     swayVisible: false,
     trianglesRecorded: 0,
+    vehicleDrawsBlend: 0,
+    vehicleDrawsOpaque: 0,
   };
   private targetKey = '';
   private timers!: GpuTimers;
@@ -1568,7 +1582,8 @@ export class Engine {
     // Procedural clutter (074/19): grass/bushes/rocks, instanced, in the opaque phase before the sky.
     draws += this.drawClutter(pass, camera);
     draws += this.drawPed(pass);
-    draws += this.drawVehicles(pass, false, camera.eye);
+    const vehicleOpaque = this.drawVehicles(pass, false, camera.eye);
+    draws += vehicleOpaque;
     pass.setPipeline(this.pipelines.get('sky'));
     pass.setBindGroup(0, this.frameBindGroup);
     pass.draw(3);
@@ -1583,7 +1598,8 @@ export class Engine {
       pass.executeBundles(blendBundles);
     }
     // Entity glass after the world blends (074/08 B2): composites over the finished frame.
-    draws += this.drawVehicles(pass, true, camera.eye);
+    const vehicleBlend = this.drawVehicles(pass, true, camera.eye);
+    draws += vehicleBlend;
     // 2dfx coronas last (074/06 row 13): additive on top of everything, depth-read hides occluded ones.
     draws += this.drawParticles(pass);
     draws += this.drawDynamicParticles(pass, seconds);
@@ -1658,6 +1674,8 @@ export class Engine {
     this.statsValue.cellsTotal = total;
     this.statsValue.cellsVisible = bundles.length;
     this.statsValue.drawsRecorded = draws;
+    this.statsValue.vehicleDrawsBlend = vehicleBlend;
+    this.statsValue.vehicleDrawsOpaque = vehicleOpaque;
     this.statsValue.trianglesRecorded = triangles + this.frameTriangles;
     this.statsValue.roadsignQuadsRecorded = roadsignQuads;
     // The wind has to be blowing for sway to be motion: at `windStrength` 0 the same geometry is still air,

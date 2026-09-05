@@ -124,6 +124,10 @@ assigns `Engine.probeCenter`, so the pass has never rendered a face here — `su
 - **`?sprites=0`** (`nosprites` on the panel) — the symbology's own drawing path, as a control arm.
 - **`scripts/debug/canvas-symbol-arms.mjs`** — a desk-side Canvas2D A/B in headless Chromium, ten seconds,
   no device. It answered "is a blit cheaper at all" and, more usefully, put a SCALE under the device number.
+- **`world.vehicleDrawsOpaque` / `world.vehicleDrawsBlend`** — the 3 571 draws split by rigid phase. The
+  opaque half instances (roughly submeshes x MODELS); the blend half cannot, because its order is a function
+  of the eye, so it stays one draw per car per submesh. Which of the two the remainder is was an inference
+  from arithmetic until this landed; `draws − blend − opaque` is everything that is not a car.
 - The report carries `marksHidden`, `spriteVariants`, `probeFacesRendered` and `surface.probeFaces`.
 - The fake device records `firstInstance`, without which instanced draws are untestable.
 
@@ -162,7 +166,8 @@ a surface where the probe has never rendered a face.
 - **Upstream has never been merged.** `AlexSergey/opensa` cannot be fetched from the web container (no
   credentials, `add_repo` refused), so the fork's divergence is unmeasured. Do it from a checkout that can.
 - **A `?models=0` arm.** The fleet's own cost was measured against a window where the models happened not to
-  load — a real arm would make that reproducible.
+  load — a real arm would make that reproducible. (The related gap is closed: how much of the fleet's draw
+  count is the un-instanceable blend phase is a REPORTED number now, not an inference.)
 - **The CSS box is not held constant.** The browser chrome collapses between 360x320, 360x570 and 360x609;
   the pinned buffer holds the scene still, but the overlay follows the box, so its pixel count moves between
   windows that are otherwise identical.

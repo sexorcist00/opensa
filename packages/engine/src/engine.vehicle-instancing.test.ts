@@ -195,6 +195,32 @@ describe('rigid instancing', () => {
       ).toEqual([0, 0, UV_ANIM_STRIDE]);
     });
 
+    it('reports the two phases apart, so a fleet\u2019s remaining draws have an owner', async () => {
+      // After instancing took the board from 11 810 draws to 3 571, WHICH of the two phases the remainder
+      // was could only be inferred from arithmetic. The opaque phase collapses to one draw per submesh per
+      // run; the blend phase cannot and stays one per car per submesh — so the split is the number that says
+      // where a fleet's draw count actually lives.
+      const engine = new Engine();
+      await engine.init(harness.canvas);
+      const init = modelInit();
+      const model = engine.createVehicleModel({
+        ...init,
+        submeshes: [
+          { indexCount: 3, indexOffset: 0, part: 0, translucent: false },
+          { indexCount: 3, indexOffset: 3, part: 1, translucent: true },
+          { indexCount: 3, indexOffset: 6, part: 0, translucent: true },
+        ],
+      });
+      for (let i = 0; i < 6; i += 1) {
+        engine.createVehicle(model);
+      }
+      const stats = engine.frame(camera);
+
+      // One opaque submesh over a run of six; two translucent ones, per car.
+      expect(stats.vehicleDrawsOpaque).toBe(1);
+      expect(stats.vehicleDrawsBlend).toBe(12);
+    });
+
     it('still counts every car\u2019s triangles, though one draw carried them all', async () => {
       // The count a capture reads must not fall with the draw count: a frame that draws eight cars in three
       // calls is submitting eight cars' geometry, and `trianglesRecorded` says so explicitly for instanced
