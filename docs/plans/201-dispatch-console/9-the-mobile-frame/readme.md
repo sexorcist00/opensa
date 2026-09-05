@@ -522,6 +522,19 @@ overturns was written for a street camera, and the GAME still reads `DEFAULT_REN
 previous default stays reachable as `?bloomscale=1` (panel link `bloomfull`), because a default that moved
 without leaving its predecessor re-flyable would make every earlier row unrepeatable.
 
+**AN EARLIER BUILD OF THIS STEP EXISTS AND IS SUPERSEDED — do not resurrect it (recorded 2026-09-05).**
+A branch (`claude/chain9-desk-work`, built 2026-09-02) carried a `bloomLevelsFor` that halved until the
+shorter edge fell under 16 px and made that the DEFAULT, plus a `?bloom=8` arm to put the constant back. It
+was never merged, and the sweep flown three days later refuted the hypothesis it was built on: the tail it
+cuts measured **0.2 ms — noise**. What shipped instead is the ceiling-and-floor above, where the floor
+defaults to 1 px and therefore cuts nothing until a caller asks — because the levels are textures and bind
+groups, not frame time. **The branch's version would ship a look change to buy a number the device says is
+not there.** Its arm names were `?bloom=` / `?clouds=` before a rename, which is its one lasting
+contribution: both belong to the GAME HOST and have since 074/09
+([the parameter table](../../../development/query-parameters.md)), so a capture filed under `?bloom=8` could
+not be re-read a month later. The stale-table restriction that came out of the same branch is
+[kept](../../../restrictions/architecture.md).
+
 ### 05b — The vendor levers, adapted (Arm and Bjørge)
 
 **Built 2026-09-05, both as ARMS, neither as a default.** 201/9 was argued from vendor material recorded in
@@ -668,6 +681,17 @@ out to be the same shape and was NOT caught the same way, because a plausible fi
 that falls out, and it is the chain's most useful product: **an ablation arm must be proven non-null before
 its number is read** — check what the pass is gated on in the HOST, not only in the engine. A null arm
 produces a perfectly ordinary capture with a believable number in it, and nothing anywhere complains.
+
+**AN EARLIER BUILD OF THIS STEP EXISTS AND IS SUPERSEDED — do not resurrect it (recorded 2026-09-05).**
+The same unmerged branch (`claude/chain9-desk-work`, 2026-09-02) carried a `shouldBakeCloudField` keyed on
+the clump scale and amortized at a `CLOUD_FIELD_HZ = 10` it called *"the one number here that is chosen
+rather than derived"*. It had the two-input insight right — a STEP that invalidates and a SCROLL that
+amortizes are different questions, and neither is a fallback for the other — and `cloudFieldDue` above keeps
+exactly that. What it did not have is the derivation: the field scrolls one texel every ~4.7·w seconds, so
+rebaking at half a texel of travel bounds the error by **what the texture can represent at all** rather than
+by a rate somebody liked. A chosen 10 Hz is a hack owing `docs/hacks/` a file; the travel bound owes nothing.
+The derived rule also survives the console scrubbing its clock backwards (201/8-03), which a deadline does
+not.
 
 ### 07 — The per-frame allocations, and one capability that retains what it never reads
 

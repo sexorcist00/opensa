@@ -1012,3 +1012,41 @@ found by the operator saying *"you moved the camera to a black screen"*.
 refused by name, every other field falls back to the pose the map holds, and the answer states the pose that
 was FLOWN rather than the one that was asked for. Anywhere else a `MapPose` is cast rather than parsed, this
 is still silent.
+
+## A long-lived process serves the TABLE IT STARTED WITH, never the one in the checkout
+
+**The rule.** A server that reads a module at boot and answers from it — a link list, a tool schema, a job
+table — keeps answering from the copy it loaded. `git pull` moves the checkout; it does not move the process.
+So the tree on disk and the surface an agent or a person is driving can disagree completely, and **both of
+them report themselves as current**: `git status` is clean, the panel's own preflight says `ok`, and the tool
+list looks like a tool list.
+
+Measured twice, and the two occurrences fail in opposite directions:
+
+- **2026-08-31 — the surface was BEHIND the checkout.** The phone's tree was `main` and clean, `git pull`
+  said *already up to date*, and the panel's MCP server still advertised the SIX links of the day before
+  `302bb2d` added three. `map_open`'s `view` offered no `cleared`, no `engine` and no `board`, and its
+  `field` was still the 150-unit board that THE FIELD RUN had stopped being that morning. An agent trusting
+  the tool would have measured the exact thing the user's call of that day removed.
+- **2026-09-03 — the surface was AHEAD of it.** The panel had been started while the checkout was on a
+  feature branch and went on offering that branch's `bloom8` / `clouds0` after the checkout returned to
+  `main`, which served neither. Opening one would have run the DEFAULT and filed it under the arm's name —
+  an A/B whose two halves are the same run, which is the one failure the measurement rules exist to prevent.
+
+The rule: **a process that hands out a table which can change with the checkout must be restarted whenever
+the checkout moves**, and anything the table drives has to be able to say which of the two it came from. The
+job route is the shape that survives this on the phone — `open.mjs` is spawned per call and therefore reads
+the CURRENT `app/links.mjs`, which is how three arms were opened on 08-31 while the tool still denied they
+existed; the MCP surface has no such escape and needs `npm run panel:tunnel` restarted, which only the person
+holding the phone can do.
+
+**The second occurrence has a second lesson, and it is why this entry was nearly lost.** Those two arms never
+reached `main`: the branch that carried them was superseded (see
+[201/9-05 and 9-06](../plans/201-dispatch-console/9-the-mobile-frame/readme.md)) and the panel was left
+serving a table no checkout would ever contain again. A stale table is not only ahead of the tree — it can be
+ahead of a tree that never arrives.
+
+**Caught:** no, and it is silent on both sides of the wire. Nothing errors, no check fails, and the two
+occurrences above look like an agent misreading a menu rather than a menu that is wrong. The only signal is
+arithmetic a reader has to do by hand — comparing what the surface offers against what the checkout contains
+— which is why it took a second occurrence to write this down.

@@ -164,6 +164,35 @@ a surface where the probe has never rendered a face.
 
 ---
 
+## 5b. The branches are read, and only one thing came off them (2026-09-05)
+
+Six branches sat on `origin` and the question *"is anything lost?"* was asked of them. **Five were stale
+ancestors of `main` with nothing unique in them.** The sixth, `claude/chain9-desk-work`, carried real code —
+earlier builds of 9-05 and 9-06 from 2026-09-02 — and **every line of it is superseded by what `main` shipped
+three days later**, which the step notes now say in place so nobody re-derives this:
+
+| the branch built | what `main` has instead | why main's is the keeper |
+| --- | --- | --- |
+| `bloomLevelsFor` — halve until the shorter edge < 16 px, as the DEFAULT | `bloomLevels()` — a ceiling of 8, a floor from `budget.bloomMinLevelPx` that defaults to 1, and `?bloomlevels=` as the arm | the sweep priced that tail at **0.2 ms — noise**. The branch ships a look change to buy a number the device says is not there |
+| `CLOUD_FIELD_HZ = 10`, keyed on clump | `cloudFieldDue` — keyed on clump, amortized on **texel travel** | the rate is DERIVED (one texel every ~4.7·w s) rather than chosen, and it survives the clock being scrubbed backwards |
+| `bloom8` / `clouds0` panel arms | `bloom4`, `bloomrg11`, `bloomhalf`, `bloomboth`, `bloomfull`, `bloomdual`, `bloomf16`, `bloomvendor`, `nocloud` | the whole measured family, against the branch's two |
+
+**What survived is a restriction, and it is worth more than the code was**: *a long-lived process serves the
+TABLE IT STARTED WITH* ([architecture.md](../../restrictions/architecture.md)) — measured twice, in opposite
+directions, and one of its two occurrences is the panel going on offering those very arms after the checkout
+left the branch. It is in `main` now. **A second debt this turned up is paid too**: `query-parameters.md`
+documented NONE of this chain's parameters — `?ablate=`, `?surface=`, `?bloomlevels=`, `?bloomformat=`,
+`?bloomscale=`, `?bloomdown=`, `?bloomminpx=`, `?postprec=`, `?sprites=` — and still listed `msaa` as
+field-removed while the console ships it as 9-04's arm. All nine are in the table now with what each arm
+measured.
+
+**The lesson, since this is the second time the repo has paid for it:** `git log main..branch` compares
+patch-ids and will tell you six commits are missing. That is not the question. The question is whether the
+CONTENT is superseded, and for five of these six the answer was *there was never anything there*, while for
+the sixth it was *yes, by a measurement taken after the branch stopped moving*.
+
+---
+
 ## 6. Still unpaid, by everyone
 
 - **No row records battery, charging state or die temperature.** Every thermal argument in this chain is made
