@@ -472,19 +472,29 @@ so the arms are subtracted from the one in their own thermal window and not from
 | `field` | nothing | 21.52 ms | — | 67 % | 32.35 |
 | `bloomrg11` | the chain's targets → `rg11b10ufloat` | **19.16 ms** | −2.4 | 80 % | 29.42 |
 | `bloomhalf` | the pyramid starts at half size | **17.16 ms** | −4.4 | **91 %** | 27.95 |
+| `bloomboth` | both | 17.38 ms | −4.1 | 90 % | 27.22 |
 
 **`bloomhalf` is the first change measured on this device to put roughly nine frames in ten on ONE display
 interval** (p90 22 ms against 36), and neither arm buys that with resolution, sampling or anti-aliasing: the
 world is still drawn at full size into a 4× MSAA `rgba16float` scene and the post pass still writes every
-pixel. They are independent — one halves the bytes of every pass in the chain, the other quarters the pixels
-of the three biggest — so the combined arm is the candidate default (`bloomboth`, link added).
+pixel. **They do NOT stack**: the combined arm reads 17.38 ms against half-res alone at 17.16 — the same number.
+Once the pyramid starts at half size, what remains of the chain is small enough that halving its bytes buys
+nothing on top, so the two are ALTERNATIVES rather than a sum. And the ladder says why that is a floor rather
+than a disappointment: 90–91 % of frames already sit on ONE display interval in both, and a mean cannot go
+far under 16.7 ms while the display is what it is. **Further bloom work on this device buys nothing** — the
+next millisecond has to come from somewhere else.
 
 **What is NOT settled is the look, and it is what decides whether either ships.** The daylight A/B at hour 10
 is indistinguishable, and that proves nothing: the cost `bloomhalf` is known to carry is sub-pixel EMITTERS,
 because at half resolution the bright-pass threshold runs on a 2×2 average and a street light one pixel
-across is diluted below it. That is a night question. **Owes:** the combined arm, and a NIGHT verdict — which
-needs a link carrying `?hour=` (the parameter parses; no panel link uses it and the agent link has no clock
-command).
+across is diluted below it. That is a night question, so the night pair was built and shot the same day (`night` / `nighthalf`, hour 22,
+differing by the arm alone — a test pins it) and is with the operator.
+
+**Which arm ships is therefore a LOOK decision rather than a performance one.** If half-res passes the night
+verdict it is the arm and the format adds nothing measurable on top of it; if it fails, `bloomrg11` is the
+fallback that costs no resolution at all — −2.4 ms, 80 % of frames on one interval, and nothing changed but
+the mantissa of a blurred additive pass. **Owes:** the operator's verdict, and then one line in
+`apps/dispatch/src/world/console-budget.ts`.
 
 ### 06 — The per-frame bakes that are already cached one line above
 

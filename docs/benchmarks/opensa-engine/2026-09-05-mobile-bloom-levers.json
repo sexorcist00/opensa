@@ -1,20 +1,35 @@
 {
-  "note": "201/9-05's TWO REAL LEVERS, measured on the phone after the sweep refuted the step's own premise (the level count is free; the first, full-resolution levels are the chain). Same rect, same ten-leg route, same `?surface=720x640` pin and the same derivation as the sweep: each window is the DELTA of two `frame.dtHistogramMs` readings, `moving` is every bin below the 100 ms tail, and the MEAN is the reading — p50 saturates on the 16.7 ms vsync floor. MGA-LX3 / ARM Bifrost @ DPR 2, pak `19:23 28-08-2026` ASTC over `los-santos-centre`, app `d0122b8+`, board EMPTY. Every arm's effective budget was read back out of the report before its numbers were kept.\n\nTHE BASELINE HERE IS ITS OWN, AND THAT IS THE POINT. `field` was re-flown between the two arms rather than taken from the sweep four hours earlier: the same baseline read 23.44 ms in the morning, 23.66 mid-session and 21.52 here, which is a spread of 2.1 ms with nothing changed. An arm is only ever subtracted from a baseline flown in the same thermal window (docs/benchmarks/readme.md), and every delta below is against the 21.52 in this file.\n\n  arm         what it changes                                    moving frames   mean      delta    rung 1   target MB\n  field       nothing (the baseline)                                  457      21.52 ms      -       67 %     32.35\n  bloomrg11   the CHAIN's targets: rgba16float -> rg11b10ufloat       511      19.16 ms   -2.4 ms    80 %     29.42\n  bloomhalf   the pyramid starts at half size (prefilter 0.5)         534      17.16 ms   -4.4 ms    91 %     27.95\n\nNEITHER ARM BUYS TIME WITH RESOLUTION, SAMPLING OR ANTI-ALIASING, which is the standing call they had to satisfy. The frame is still drawn at full size into a 4x MSAA `rgba16float` scene; the post pass still writes every pixel; the world is untouched. `bloomrg11` changes only what the BLOOM chain stores — four bytes a pixel instead of eight, floating-point range kept, which is `rgb10a2unorm`'s win from the 09-04 ladder without UNORM's clipping. `bloomhalf` changes the resolution the GLOW is computed at, and that is a look question rather than a frame-resolution one.\n\nAND THE SECOND ARM REACHES THE DECLARED 60. `bloomhalf` puts 487 of 534 frames — 91 % — on ONE display interval, p90 22 ms against the baseline's 36. `bloomrg11` reaches 80 %. The two are independent (one halves the bytes of every pass, the other quarters the pixels of the three biggest), so the combined arm is the candidate for a default and is the next thing to fly; there is no combined link yet and `bloomboth` was added for it.\n\nWHAT IS NOT SETTLED, and it is the half that decides whether either ships. The look A/B was taken at hour 10 on a daylight map, where the two screenshots are indistinguishable — which proves nothing about `bloomhalf`, because the cost it is known to carry is sub-pixel EMITTERS: at half resolution the bright-pass threshold runs on a 2x2 average, so a street light one pixel across is diluted below the threshold and stops blooming. That is a NIGHT question and this console has no night arm on the panel (`?hour=` parses, but no link carries it and the agent link has no clock command). Until that verdict exists both stay arms and the default is unchanged.\n\nMemory, since it comes free with the format: the bloom chain's own targets are 32.35 -> 29.42 MB with `rg11b10ufloat` and 27.95 MB at half res, against a 300-500 MB phone ceiling — real but not why either arm exists.",
+  "note": "201/9-05's TWO REAL LEVERS, measured on the phone after the sweep refuted the step's own premise (the level count is free; the first, full-resolution levels are the chain). Same rect, same ten-leg route, same `?surface=720x640` pin and the same derivation as the sweep: each window is the DELTA of two `frame.dtHistogramMs` readings, `moving` is every bin below the 100 ms tail, and the MEAN is the reading — p50 saturates on the 16.7 ms vsync floor. MGA-LX3 / ARM Bifrost @ DPR 2, pak `19:23 28-08-2026` ASTC over `los-santos-centre`, app `d0122b8+`, board EMPTY. Every arm's effective budget was read back out of the report before its numbers were kept.\n\nTHE BASELINE HERE IS ITS OWN, AND THAT IS THE POINT. `field` was re-flown between the two arms rather than taken from the sweep four hours earlier: the same baseline read 23.44 ms in the morning, 23.66 mid-session and 21.52 here, which is a spread of 2.1 ms with nothing changed. An arm is only ever subtracted from a baseline flown in the same thermal window (docs/benchmarks/readme.md), and every delta below is against the 21.52 in this file.\n\n  arm         what it changes                                    moving frames   mean      delta    rung 1   target MB\n  field       nothing (the baseline)                                  457      21.52 ms      -       67 %     32.35\n  bloomrg11   the CHAIN's targets: rgba16float -> rg11b10ufloat       511      19.16 ms   -2.4 ms    80 %     29.42\n  bloomhalf   the pyramid starts at half size (prefilter 0.5)         534      17.16 ms   -4.4 ms    91 %     27.95\n  bloomboth   both of the above                                       523      17.38 ms   -4.1 ms    90 %     27.22\n\nNEITHER ARM BUYS TIME WITH RESOLUTION, SAMPLING OR ANTI-ALIASING, which is the standing call they had to satisfy. The frame is still drawn at full size into a 4x MSAA `rgba16float` scene; the post pass still writes every pixel; the world is untouched. `bloomrg11` changes only what the BLOOM chain stores — four bytes a pixel instead of eight, floating-point range kept, which is `rgb10a2unorm`'s win from the 09-04 ladder without UNORM's clipping. `bloomhalf` changes the resolution the GLOW is computed at, and that is a look question rather than a frame-resolution one.\n\nAND THE SECOND ARM REACHES THE DECLARED 60. `bloomhalf` puts 487 of 534 frames — 91 % — on ONE display interval, p90 22 ms against the baseline's 36. `bloomrg11` reaches 80 %. THE TWO DO NOT STACK, and that is the sweep's own correction to the sentence this row was drafted with. `bloomboth` reads 17.38 ms against `bloomhalf`'s 17.16 — the same number — so they are ALTERNATIVES rather than a sum: once the pyramid starts at half size, what is left of the chain is small enough that halving its bytes buys nothing measurable on top. Read together with the vsync ladder that is not a disappointment but a FLOOR: 90-91 % of frames already sit on ONE display interval in both, and a mean cannot go far under 16.7 ms while the display is what it is. Further bloom work on this device buys nothing; the next millisecond has to come from somewhere else.\n\nWHICH ONE SHIPS IS A LOOK DECISION, NOT A PERFORMANCE ONE. If `bloomhalf` passes the night verdict it is the arm, and the format adds 0.2 ms — noise — on top of it. If it fails, `bloomrg11` is the fallback that costs no resolution at all: -2.4 ms, 80 % of frames on one interval, and nothing changed but the mantissa of a blurred additive pass.\n\nWHAT IS NOT SETTLED, and it is the half that decides whether either ships. The first look A/B was taken at hour 10, where the two screenshots are indistinguishable — which proves nothing, because the cost `bloomhalf` is known to carry is sub-pixel EMITTERS: at half resolution the bright-pass threshold runs on a 2x2 average, so a street light one pixel across is diluted below it and stops blooming. There is nothing lit at ten in the morning to lose. A NIGHT pair was therefore built and shot the same day (`night` / `nighthalf`, hour 22, differing by the arm alone — `links.test.mjs` pins that, because a pair differing by anything else is an A/B about something else) and is with the operator. Until that verdict exists both stay arms and the default is unchanged.\n\nMemory, since it comes free with the format: the bloom chain's own targets are 32.35 -> 29.42 MB with `rg11b10ufloat` and 27.95 MB at half res, against a 300-500 MB phone ceiling — real but not why either arm exists.",
   "app": "d0122b8+",
   "build": "19:23 28-08-2026",
   "district": "los-santos-centre",
   "device": {
     "adapter": "arm bifrost",
     "dpr": 2,
-    "missing": ["texture-compression-bc", "timestamp-query"]
+    "missing": [
+      "texture-compression-bc",
+      "timestamp-query"
+    ]
   },
-  "surfacePin": { "deviceWidth": 720, "deviceHeight": 640, "pinned": true, "cssHeightsSeen": [570, 609] },
+  "surfacePin": {
+    "deviceWidth": 720,
+    "deviceHeight": 640,
+    "pinned": true,
+    "cssHeightsSeen": [
+      570,
+      609
+    ]
+  },
   "route": "the sweep's own: settle [1500,-1500] h200 pitch -1.3 yaw pi, the rect's four corners warmed, then ten legs",
   "howDerived": "per arm: delta of frame.dtHistogramMs between a post-warmup reading and a post-route reading; moving = every bin below the 100 ms tail; vsyncLadder = each moving bin rounded to the nearest 1/60 s interval",
   "arms": {
     "field": {
       "query": "units=0&calls=0&inventory=1&surface=720x640",
-      "budget": { "bloomFormat": "rgba16float", "bloomPrefilterScale": 1, "bloomMinLevelPx": 1 },
+      "budget": {
+        "bloomFormat": "rgba16float",
+        "bloomPrefilterScale": 1,
+        "bloomMinLevelPx": 1
+      },
       "movingFrames": 457,
       "movingMeanMs": 21.52,
       "movingP50Ms": 18,
@@ -22,17 +37,32 @@
       "movingP95Ms": 36,
       "movingP99Ms": 54,
       "movingMaxMs": 76,
-      "vsyncLadder": { "1": 304, "2": 142, "3": 9, "4": 1, "5": 1 },
+      "vsyncLadder": {
+        "1": 304,
+        "2": 142,
+        "3": 9,
+        "4": 1,
+        "5": 1
+      },
       "windowMs": 85001.1,
       "drawnFrames": 479,
       "framesSkipped": 736,
       "tailFrames": 0,
       "cellsCreatedInWindow": 29,
-      "world": { "draws": 96, "triangles": 241863, "residencyMb": 68.933, "targetMb": 32.349 }
+      "world": {
+        "draws": 96,
+        "triangles": 241863,
+        "residencyMb": 68.933,
+        "targetMb": 32.349
+      }
     },
     "bloomrg11": {
       "query": "units=0&calls=0&inventory=1&surface=720x640&bloomformat=rg11b10ufloat",
-      "budget": { "bloomFormat": "rg11b10ufloat", "bloomPrefilterScale": 1, "bloomMinLevelPx": 1 },
+      "budget": {
+        "bloomFormat": "rg11b10ufloat",
+        "bloomPrefilterScale": 1,
+        "bloomMinLevelPx": 1
+      },
       "movingFrames": 511,
       "movingMeanMs": 19.16,
       "movingP50Ms": 16,
@@ -40,17 +70,31 @@
       "movingP95Ms": 34,
       "movingP99Ms": 40,
       "movingMaxMs": 60,
-      "vsyncLadder": { "1": 409, "2": 97, "3": 4, "4": 1 },
+      "vsyncLadder": {
+        "1": 409,
+        "2": 97,
+        "3": 4,
+        "4": 1
+      },
       "windowMs": 77799.2,
       "drawnFrames": 534,
       "framesSkipped": 663,
       "tailFrames": 0,
       "cellsCreatedInWindow": 29,
-      "world": { "draws": 96, "triangles": 241863, "residencyMb": 66.003, "targetMb": 29.419 }
+      "world": {
+        "draws": 96,
+        "triangles": 241863,
+        "residencyMb": 66.003,
+        "targetMb": 29.419
+      }
     },
     "bloomhalf": {
       "query": "units=0&calls=0&inventory=1&surface=720x640&bloomscale=0.5",
-      "budget": { "bloomFormat": "rgba16float", "bloomPrefilterScale": 0.5, "bloomMinLevelPx": 1 },
+      "budget": {
+        "bloomFormat": "rgba16float",
+        "bloomPrefilterScale": 0.5,
+        "bloomMinLevelPx": 1
+      },
       "movingFrames": 534,
       "movingMeanMs": 17.16,
       "movingP50Ms": 16,
@@ -58,18 +102,59 @@
       "movingP95Ms": 32,
       "movingP99Ms": 40,
       "movingMaxMs": 56,
-      "vsyncLadder": { "1": 487, "2": 42, "3": 5 },
+      "vsyncLadder": {
+        "1": 487,
+        "2": 42,
+        "3": 5
+      },
       "windowMs": 63906.7,
       "drawnFrames": 551,
       "framesSkipped": 469,
       "tailFrames": 1,
       "cellsCreatedInWindow": 31,
-      "world": { "draws": 96, "triangles": 241863, "residencyMb": 64.539, "targetMb": 27.955 }
+      "world": {
+        "draws": 96,
+        "triangles": 241863,
+        "residencyMb": 64.539,
+        "targetMb": 27.955
+      }
+    },
+    "bloomboth": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&bloomformat=rg11b10ufloat&bloomscale=0.5",
+      "budget": {
+        "bloomFormat": "rg11b10ufloat",
+        "bloomPrefilterScale": 0.5,
+        "bloomMinLevelPx": 1
+      },
+      "movingFrames": 523,
+      "movingMeanMs": 17.38,
+      "movingP50Ms": 16,
+      "movingP90Ms": 24,
+      "movingP95Ms": 34,
+      "movingP99Ms": 40,
+      "movingMaxMs": 68,
+      "vsyncLadder": {
+        "1": 471,
+        "2": 48,
+        "3": 3,
+        "4": 1
+      },
+      "windowMs": 69356.6,
+      "drawnFrames": 542,
+      "framesSkipped": 531,
+      "tailFrames": 1,
+      "cellsCreatedInWindow": 31,
+      "world": {
+        "draws": 96,
+        "triangles": 241863,
+        "residencyMb": 63.806,
+        "targetMb": 27.222
+      }
     }
   },
   "owed": {
-    "combined": "both levers in one arm (`bloomboth`) — they are independent, so the candidate default is expected near or under the 16.7 ms floor",
-    "look": "a NIGHT A/B for bloomhalf, where sub-pixel emitters are the content the half-res threshold can lose. No panel link carries `?hour=` and the agent link has no clock command; the daylight pair taken here is indistinguishable and settles nothing",
+    "combined": "TAKEN: 17.38 ms, and it says the two levers overlap rather than add — see the note",
+    "look": "the night pair (`night` / `nighthalf`, hour 22, differing by the arm alone — a test pins that) was SHOT on 2026-09-05 and is with the operator; the verdict decides which arm ships",
     "conditions": "no row in this folder records the battery level, the charging state or the die temperature, this one included"
   }
 }
