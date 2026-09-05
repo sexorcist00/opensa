@@ -577,6 +577,18 @@ caught, by the `no-restricted-imports` rule above.)
 
 ## A map surface draws the fix it was sent, and corrects NOTHING about it
 
+> **UNDER REVIEW since 2026-09-05, by the user's decision.** Asked what *"a car entity with its own physics"*
+> meant for units on the dispatch map, the answer was **"like an ordinary GTA SA game car — model, physics,
+> drives on the map surface"**, which reverses the 2026-08-26 framing this rule is written from
+> ([201/5-05](../plans/201-dispatch-console/5-symbology-and-picking-as-product/readme.md)). **Nothing below
+> is retracted yet, and the argument does not weaken with the decision**: whatever the console gains the
+> ability to simulate, a position that came FROM THE SERVER is still a claim the map may not correct, or the
+> map stops agreeing with the game a dispatcher is directing. 5/05's first job is to separate the two objects
+> — a FED unit, whose position is owned upstream, from a car the console itself DRIVES, which nothing
+> upstream owns — and to put the remaining question back to the user with its five costs attached rather
+> than answer it by building. Read this rule as live for fed positions until that lands.
+
+
 The dispatch console shows units that are players on a running server. Their positions arrive from PCAD — a
 position and a heading, published every 4 s while the unit is in a vehicle
 ([202 §4](../plans/202-pcad-dispatch/readme.md)) — and they are already physically correct, because **the run

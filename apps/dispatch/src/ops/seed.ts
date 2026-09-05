@@ -67,11 +67,11 @@ const ROSTER: readonly { readonly callsign: string; readonly kind: Unit['kind'];
 const FILL_KINDS: readonly Unit['kind'][] = ['patrol', 'patrol', 'patrol', 'ambulance', 'patrol', 'patrol', 'fire'];
 
 /**
- * What each service drives on the MOCK board — stock San Andreas model names, and a demo fixture exactly
- * like the landmark table above it. On a real board this is CAD state, not feed state: the position stream
- * carries a position, and what a unit is driving is known the way its callsign is. A total conversion ships
- * none of these names, which is not a defect to hide — it is the fallback path (symbol, and a line in the
- * log) doing its job.
+ * What each service drives on the MOCK board — stock San Andreas model names, and a demo
+ * fixture exactly like the landmark table above it. On a real board this is CAD state, not feed state: the
+ * position stream carries a position, and what a unit is driving is known the way its callsign is. A total
+ * conversion ships none of these names, which is not a defect to hide — it is the fallback path (symbol, and
+ * a line in the log) doing its job.
  *
  * **`patrol` read `copcarls` until 2026-08-31, and stock San Andreas has no such model.** The LS police car
  * is `copcarla` (`copcarsf`, `copcarvg`, `copcarru` are the other three); nothing named `copcarls` is in the
@@ -81,15 +81,31 @@ const FILL_KINDS: readonly Unit['kind'][] = ['patrol', 'patrol', 'patrol', 'ambu
  * three `errors` lines looked like one thin convert rather than one wrong name, and 201/5-02's budget
  * (150 units each drawn as a MODEL) was unmeasurable on any pak while it stood.
  *
- * These three names are also what `scripts/phone.sh` converts by default, so THE FIELD RUN's link opens on a
- * pak that carries them — {@link DEMO_MODELS} is the owner of that list and `seed.test.ts` holds the two
- * sides together.
+ * **A LIST per service since 2026-09-05, because the TYPE COUNT is the axis the budget is written on.**
+ * `ops/budget.ts` states it plainly — *"a shift is a handful of TYPES however many units it has: 150 cars of
+ * six kinds upload six"* — so texture memory and upload cost scale with distinct models, not with units. A
+ * board of three types measures three, and 201's declared budget says a handful. Patrol drives the three
+ * real police cars it has (LS, SF, LV), which takes the board to **five types** without inventing a service
+ * that does not exist: a `UnitKind` is what a unit IS, and which car a precinct drives is not that.
+ *
+ * The variant is picked by INDEX rather than at random — `seed.ts` is a fixture and the same board has to
+ * come back on every run, which is what lets a capture be compared with the one before it.
+ *
+ * These names are also what `scripts/phone.sh` converts by default, so THE FIELD RUN's link opens on a pak
+ * that carries them — this table is the owner of that list and `seed.test.ts` holds the two sides together.
  */
-export const DEMO_MODELS: Readonly<Record<Unit['kind'], string>> = {
-  ambulance: 'ambulan',
-  fire: 'firetruk',
-  patrol: 'copcarla',
+export const DEMO_MODELS: Readonly<Record<Unit['kind'], readonly string[]>> = {
+  ambulance: ['ambulan'],
+  fire: ['firetruk'],
+  patrol: ['copcarla', 'copcarsf', 'copcarvg'],
 };
+
+/** Which of a service's cars this unit drives — by index, so the board is the same board every run. */
+export function demoModel(kind: Unit['kind'], index: number): string {
+  const variants = DEMO_MODELS[kind];
+
+  return variants[index % variants.length];
+}
 
 /**
  * The height the mock puts its units at, metres. Los Santos street level, ONE number rather than twenty
@@ -113,7 +129,7 @@ const SCATTER = 220;
 export function initialOperations(now: number, size = { calls: DEFAULT_CALLS, units: DEFAULT_SHIFT }): Operations {
   const units: Unit[] = [];
   for (let i = 0; i < size.units; i += 1) {
-    units.push(i < ROSTER.length ? unit(`u${i + 1}`, ROSTER[i]) : fillUnit(i));
+    units.push(i < ROSTER.length ? unit(`u${i + 1}`, ROSTER[i], i) : fillUnit(i));
   }
   const incidents: Incident[] = [];
   for (let i = 0; i < size.calls; i += 1) {
@@ -165,7 +181,7 @@ function fillUnit(index: number): Unit {
     id: `u${index + 1}`,
     incident: null,
     kind,
-    model: DEMO_MODELS[kind],
+    model: demoModel(kind, index),
     status: 'available',
     target: null,
   };
@@ -182,7 +198,7 @@ function prefix(kind: Unit['kind']): string {
   return kind === 'ambulance' ? 'MEDIC' : kind === 'fire' ? 'ENGINE' : '4-XRAY';
 }
 
-function unit(id: string, entry: (typeof ROSTER)[number]): Unit {
+function unit(id: string, entry: (typeof ROSTER)[number], rosterIndex: number): Unit {
   return {
     at: LANDMARKS[entry.landmark % LANDMARKS.length].at,
     callsign: entry.callsign,
@@ -191,7 +207,7 @@ function unit(id: string, entry: (typeof ROSTER)[number]): Unit {
     id,
     incident: null,
     kind: entry.kind,
-    model: DEMO_MODELS[entry.kind],
+    model: demoModel(entry.kind, rosterIndex),
     status: 'available',
     target: null,
   };

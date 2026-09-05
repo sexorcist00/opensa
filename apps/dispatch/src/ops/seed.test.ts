@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { UNITS_ON_SCREEN } from './budget';
 import { BoardHistory } from './history';
-import { DEMO_MODELS, initialOperations } from './seed';
+import { DEMO_MODELS, demoModel, initialOperations } from './seed';
 
 describe('initialOperations', () => {
   describe('negative cases', () => {
@@ -101,7 +101,7 @@ describe('the mock board against the pak the field run converts', () => {
     it('names no model stock San Andreas does not have — `copcarls` was one for a week', () => {
       // The LS police car is `copcarla`; `copcarls` is in no roster, so every patrol unit resolved to nothing
       // on every pak and drew as a symbol. The fallback and a thin convert leave the SAME line in the log.
-      expect(Object.values(DEMO_MODELS)).not.toContain('copcarls');
+      expect(Object.values(DEMO_MODELS).flat()).not.toContain('copcarls');
     });
   });
 
@@ -110,7 +110,24 @@ describe('the mock board against the pak the field run converts', () => {
       const converted = phoneDefaultVehicles();
 
       expect(converted.length).toBeGreaterThan(0);
-      expect(converted).toEqual(expect.arrayContaining([...Object.values(DEMO_MODELS)]));
+      expect(converted).toEqual(expect.arrayContaining([...Object.values(DEMO_MODELS).flat()]));
+    });
+
+    it('puts FIVE model types on the board, because the type count is what the budget scales on', () => {
+      // `ops/budget.ts`: a shift is a handful of TYPES however many units it has. Three types measured three;
+      // 201's budget says a handful, so patrol drives the three real police cars rather than one.
+      expect(new Set(Object.values(DEMO_MODELS).flat()).size).toBe(5);
+    });
+
+    it('gives a service its cars in a stable order, so the same board comes back every run', () => {
+      // A fixture that shuffles is a fixture no capture can be compared against.
+      expect([0, 1, 2, 3].map((index) => demoModel('patrol', index))).toEqual([
+        'copcarla',
+        'copcarsf',
+        'copcarvg',
+        'copcarla',
+      ]);
+      expect(demoModel('ambulance', 7)).toBe('ambulan');
     });
   });
 });

@@ -91,7 +91,7 @@ ASTC_THREADS="${ASTC_THREADS:-1}"
 # written for 150 models, and said so only in three `errors` lines nobody had a reason to read. The owner of
 # this list is `DEMO_MODELS` in `apps/dispatch/src/ops/seed.ts`; `seed.test.ts` fails if the two drift.
 PLAYER_PED="${PLAYER_PED:-bmycg}"
-VEHICLES="${VEHICLES:-copcarla,ambulan,firetruk}"
+VEHICLES="${VEHICLES:-copcarla,ambulan,firetruk,copcarsf,copcarvg}"
 PEDS="${PEDS:-bmycg,wmycr}"
 REBUILD="${REBUILD:-0}"
 APP_PORT="${APP_PORT:-5173}"

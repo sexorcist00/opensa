@@ -270,6 +270,68 @@ a rigid model and it should not be built on a guess about what the frame can aff
 **Touched from [the protected list](../1-the-map-profile/protected-list.md):** the vehicle model path, which
 is protected — this step is the one that makes it load.
 
+### 05 — A unit becomes a CAR: model, physics, driving on the surface
+
+**Opened 2026-09-05 by the user's decision, and it reverses a recorded one.** Asked what *"a car entity with
+its own physics"* meant for units on the dispatch map, the answer was: **"like an ordinary GTA SA game car —
+model, physics, drives on the map surface."** That is a different product from the one
+[04](#04--units-get-real-models) shipped, and the reversal is written here rather than absorbed quietly,
+because the decision it overturns was itself taken with the user (2026-08-26) and is a
+[restriction](../../../restrictions/architecture.md) with a stated failure mode.
+
+**What the old decision said, and why it was not a mistake.** A unit's position arrives from PCAD already
+physically correct — the run that produced it had collision, which is why `pos_z` is a road height rather
+than a hole — so the map applied it verbatim and corrected nothing. The cost of correcting it is that **the
+map stops agreeing with the server**, and the error is largest exactly where an operator cares (a bridge, a
+multi-storey car park, a hill). That argument has not gone away and this step does not get to pretend it has.
+
+**So the step's first job is to separate two objects that both look like "a car on the map":**
+
+| | where its position comes from | may it be simulated? |
+| --- | --- | --- |
+| a **fed unit** — a real player on the server | PCAD, every 4 s, already collision-correct | the old rule still applies to the POSITION; simulating it makes the map disagree with the server |
+| a **driven car** — a car the console itself runs | our own physics, on our own collision | yes: nothing upstream owns it, so there is nothing to disagree with |
+
+**Until that is settled, the honest reading of the decision is the second column**: the console gains the
+ability to run a real car, and whether a FED unit is then handed to that simulation is the question this step
+has to put back to the user with its cost attached, rather than answer by building.
+
+**What it costs, stated before anything is built.** Every one of these is a consequence, not a risk:
+
+- **The pak must carry collision again.** [1/03](../1-the-map-profile/readme.md) freed the map profile of the
+  baked collision because the 08-09 bytes table measured **zero requests against a 49 870-triangle bake**.
+  That freedom ends: a car driving on the surface reads exactly that bake. (The 09-05 `phone-cars` convert
+  already bakes it — 9 cells, 49 870 triangles.)
+- **The layer boundary moves.** `apps/dispatch` reaches the game layer through the environment driver alone;
+  physics lives in `packages/game` (`physics/physics-world.ts`, `vehicle/drivetrain.ts`). Running a car means
+  importing more of it, which is the restriction's own line to redraw — and 202 §7's *"no player, no physics,
+  no ECS in the map component"* with it.
+- **See-only residency stops qualifying.** The
+  [streaming restriction](../../../restrictions/streaming-residency.md) permits narrowing residency to what
+  the camera SEES *"only where nothing behind the camera is simulated — the map surfaces qualify, the game
+  does not"*. A console that simulates cars is on the game's side of that sentence, and a car driven out of
+  view falls through a world that was never streamed.
+- **A dynamic body may only be created where its static collision already exists** — the existing
+  [restriction](../../../restrictions/architecture.md); a unit spawning outside the collision ring spawns
+  into a hole.
+- **The frame budget is re-opened.** 201/9 closed with the console on the display's floor at 96 draws and an
+  empty board. Physics is CPU, and the [frame audit](../../../audit/frame-path-vs-aaa.md) already names the
+  declared load as the thing nothing has ever measured.
+
+**The order, and 2026-09-05 delivered the first line of it.**
+
+1. **A pak with cars and collision in it** — done: `./build/phone-cars`, `MODELS=1`, `BAKE=1`,
+   `VEHICLES=copcarla,ambulan,firetruk,copcarsf,copcarvg`, in an OUT of its own so the pak every 09-05 row
+   was measured on survives (the user's call).
+2. **Five model TYPES on the board** — done: `DEMO_MODELS` became a list per service and patrol drives the
+   three real police cars, because `ops/budget.ts` states the axis plainly (*a shift is a handful of TYPES
+   however many units it has*) and three types measured three.
+3. **Verify the models actually draw** on the device, and take the capture 5/02 and 5/04 have always owed —
+   the first frame in this repository's history with units drawn as models.
+4. **Then, and only then, the physics question above**, put back to the user with the five costs attached.
+
+**Owes:** the capture at step 3, and the decision at step 4.
+
 ## Verification
 
 - Click-to-inspect still answers model + TXD + GTA coordinates in a build with debug defaults off.
