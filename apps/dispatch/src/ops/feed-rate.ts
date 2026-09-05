@@ -7,24 +7,35 @@
  * than 50 ms, on a console whose feed publishes every **four seconds**. Every 150-unit row this chain has
  * taken was taken under that churn, so each of them measured the mock as much as the product.
  *
- * **Four seconds is read out of PCAD, not chosen here.** `cadui.lua`'s `sendPositionUpdate` thread publishes
- * `pos_x, pos_y, pos_z, heading, vehicleId` every 4 s and only while the unit is in a vehicle
- * ([202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md)). It is the hardest constraint on this map
- * and the one thing about the feed that was not knowable before the client was read.
+ * **Four seconds WAS read out of PCAD, and is no longer the rate.** `cadui.lua`'s `sendPositionUpdate` thread
+ * publishes `pos_x, pos_y, pos_z, heading, vehicleId` every 4 s and only while the unit is in a vehicle
+ * ([202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md)) — that is what the plugin ships today, and
+ * it was the hardest constraint on this map. On **2026-09-05 the user took 202 phase 4's first answer** and
+ * dropped it to 500 ms, so the console is built against 2 Hz and PCAD owes the client change.
  *
- * **And publishing faster is a behaviour the console has already ruled out.** [201/8-02](../../../../docs/plans/201-dispatch-console/8-the-time-axis/readme.md)
- * settled that a track answers with the last fix and STEPS between two of them rather than sliding. A
- * 4-second step of ~110 m is what the real feed does and what the map is required to show; a board
- * rehearsing 20 Hz is a board rehearsing a smoothness this product does not have.
+ * **A board rehearsing a smoothness the product does not have is still the thing to avoid**, and that is why
+ * this is 500 rather than 50. [201/8-02](../../../../docs/plans/201-dispatch-console/8-the-time-axis/readme.md)
+ * stands unchanged: a track answers with the last fix and STEPS between two of them rather than sliding. The
+ * step is now ~14 m at 100 km/h instead of ~110 — the same rule, at a gap the eye stops reading as a jump.
  */
 
 /**
- * The mock board's publish interval, ms — PCAD's own rate.
+ * The mock board's publish interval, ms — the rate the console is built against.
  *
  * It is not a frame budget and not a render rate: the console draws on demand, and this is how often there
- * is anything new to draw.
+ * is anything new to draw. **500 ms since 2026-09-05** (the user's call; it was 4000). The reasoning, the
+ * ceiling it sits on and what PCAD owes for it live on the twin of this constant in
+ * [`tracks.ts`](./tracks.ts) — this one is the mock's tick, that one is the fact about the feed, and they
+ * are two files because one is a stand-in and the other is the interface.
+ *
+ * **What it costs, stated rather than discovered:** this step slowed the mock from 50 ms to 4 s precisely
+ * because a board changing 20x a second forced a draw 20x a second and render-on-demand could never rest.
+ * At 500 ms the board wakes the frame twice a second by design — 2 Hz is 202 §4's stated ceiling for this
+ * map and the deliberate price of a unit that moves ~14 m between fixes instead of ~110. Every row taken
+ * before this was taken under a 4 s board, so `framesSkipped` and anything read off idle behaviour are NOT
+ * comparable across the change; `?tick=` reaches either rate for a capture that needs the old one.
  */
-export const PUBLISH_INTERVAL_MS = 4000;
+export const PUBLISH_INTERVAL_MS = 500;
 
 /**
  * How often the shift clock advances while REPLAYING, ms.

@@ -245,14 +245,20 @@ export async function runChecks(probe, target) {
       state: 'fail',
     });
   }
+  // A count nobody refreshed is not a count. `behind` is measured against the LOCAL `origin/<branch>`, so
+  // until the probe started fetching (2026-09-05) this row said `main · clean` on a device three app
+  // archives behind — the check that exists to catch stale code reporting the device current. The fetch is
+  // throttled and bounded, so it can fail; when it does, the age of the last good one is the qualifier that
+  // makes the number readable instead of merely reassuring.
+  const stale = git !== null && git.fetched !== undefined && !git.fetched.ok;
   add({
     detail:
       git === null
         ? 'not a git worktree'
-        : `${git.branch}${git.dirty > 0 ? ` · ${git.dirty} changed files` : ' · clean'}${git.ahead > 0 ? ` · ${git.ahead} to push` : ''}${git.behind > 0 ? ` · ${git.behind} behind` : ''}`,
+        : `${git.branch}${git.dirty > 0 ? ` · ${git.dirty} changed files` : ' · clean'}${git.ahead > 0 ? ` · ${git.ahead} to push` : ''}${git.behind > 0 ? ` · ${git.behind} behind` : ''}${stale ? ` · origin unreachable${git.fetched.ageMs === null ? ', never fetched this run' : `, last read ${since(git.fetched.ageMs)} ago`}` : ''}`,
     id: 'git',
     label: 'branch',
-    state: git === null ? 'warn' : 'ok',
+    state: git === null || stale ? 'warn' : 'ok',
     ...(git !== null && git.behind > 0 ? { fix: 'git pull --ff-only', job: 'pull' } : {}),
   });
 
@@ -339,4 +345,13 @@ export function verdict(checks) {
   return warned.length > 0
     ? { headline: `ready · ${warned.length} to know about`, state: 'warn' }
     : { headline: 'ready', state: 'ok' };
+}
+
+/** A duration a person reads at a glance — this is a status line on a phone, not a log. */
+function since(ms) {
+  if (ms < 90_000) {
+    return `${Math.round(ms / 1000)}s`;
+  }
+
+  return ms < 5_400_000 ? `${Math.round(ms / 60_000)}m` : `${Math.round(ms / 3_600_000)}h`;
 }

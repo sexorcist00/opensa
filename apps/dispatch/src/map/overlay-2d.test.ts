@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { Incident, Operations, Unit, UnitStatus } from '../ops/types';
 import type { ScreenPoint, ScreenProjector } from './projection';
 
+import { PUBLISH_INTERVAL_MS } from '../ops/tracks';
 import { SymbologyLayer, warmTextMetrics } from './overlay-2d';
+import { SymbolSprites } from './symbol-sprites';
 
 /** `status` defaults to a unit the shift IS about, because that is the one with a name to place — the
  *  quiet side of `unitWantsLabel` is asserted on its own below rather than inherited by every case. */
@@ -32,14 +34,22 @@ function call(index: number): Incident {
 }
 
 /** A 2D context that records what was asked of it — the layer's cost is calls, not pixels. */
-function fakeContext(): { calls: { font: number; measure: number; text: string[] }; ctx: CanvasRenderingContext2D } {
-  const calls = { font: 0, measure: 0, text: [] as string[] };
+function fakeContext(): {
+  calls: { blits: number; fills: number; font: number; measure: number; text: string[] };
+  ctx: CanvasRenderingContext2D;
+} {
+  const calls = { blits: 0, fills: 0, font: 0, measure: 0, text: [] as string[] };
   const ctx = {
     arc: (): void => undefined,
     arcTo: (): void => undefined,
     beginPath: (): void => undefined,
     closePath: (): void => undefined,
-    fill: (): void => undefined,
+    drawImage: (): void => {
+      calls.blits += 1;
+    },
+    fill: (): void => {
+      calls.fills += 1;
+    },
     fillStyle: '',
     fillText: (text: string): void => {
       calls.text.push(text);
@@ -109,6 +119,30 @@ function unit(index: number, status: UnitStatus = 'enRoute'): Unit {
 
 const SIZE = { height: 800, width: 1200 };
 
+/** A layer whose sprite cache can rasterize — node has no `document`, so the canvas is faked. */
+function spriteLayer(): SymbologyLayer {
+  const stub = {
+    getContext: () => ({
+      arc: (): void => undefined,
+      beginPath: (): void => undefined,
+      closePath: (): void => undefined,
+      fill: (): void => undefined,
+      fillStyle: '',
+      lineTo: (): void => undefined,
+      lineWidth: 0,
+      moveTo: (): void => undefined,
+      rect: (): void => undefined,
+      rotate: (): void => undefined,
+      setTransform: (): void => undefined,
+      stroke: (): void => undefined,
+      strokeStyle: '',
+      translate: (): void => undefined,
+    }),
+  } as unknown as HTMLCanvasElement;
+
+  return new SymbologyLayer(2, new SymbolSprites(2, () => stub));
+}
+
 describe('SymbologyLayer', () => {
   describe('negative cases', () => {
     it('does not re-measure a label it has already drawn — the per-symbol cost 5/02 was written for', () => {
@@ -169,6 +203,23 @@ describe('SymbologyLayer', () => {
       expect(calls.text).not.toContain('4-XRAY-0');
       // And the name it does not draw is a name it does not measure, which is the point on the CPU side.
       expect(calls.measure).toBe(0);
+    });
+
+    it('does not rebuild a symbol path per instance — 190 marks are 190 BLITS', () => {
+      // 201/9-01's second known waste, and the largest CPU line in the frame at the declared board: a unit
+      // was a filled-and-stroked `arc` plus a filled triangle, rebuilt every frame for every unit. A symbol
+      // is a fixed picture in a handful of variants, which is what MapLibre's icon atlas and deck.gl's
+      // IconLayer both say about it.
+      const { calls, ctx } = fakeContext();
+      const layer = spriteLayer();
+
+      layer.render(ctx, spreadProjector(), board(150, 40), null, SIZE);
+
+      expect(calls.blits).toBe(190);
+      // Only the chips fill anything now — the marks are blitted, not painted.
+      expect(calls.fills).toBeLessThanOrEqual(layer.counted().chips);
+      // And the whole board of 150 units plus 40 calls is a handful of bitmaps.
+      expect(layer.counted().spriteVariants).toBeLessThanOrEqual(4);
     });
 
     it('drops a chip past the depth cut and counts the drop', () => {
@@ -238,13 +289,13 @@ describe('SymbologyLayer', () => {
       expect(counts.chipsDropped).toBe(190 - counts.chips);
     });
 
-    it('marks a unit whose fix has aged past one publish interval, and says how old', () => {
+    it('marks a unit whose fix is late by a whole missed publish, and says how old', () => {
       const { calls, ctx } = fakeContext();
       const layer = new SymbologyLayer();
       const ops = board(3);
-      // PCAD publishes every 4 s: 2 s is not late, 90 s is.
+      // The feed publishes every 500 ms: 400 ms is simply the newest fix, 90 s and 400 s are silence.
       const ages = new Map([
-        ['u0', 2000],
+        ['u0', 400],
         ['u1', 90_000],
         ['u2', 400_000],
       ]);
@@ -255,6 +306,20 @@ describe('SymbologyLayer', () => {
       // The age rides on the chip, so a callsign an operator cannot trust says so in the same glance.
       expect(calls.text).toContain('4-XRAY-1 · 1m');
       expect(calls.text).toContain('4-XRAY-2 · 6m');
+      expect(calls.text).toContain('4-XRAY-0');
+      expect(calls.text).not.toContain('4-XRAY-0 · ');
+    });
+
+    it('does not mark the newest fix there is as late — the boundary that read 150 of 150 stale', () => {
+      const { calls, ctx } = fakeContext();
+      const layer = new SymbologyLayer();
+      // A fix exactly one publish interval old is the one that was just sent, not a late one. Comparing
+      // against the interval itself flipped every unit on screen the moment its fix was due to be replaced.
+      const ages = new Map([['u0', PUBLISH_INTERVAL_MS]]);
+
+      layer.render(ctx, fakeProjector(), board(1), null, SIZE, ages);
+
+      expect(layer.counted().stale).toBe(0);
       expect(calls.text).toContain('4-XRAY-0');
       expect(calls.text).not.toContain('4-XRAY-0 · ');
     });

@@ -95,15 +95,17 @@ export class BoardHistory {
    *
    * It cannot come off the board: a `Unit` carries a position, not the moment that position was reported,
    * and the live board's `now` is the console's clock rather than the feed's. The age is a property of the
-   * TRACK — the gap between the moment asked for and the last sample the feed actually delivered — which is
-   * the only place it exists.
+   * FEED — the gap between the moment asked for and the last fix that arrived — and `UnitTracks.fixAge` is
+   * the only place it exists. **Not the last SAMPLE**: the ring is rate-limited and collapses a stationary
+   * run onto its tail, so reading the age off it reported the moving units as aging and the parked ones as
+   * current, which is the question backwards (see the stamp's own note in `tracks.ts`).
    */
   fixAges(t: number): Map<string, number> {
     const out = new Map<string, number>();
     for (const id of this.roster.keys()) {
-      const state = this.tracks.at(id, t);
-      if (state) {
-        out.set(id, state.ageMs);
+      const age = this.tracks.fixAge(id, t);
+      if (age !== null) {
+        out.set(id, age);
       }
     }
 

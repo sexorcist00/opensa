@@ -18,6 +18,7 @@ import { PUBLISH_INTERVAL_MS } from '../ops/tracks';
 import { incidentKey, type Rgba, SET_COLORS } from './beacons';
 import { aheadOf, gtaToEngine } from './coords';
 import { CollisionIndex, labelCandidates, labelRank, unitWantsLabel } from './labels';
+import { quantizeAlpha, SymbolSprites } from './symbol-sprites';
 
 /** What the last draw put on screen, and what a click at those pixels selects. */
 export interface HitArea {
@@ -40,6 +41,9 @@ export interface SymbologyCounts {
   /** `measureText` calls this frame. It is the claim of the width cache, stated rather than asserted: with
    *  the cache warm this is 0 however many symbols are on screen, and every new label costs exactly one. */
   readonly measures: number;
+  /** Symbol bitmaps rasterized this session — the sprite cache's claim that it bounds itself. A board of
+   *  150 fresh units holds two of them, and a blown key would show up here as a number that keeps climbing. */
+  readonly spriteVariants: number;
   /** Units drawn with an aging fix — older than one publish interval (201/8-02). */
   readonly stale: number;
   /** Icons drawn — units plus calls that projected onto the canvas. */
@@ -62,19 +66,30 @@ const NARROW_CANVAS = 620;
 /**
  * When a unit's last fix stops being current, and when the feed has given up on it (201/8-02).
  *
- * **Both numbers are PCAD's, not ours** ([202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md), read
- * out of the plugin and the backend rather than chosen here): positions publish every **4 s**, so a fix
- * younger than that is not late — it is simply the newest one sent. The backend sweeps a unit as stale after
- * **300 s**, so past that the feed itself has stopped believing in the position and the map may not keep
- * drawing it as if it were current.
+ * **The far end is PCAD's, not ours** ([202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md), read
+ * out of the backend rather than chosen here): it sweeps a unit as stale after **300 s**, so past that the
+ * feed itself has stopped believing in the position and the map may not keep drawing it as if it were
+ * current. The near end is derived from the publish rate, below.
  *
  * Between the two the marker FADES rather than flipping, because that is the honest shape of the thing: a
  * fix does not become wrong at a threshold, it gets older. This is the half 8/02 owed — a stale marker, not
  * a confidently wrong one — and the interpolation half of that step is answered by not having any.
  */
-/** A fix is CURRENT for one publish interval — derived, because a hardcoded twin of the feed's rate goes
- *  quietly wrong the day the rate changes: every unit would read as aging, or none would. */
-const FIX_FRESH_MS = PUBLISH_INTERVAL_MS;
+
+/**
+ * A fix is CURRENT until one publish has been MISSED — derived from the feed's rate, never a twin of it.
+ *
+ * Two things are wrong with `> PUBLISH_INTERVAL_MS`, and the operator met both on 2026-09-05. A fix exactly
+ * one interval old is the newest one sent, so a strict comparison against the interval flips at the moment
+ * every unit's fix is due to be replaced: the capture read **`stale: 150` of 150**, and the map said *we
+ * have not heard from it* about a feed it was hearing perfectly. And a single late packet — ordinary on a
+ * phone network — then flickers every plate on screen.
+ *
+ * *One missed publish* is the heartbeat rule and it is a statement about the feed rather than a number
+ * chosen to look right: the next fix should have arrived and has not. It follows the rate automatically, so
+ * the 4 s → 500 ms change moved it without a second edit.
+ */
+const FIX_FRESH_MS = 2 * PUBLISH_INTERVAL_MS;
 const FIX_LOST_MS = 300_000;
 /** How faint a lost unit gets. Not zero: an operator must still be able to find it and ask why. */
 const FIX_LOST_ALPHA = 0.35;
@@ -105,7 +120,17 @@ export class SymbologyLayer {
   private areas: HitArea[] = [];
   /** Chip rects of the frame, held apart so the ICONS can be appended after them (see {@link render}). */
   private chipAreas: HitArea[] = [];
-  private counts = { chips: 0, chipsDropped: 0, measures: 0, stale: 0, symbols: 0 };
+  private counts = { chips: 0, chipsDropped: 0, measures: 0, spriteVariants: 0, stale: 0, symbols: 0 };
+  /**
+   * The symbol bitmaps this layer blits instead of re-tessellating (see `symbol-sprites.ts`).
+   *
+   * It takes the device pixel ratio because a sprite is STORED at device resolution — the layer's own
+   * coordinates stay CSS pixels, as everything else here does. A host that cannot make a canvas gets `null`
+   * back and the path drawing below runs unchanged, which is what keeps this an optimisation rather than a
+   * second renderer.
+   */
+  private readonly sprites: SymbolSprites;
+
   /**
    * Chip width by label text, because `measureText` is the layer's per-symbol cost and the labels do not
    * change: a callsign is a callsign for a whole shift. Before this, every chip re-set `ctx.font` (a font
@@ -118,9 +143,16 @@ export class SymbologyLayer {
    */
   private readonly widths = new Map<string, number>();
 
+  constructor(
+    dpr = typeof window === 'undefined' ? 1 : Math.min(window.devicePixelRatio || 1, 2),
+    sprites?: SymbolSprites,
+  ) {
+    this.sprites = sprites ?? new SymbolSprites(dpr);
+  }
+
   /** What the last {@link render} drew — the inventory report's `symbology` block. */
   counted(): SymbologyCounts {
-    return { ...this.counts };
+    return { ...this.counts, spriteVariants: this.sprites.size };
   }
 
   /** What sits at a CSS-pixel position, topmost first. Chips count — they are half the click target. */
@@ -154,7 +186,7 @@ export class SymbologyLayer {
   ): void {
     this.areas = [];
     this.chipAreas = [];
-    this.counts = { chips: 0, chipsDropped: 0, measures: 0, stale: 0, symbols: 0 };
+    this.counts = { chips: 0, chipsDropped: 0, measures: 0, spriteVariants: 0, stale: 0, symbols: 0 };
     // Font and alignment are the chips' state and never vary, so they are set ONCE per frame rather than
     // once per chip: assigning `ctx.font` re-parses the shorthand every time.
     ctx.font = FONT;
@@ -216,7 +248,7 @@ export class SymbologyLayer {
     }
     const color = css(SET_COLORS[incidentKey(incident.status, incident.priority)]);
     const selected = selection?.kind === 'incident' && selection.id === incident.id;
-    diamond(ctx, point.x, point.y, incident.status === 'closed' ? 5 : 8, color, selected);
+    diamond(ctx, this.sprites, point.x, point.y, incident.status === 'closed' ? 5 : 8, color, selected);
     this.counts.symbols += 1;
     this.areas.push({ height: 20, id: incident.id, kind: 'incident', width: 20, x: point.x - 10, y: point.y - 10 });
     if (point.depth > CHIP_MAX_DEPTH && !selected) {
@@ -260,7 +292,7 @@ export class SymbologyLayer {
     const angle = ahead ? Math.atan2(ahead.y - point.y, ahead.x - point.x) : 0;
     // A stale unit is drawn HOLLOW as well as faded: fade alone reads as distance on a tilted map, and the
     // difference between "far away" and "we have not heard from it" is the whole point of the mark.
-    chevron(ctx, point.x, point.y, angle, color, selected, stale);
+    chevron(ctx, this.sprites, point.x, point.y, angle, color, selected, stale);
     this.counts.symbols += 1;
     this.areas.push({ height: 20, id: unit.id, kind: 'unit', width: 20, x: point.x - 10, y: point.y - 10 });
     if (stale) {
@@ -403,6 +435,7 @@ function age(ms: number): string {
  */
 function chevron(
   ctx: CanvasRenderingContext2D,
+  sprites: SymbolSprites,
   x: number,
   y: number,
   angle: number,
@@ -410,6 +443,19 @@ function chevron(
   selected: boolean,
   stale = false,
 ): void {
+  // THE FAST PATH, and the only one a phone takes: one blit of a bitmap that was tessellated once. The disc
+  // is rotation-invariant and the arrow is baked pointing along +x, so rotating the whole sprite draws
+  // exactly what the path below draws.
+  const sprite = sprites.chevron(color, selected, stale);
+  if (sprite) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.drawImage(sprite.image, -sprite.halfSize, -sprite.halfSize, sprite.size, sprite.size);
+    ctx.restore();
+
+    return;
+  }
   ctx.save();
   ctx.translate(x, y);
   ctx.beginPath();
@@ -484,12 +530,19 @@ function clampToCanvas(box: LabelBox, size: { readonly height: number; readonly 
 /** The call symbol: a diamond, as every CAD map draws an incident. */
 function diamond(
   ctx: CanvasRenderingContext2D,
+  sprites: SymbolSprites,
   x: number,
   y: number,
   size: number,
   color: string,
   selected: boolean,
 ): void {
+  const sprite = sprites.diamond(color, selected, size);
+  if (sprite) {
+    ctx.drawImage(sprite.image, x - sprite.halfSize, y - sprite.halfSize, sprite.size, sprite.size);
+
+    return;
+  }
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(Math.PI / 4);
@@ -553,7 +606,10 @@ function drawScaleBar(
 function fixAlpha(ageMs: number): number {
   const past = Math.min(1, (ageMs - FIX_FRESH_MS) / Math.max(1, FIX_LOST_MS - FIX_FRESH_MS));
 
-  return 1 - past * (1 - FIX_LOST_ALPHA);
+  // QUANTIZED, because this alpha becomes a sprite cache key. A fade that is continuous in time makes a new
+  // key every frame for every aging unit, which is an unbounded cache — and a 1/16 step of a fade that
+  // travels from 1.0 to 0.35 over five minutes is not something an eye resolves.
+  return quantizeAlpha(1 - past * (1 - FIX_LOST_ALPHA));
 }
 
 /** Where the leader line meets the chip: the point on the box's edge nearest the symbol. */

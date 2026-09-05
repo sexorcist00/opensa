@@ -16,11 +16,12 @@
  * **What it records and what it drops** is the sampling policy 8/01 owes, and all three rules exist because
  * of the feed rather than by taste:
  *
- * - **Rate limit.** The mock ticks at 20 Hz; PCAD publishes every 4 s today (measured in its source, plan
- *   202 §4) and faster later. Recording at tick rate would make the mock's tracks denser than the live
- *   feed's — a memory figure that flatters, and a scrub that behaves differently in the two — and recording
- *   at a RISING feed rate would grow the ring with it. So one sample per {@link RECORD_INTERVAL_MS},
- *   whatever is driving and however fast it arrives.
+ * - **Rate limit.** The feed publishes every 500 ms since 2026-09-05 (it was 4 s, see
+ *   {@link PUBLISH_INTERVAL_MS}). Recording at the feed's rate would make the ring follow it — a memory
+ *   figure that grows every time the feed gets better — so one sample per {@link RECORD_INTERVAL_MS},
+ *   whatever is driving and however fast it arrives. **The 8x gap between the two rates is now real rather
+ *   than theoretical**, which is what made `fixAge` necessary: the newest SAMPLE and the newest FIX stopped
+ *   being the same thing.
  * - **A status change always samples**, rate limit or not: a unit that went en-route and arrived between two
  *   position samples has a history that says it never did.
  * - **A stationary run collapses to its two ends.** Most of a shift, most units are parked. Keeping the
@@ -31,10 +32,13 @@
  * around interpolating between packets; interpolation was dropped before anything needed it, and the reasons
  * hold either way:
  *
- * - At PCAD's 4 s rate a car at 100 km/h covers ~110 m between fixes, so a straight-line slide draws it
- *   gliding through buildings — smooth, confident and wrong, which 202 §4 already named as the map's hardest
- *   constraint. A dot that jumps to where the unit was actually reported is the honest picture, and the
- *   cheapest fix for the jumping is PCAD's own publish rate (202 phase 4).
+ * - At the 4 s rate this was written against, a car at 100 km/h covered ~110 m between fixes, so a
+ *   straight-line slide drew it gliding through buildings — smooth, confident and wrong, which 202 §4 named
+ *   as the map's hardest constraint. A dot that jumps to where the unit was actually reported is the honest
+ *   picture, and the cheapest fix for the jumping is the publish rate itself (202 phase 4) — **which is the
+ *   answer that was taken on 2026-09-05**: at 500 ms the same car moves ~14 m, so the step this rule insists
+ *   on is a step the eye no longer reads as a jump. Interpolation stays refused, and now has to justify
+ *   itself against a gap eight times smaller.
  * - Nothing on screen needed it. The mock feed integrates at 20 Hz, so the live map is already smooth; and a
  *   drag across an 8 h timeline moves about one sample per pixel, so a slide inside a 4 s gap is invisible.
  *
@@ -75,14 +79,26 @@ export interface TrackStats {
 export const BYTES_PER_SAMPLE = 4 + 4 + 4 + 4 + 1;
 
 /**
- * How often the feed PUBLISHES a fix, ms — a FACT about PCAD, read out of its source rather than chosen here
- * (plan 202 §4: `cadui.lua`'s `sendPositionUpdate` thread, every 4 s, vehicles only), and one that is
- * expected to SHRINK once the transport is a socket rather than a poll.
+ * How often the feed PUBLISHES a fix, ms.
+ *
+ * **500 ms since 2026-09-05, and it is now a DECISION rather than a measurement.** It read 4000 until then,
+ * and that number was a fact about the plugin as shipped — `cadui.lua`'s `sendPositionUpdate` thread, every
+ * 4 s, vehicles only ([202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md)). 202's phase 4 lists
+ * raising it as the cheapest of the three answers to a 4-second gap, and the user — who owns PCAD — has
+ * taken it. So this is what the console is BUILT and MEASURED against, and the client change is owed on the
+ * other side; the plugin's own rate stays recorded in 202 as what it publishes today.
+ *
+ * **2 Hz is the map's own ceiling, not a round number.** 202 §4 states it: this console draws on demand, and
+ * a feed faster than about 2 Hz spends the frames render-on-demand exists to skip. Half a second is that
+ * ceiling exactly — a car at 100 km/h moves ~14 m between fixes instead of ~110, which is the width of a
+ * road rather than the length of a block, and the reason 8/02's *step, never slide* stops looking like a
+ * jump.
  *
  * It is what a consumer measuring the feed's own behaviour reads: how long a fix may be old before it is
- * aging on screen, and how fast the follow damper must close a gap to stay inside one fix.
+ * aging on screen, and how fast the follow damper must close a gap to stay inside one fix. It is emphatically
+ * NOT {@link RECORD_INTERVAL_MS} — the note there is about this exact edit.
  */
-export const PUBLISH_INTERVAL_MS = 4000;
+export const PUBLISH_INTERVAL_MS = 500;
 
 /**
  * How often a track WRITES a sample, ms — **ours to choose, and deliberately not the same number.**
@@ -208,6 +224,26 @@ class Track {
  */
 export class UnitTracks {
   private readonly capacity: number;
+  /**
+   * When each unit's last FIX arrived, whatever the sampling policy then did with it.
+   *
+   * **It cannot be read off the ring, and the day the two rates were equal was the day nobody noticed**
+   * (2026-09-05). `at()` reports the age of the last SAMPLE, and a sample is written at most once per
+   * {@link RECORD_INTERVAL_MS} — so with the publish rate and the record rate both at 4 s the two numbers
+   * agreed to within a tick and the map looked right. They are different questions, and separating the
+   * constants (2026-08-26) separated the answers without anything reading the difference: at a 0.5 s feed
+   * the newest sample is up to 4 s old while the newest fix is never older than half a second.
+   *
+   * It was worse than a wrong number, because the sampling policy makes it wrong in the direction that
+   * reads as reassuring: a PARKED unit's tail is overwritten with the current moment, so it reported age
+   * ~0, while a MOVING unit only appends every record interval and climbed to the full 4 s. The map said *we
+   * have not heard from it* about exactly the units it was hearing from, and said nothing about the ones
+   * standing still — the operator's screenshot of 2026-09-05 has `· 4s` on every moving unit in frame.
+   *
+   * A fix stamp is one number per unit per tick, no allocation, and it is the only place this question is
+   * answered.
+   */
+  private readonly lastFix = new Map<string, number>();
   private readonly tracks = new Map<string, Track>();
 
   /** `capacity` is the ring length per unit; the default is a whole shift at the publish rate. */
@@ -234,8 +270,26 @@ export class UnitTracks {
     return state(track, track.index(i), i === track.length - 1 ? Math.max(0, t - track.t[last]) : 0);
   }
 
+  /**
+   * How old this unit's last FIX is at `t`, ms — what "aging" on the map means, and what a chip's `· 12s`
+   * counts. `null` when the feed has never delivered one.
+   *
+   * Live, this is the gap to the newest fix. Scrubbing into the PAST it falls back to the sample the ring
+   * holds, because that is genuinely all a history has: a moment between two samples was never recorded, and
+   * a stamp cannot invent it.
+   */
+  fixAge(id: string, t: number): null | number {
+    const arrived = this.lastFix.get(id);
+    if (arrived === undefined) {
+      return this.at(id, t)?.ageMs ?? null;
+    }
+
+    return t >= arrived ? t - arrived : (this.at(id, t)?.ageMs ?? null);
+  }
+
   /** Drop a unit's history — it went off duty. */
   forget(id: string): void {
+    this.lastFix.delete(id);
     this.tracks.delete(id);
   }
 
@@ -245,6 +299,9 @@ export class UnitTracks {
    */
   record(ops: Operations): void {
     for (const unit of ops.units) {
+      // The stamp is unconditional and the sample is not: this line is what the feed did, everything below
+      // is what we chose to keep of it.
+      this.lastFix.set(unit.id, ops.now);
       let track = this.tracks.get(unit.id);
       if (!track) {
         track = new Track(this.capacity);

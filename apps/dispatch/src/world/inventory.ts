@@ -280,13 +280,18 @@ export interface InventoryReport {
      *  budget table wants to hear about. */
     readonly beaconGrowths: number;
     readonly chips: number;
-    /** Chips dropped for depth — the only decluttering this layer does today (3/03 owns the real rule). */
+    /** Names not drawn — past the depth cut, not a unit the shift is about (3/03's rule since 2026-09-05),
+     *  or beaten to the pixels. `chips + chipsDropped` is every symbol that could have carried one. */
     readonly chipsDropped: number;
     readonly incidents: number;
     /** `measureText` calls on that frame. 0 with a warm width cache, whatever the symbol count; one per
      *  label the layer had never drawn before. A capture where this tracks `chips` is one where the cache
      *  is not working. */
     readonly measures: number;
+    /** Symbol bitmaps rasterized this session (`symbol-sprites.ts`). The same claim as `measures`, one layer
+     *  down: a mark is tessellated once per VARIANT and blitted per instance, so this settles at a handful
+     *  and a capture where it tracks the unit count is one where a key is carrying something continuous. */
+    readonly spriteVariants: number;
     /** Texture megabytes the uploaded unit models hold (201/5-04) — the dominant per-type cost, and the
      *  half of a resident figure that belongs to the BOARD rather than to the world. */
     readonly modelTextureMb: number;

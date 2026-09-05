@@ -11,9 +11,11 @@ describe('boardTickMs', () => {
     });
 
     it('does not let the mock outrun the interface it stands in for by default', () => {
-      // The defect this step closes: 50 ms against a 4 s publish rate, and the gate compares by identity.
+      // The defect this step closes: 50 ms against the publish rate, and the gate compares by identity. The
+      // rate itself moved to 500 ms on 2026-09-05, so the assertion is against the CONSTANT rather than a
+      // literal — a test that pins the number twice is a test that has to be edited to change the rate.
       expect(boardTickMs(new URLSearchParams(''))).not.toBe(REPLAY_TICK_MS);
-      expect(boardTickMs(new URLSearchParams(''))).toBe(4000);
+      expect(boardTickMs(new URLSearchParams(''))).toBe(PUBLISH_INTERVAL_MS);
     });
   });
 

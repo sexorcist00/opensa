@@ -14,7 +14,15 @@ function probe(overrides = {}) {
     credentials: async () => ({ helper: 'store', ok: true }),
     exists: async (path) => (overrides.missing ?? new Set()).has(path) === false && present.has(path),
     freeBytes: async () => 40 * 1024 ** 3,
-    git: async () => ({ ahead: 0, behind: 0, branch: 'main', dirty: 0, dirtyPaths: [], upstream: 'ok' }),
+    git: async () => ({
+      ahead: 0,
+      behind: 0,
+      branch: 'main',
+      dirty: 0,
+      dirtyPaths: [],
+      fetched: { ageMs: 1200, ok: true },
+      upstream: 'ok',
+    }),
     identity: async () => ({ email: 'phone@users.noreply.github.com', name: 'phone', owner: 'sexorcist00' }),
     mtime: async (path) => (path === 'package-lock.json' ? 100 : 200),
     nodeVersion: 'v22.4.0',
@@ -105,6 +113,47 @@ describe('phone console doctor', () => {
       const checks = await runChecks(probe({ freeBytes: async () => 512 * 1024 ** 2 }), TARGET);
 
       expect(find(checks, 'disk-repo').state).toBe('warn');
+    });
+
+    it('says the count is stale when origin cannot be reached — `behind 0` is not `up to date`', async () => {
+      // The 2026-09-05 failure: `behind` is measured against a LOCAL ref, so a device that has not fetched
+      // reads `behind 0` however far behind it is. An unreachable origin has to travel WITH the number.
+      const checks = await runChecks(
+        probe({
+          git: async () => ({
+            ahead: 0,
+            behind: 0,
+            branch: 'main',
+            dirty: 0,
+            dirtyPaths: [],
+            fetched: { ageMs: 7_200_000, ok: false },
+            upstream: 'ok',
+          }),
+        }),
+        TARGET,
+      );
+
+      expect(find(checks, 'git').state).toBe('warn');
+      expect(find(checks, 'git').detail).toBe('main · clean · origin unreachable, last read 2h ago');
+    });
+
+    it('says so differently when origin has never been reached in this run', async () => {
+      const checks = await runChecks(
+        probe({
+          git: async () => ({
+            ahead: 0,
+            behind: 0,
+            branch: 'main',
+            dirty: 0,
+            dirtyPaths: [],
+            fetched: { ageMs: null, ok: false },
+            upstream: 'ok',
+          }),
+        }),
+        TARGET,
+      );
+
+      expect(find(checks, 'git').detail).toBe('main · clean · origin unreachable, never fetched this run');
     });
 
     it('names a modified package.json, because that is a pull that will not run', async () => {

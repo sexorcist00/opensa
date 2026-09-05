@@ -39,6 +39,57 @@ const PORT = Number(process.env.PANEL_PORT) || 8787;
 
 /** A Termux:API binary with no add-on app behind it can hang; the release must not hang with it. */
 const SIGNAL_TIMEOUT_MS = 4000;
+/**
+ * How stale `origin/<branch>` may be before the doctor refreshes it, and how long it may take to try.
+ *
+ * **`behind` is measured against a LOCAL ref, and nothing here used to move it** (found 2026-09-05). The
+ * count comes from `git rev-list branch...origin/<branch>`, and `origin/<branch>` only advances when
+ * something fetches — which on this device is the `pull` job and nothing else. So the check that exists to
+ * say *"you are running old code"* answered **`behind 0`** while the phone was 27 files and three app
+ * archives behind, and the `webapp` check agreed with it, because that one compares the served copy against
+ * the archive in the phone's own checkout and both were stale together. Two green lights over a device
+ * serving an app from two days earlier, which is the exact failure
+ * [architecture.md](../../docs/restrictions/architecture.md) records for a device running jobs out of a git
+ * checkout: it has to be able to say the checkout can no longer be updated, and "up to date as of a fetch
+ * nobody has run" is not that.
+ *
+ * The panel polls, so the fetch is throttled rather than run per request, and it is bounded: this phone is
+ * routinely on a captive portal or no network at all, and a doctor that hangs on `git fetch` is worse than
+ * one that reports a stale count — so a failure is REPORTED, never fatal, and the age of the last good
+ * fetch travels with the count.
+ */
+const FETCH_INTERVAL_MS = 60_000;
+const FETCH_TIMEOUT_MS = 8000;
+/** When `origin/*` was last refreshed, and whether the last attempt got there. Module state: one panel, one
+ *  repository, and the throttle has to survive across requests to be a throttle at all. */
+const remoteRefs = { at: 0, lastTry: 0, ok: false };
+
+/**
+ * Fetch `origin/<branch>` if it has not been refreshed lately, and say how fresh the answer is.
+ *
+ * Returns what the DOCTOR needs to qualify a count it cannot otherwise qualify: `ok` — the last attempt
+ * reached origin; `ageMs` — how long ago the refs were last known good, or `null` if never in this run.
+ */
+async function refreshRemoteRefs(branch) {
+  const now = Date.now();
+  if (now - remoteRefs.lastTry < FETCH_INTERVAL_MS) {
+    return { ageMs: remoteRefs.at === 0 ? null : now - remoteRefs.at, ok: remoteRefs.ok };
+  }
+  remoteRefs.lastTry = now;
+  try {
+    // The BRANCH alone, not `--all`: this is a status check on a phone's data plan, not a mirror.
+    await run('git', ['fetch', '--quiet', 'origin', branch], { cwd: REPO, timeout: FETCH_TIMEOUT_MS });
+    remoteRefs.at = Date.now();
+    remoteRefs.ok = true;
+  } catch {
+    // No network, a captive portal, no such branch on origin — all of them mean the same thing here: the
+    // counts below are as old as the last fetch that worked, and the doctor says so rather than implying
+    // they are current.
+    remoteRefs.ok = false;
+  }
+
+  return { ageMs: remoteRefs.at === 0 ? null : Date.now() - remoteRefs.at, ok: remoteRefs.ok };
+}
 const HOST = process.env.PANEL_HOST || '127.0.0.1';
 /** The two ports a field run uses (`scripts/phone.sh`), so the doctor can say which are already serving. */
 const RUN_PORTS = [Number(process.env.STATIC_PORT) || 3001, Number(process.env.APP_PORT) || 5173];
@@ -155,6 +206,7 @@ const probe = {
     try {
       const branch = (await run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: REPO })).stdout.trim();
       const status = (await run('git', ['status', '--porcelain'], { cwd: REPO })).stdout;
+      const fetched = await refreshRemoteRefs(branch);
       let ahead = 0;
       let behind = 0;
       /** `ok` — origin carries this branch; `gone` — it did and no longer does; `none` — it never has. */
@@ -178,7 +230,7 @@ const probe = {
 
       const paths = statusPaths(status);
 
-      return { ahead, behind, branch, dirty: paths.length, dirtyPaths: paths, upstream };
+      return { ahead, behind, branch, dirty: paths.length, dirtyPaths: paths, fetched, upstream };
     } catch {
       return null;
     }

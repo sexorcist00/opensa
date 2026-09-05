@@ -91,6 +91,24 @@ describe('BoardHistory', () => {
 
       expect(resolved.units.map((entry) => entry.id)).toEqual(['u1']);
     });
+
+    it('does not read a moving unit’s fix age off the RING, which is rate-limited', () => {
+      // The 2026-09-05 defect, and it was silent for as long as the two rates were the same number. A
+      // sample is written at most once per RECORD_INTERVAL_MS, so a MOVING unit's newest sample climbs to
+      // that interval while its newest fix is one tick old — and the map read the ring, so it marked as
+      // aging exactly the units it was hearing from. Worse in the direction that reassures: a PARKED unit
+      // overwrites its own tail, so it reported an age of ~0 for the whole time it was silent.
+      const history = new BoardHistory();
+      for (let ms = 0; ms <= 6000; ms += 500) {
+        history.record(board(ms, [unit('u0', [ms, -500]), unit('u1', [900, -900])]));
+      }
+
+      // Both were fed at the same moment, so both are as fresh as each other — the mover included.
+      expect(history.fixAges(6000).get('u0')).toBe(0);
+      expect(history.fixAges(6000).get('u1')).toBe(0);
+      // And the age is the gap to the last FIX rather than to the last sample: nothing arrived for 4 s.
+      expect(history.fixAges(10_000).get('u0')).toBe(4000);
+    });
   });
 
   describe('positive cases', () => {

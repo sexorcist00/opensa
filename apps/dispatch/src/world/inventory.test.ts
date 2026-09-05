@@ -94,6 +94,7 @@ const CONTEXT = {
     chipsDropped: 2,
     incidents: 2,
     measures: 0,
+    spriteVariants: 2,
     modelTextureMb: 12.5,
     modelTypes: 3,
     stale: 0,

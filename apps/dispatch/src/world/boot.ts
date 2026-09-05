@@ -692,8 +692,6 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     );
   };
 
-  /** How many more overlay draws are broken into named steps — see the split inside `overlay-2d` below. */
-  let overlayDetail = 3;
   const gate = new RenderGate();
   let idleTimer: null | ReturnType<typeof setTimeout> = null;
   const schedule = (idle: boolean): void => {
@@ -883,7 +881,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         return;
       }
       /**
-       * The first few overlay draws are SPLIT, and only those.
+       * The overlay draw is SPLIT into its three parts.
        *
        * The phone's first frame spends ~1.85 s here and nothing says which part
        * ([the 08-25 moving-camera row](../../../../docs/benchmarks/opensa-engine/2026-08-25-mobile-centre-moving-camera.json)).
@@ -892,20 +890,25 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
        * three candidates it separates: the canvas backing store being touched for the first time
        * (`clearRect`), the symbol layer's first glyph raster (`symbols`), and the sketch pass.
        *
-       * `overlayDetail` counts down, so this costs two extra `performance.now()` pairs for three frames and
-       * nothing at all afterwards — a permanent split would put three noise rows in every steady-state
+       * It counted down for three frames, so it cost two extra `performance.now()` pairs at boot and
+       * nothing at all afterwards — a permanent split would have put three noise rows in every steady-state
        * frame's segments.
        *
        * It was written to be removed once it had answered, and it is KEPT instead: `overlay:clear` went
        * 212.1 ms → 0.1 on the device once the warm landed, and this split is the only thing that would say
        * if that ever came back. Six timestamps per session is a cheap regression detector for a cost that
        * used to be two seconds.
+       *
+       * **AND IT IS PERMANENT SINCE 2026-09-05, because the argument above expired.** The split was a
+       * BOOT question, so three frames answered it and a steady-state row was noise. Then the first capture
+       * at the declared board put `overlay-2d` at **6.17 ms of an 11.65 ms CPU body** — the largest single
+       * line in the frame, nearly twice `engine-frame` — and its own sub-spans were three frames old and
+       * therefore silent about all of it. A frame's biggest line with no breakdown is the one place a split
+       * is worth its rows: `firstFrames` above already carries the boot answer, so what this now buys is the
+       * steady state. Six `performance.now()` calls a frame against a 6 ms line is a cost that cannot be
+       * read off the number it explains.
        */
-      const detail = overlayDetail > 0;
-      if (detail) {
-        overlayDetail -= 1;
-      }
-      const step = <T>(name: string, run: () => T): T => (detail ? time(name, run) : run());
+      const step = time;
       step('overlay:clear', () => {
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
         context.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
