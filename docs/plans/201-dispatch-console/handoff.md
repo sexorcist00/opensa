@@ -1,171 +1,168 @@
 # 201 — the handoff spec
 
-**Written 2026-09-05 for the agent that picks this up next.** The `## Status` table in
-[readme.md](readme.md) is still the chain's state of record; this is the working spec it points at, because a
-handoff that has to fit in a table cell stops being read at about the point it starts being useful.
+**Rewritten 2026-09-05 (evening) for the agent taking the POST CHAIN.** The `## Status` table in
+[readme.md](readme.md) is the chain's state of record; this is the working spec it points at.
 
 Read [`CLAUDE.md`](../../../CLAUDE.md)'s chain first, then this.
 
 ---
 
-## 1. Where the project actually is
+## 1. Where the frame is
 
-**The console meets its frame budget on an empty map and does not on a full one, and until today only the
-first half of that sentence had ever been measured.**
+Measured today at the settled pose `[1500,-1500] h900 pitch −1.15 yaw π`, `?surface=720x640`, pak
+`./build/phone-cars`, on the 2/03 phone. The empty map was flown three times across the session and read
+**20.03 / 20.43 / 20.25 ms** — a 0.4 ms spread, which is what makes every subtraction below worth having.
 
-| | empty map | 9 units as models | **150 units as models** |
-| --- | --- | --- | --- |
-| draws | 96 | 837 | **12 197** |
-| triangles | 242 k | 344 k | **1.30 M** |
-| `overlay-2d` (CPU) | 0.5–0.9 ms | — | **6.17 ms** of an 11.65 ms body |
-| frame | 17–21 ms, 74–92 % on one vsync interval | — | not yet measured on the route |
+| | frame mean | p50 | p95 | CPU body | draws |
+| --- | --- | --- | --- | --- | --- |
+| empty map (`field`) | **20.2 ms** | 16 | 34 | 3.3 | 112 |
+| declared board (`board`, 150 units + 40 calls, fleet drawn) | **23.8 ms** | 18 | 38 | 7.9 | 3 571 |
 
-Rows: [the empty-map series](../../benchmarks/index.md) (09-05) and
-[units as models, first look](../../benchmarks/opensa-engine/2026-09-05-mobile-units-as-models-first.json).
+**The board is no longer where the frame goes.** Everything the 150 units cost — cars, symbology, labels —
+is now **+3.6 ms over the empty map**, and it took three changes today to get there:
 
-**Chain 9 is spent.** It took the frame from 48 ms to ~17 with ~90 % of frames on one display interval. The
-win was the post chain, not the world: removing the bloom chain is 7.7 ms of a 23.4 ms frame while the whole
-streamed city is 3.8, and the shipped fix is a half-resolution bloom prefilter taken on an operator's night
-verdict.
+| | before | after |
+| --- | --- | --- |
+| draws at the board ([instancing](../../benchmarks/opensa-engine/2026-09-05-mobile-vehicle-instancing.json)) | 11 810 | **3 571** |
+| `sym:units` ([per-unit allocation](../../benchmarks/opensa-engine/2026-09-05-mobile-per-unit-allocation.json)) | 4.04 ms | **1.62** |
+| board over empty | +6.1 ms | **+3.6** |
 
-**Chains 4 and 5 moved today.** [4/04](4-a-console-is-not-a-game/readme.md) (sway keeps the frame awake) is
-built; [5/05](5-symbology-and-picking-as-product/readme.md) is open with a decision in it that needs the
-user.
+**So the 20.2 ms empty map is the whole remaining budget, and the post chain is the biggest thing in it.**
+That is your work.
 
 ---
 
 ## 2. Do this first, or every number you take is of the wrong thing
 
-**The device is running the previous app.** The long `phone` job is serving out of `./build/phone-cars` and a
-job holds the runner, so `pull` is refused while it runs. Until this is done the phone has neither the
-five-type board nor 4/04's sway:
+**The phone runs jobs out of a git checkout.** Stop the serving job, pull, re-unpack the app, restart:
 
-```bash
-# on the phone, after stopping the serving job
-git pull --ff-only && rm -rf build/webapp/assets && tar -xzf prebuilt/opensa-webapp.tar.gz -C build/webapp
+```
+phone_stop → phone_run pull → phone_run webapp → phone_run phone (OUT=./build/phone-cars MODELS=1 BAKE=1
+DISTRICT=los-santos-centre TEXTURES=astc)
 ```
 
-**There are now TWO paks and they are not interchangeable.**
+The `phone` job REUSES the pak when the recipe matches; it only converts when `--out/pak/manifest.json` is
+missing or `REBUILD=1`. It will not spend an hour on you by accident.
+
+**Verify the app you are measuring by reading `inventory.app` out of a snapshot.** A prebuilt archive is
+always built before its own commit, so the stamp reads one behind with a `+` whenever the tree was dirty —
+`aa64e84+` is the tree at `ca45aca`. This is not pedantry: an entire change shipped INERT this session and
+the only thing that said so was a device number.
+
+**The panel's `behind` count is live again since this session.** It used to be measured against a local
+`origin/main` that nothing ever fetched, so it read `behind 0` on a device three app archives stale. The
+probe fetches now (throttled 60 s, bounded 8 s) and an unreachable origin shows as
+`origin unreachable, last read 2h ago` in the branch row. Trust it, but read `inventory.app` anyway.
+
+**Two paks, not interchangeable.**
 
 | pak | what it is | use it for |
 | --- | --- | --- |
-| `./build/phone` | `19:23 28-08-2026`, `MODELS=0` — no cars, no collision | every 09-05 row in the benchmark index. Keep it: those rows are only re-flyable against it |
-| `./build/phone-cars` | `07:40 05-09-2026`, `MODELS=1 BAKE=1`, 5 vehicles, collision baked | anything with units drawn as models, and anything that will ever need collision |
-
-`map_open` takes `out`, so you can point the console at either without touching the panel.
-
-**Verify the app you are measuring by grepping the SERVED bundle, never by the stamp.** The stamp names the
-last COMMIT and a prebuilt archive is always built before its own commit, so it reads one behind with a `+`
-whenever the tree was dirty.
+| `./build/phone` | `19:23 28-08-2026`, `MODELS=0` — no cars | the 09-05 morning series only |
+| `./build/phone-cars` | `07:40 05-09-2026`, `MODELS=1 BAKE=1`, 5 vehicles | **everything since**, including every number above |
 
 ---
 
-## 3. The work, in order
+## 3. The work: the post chain
 
-### 3.1 — The comparable row at the declared load
+### 3.1 — The first thing to do is re-fly `nobloom`, because 7.7 ms is stale
 
-The first-look row is deliberately **not** comparable: new pak, ten-leg route not flown, 260 frames against
-the 300 the collector asks for, three model types rather than five. Fly the route properly at
-`board` against `./build/phone-cars` and file it as a row that can be subtracted from.
+[201/9's sweep](../../benchmarks/opensa-engine/2026-09-05-mobile-map-ablation-sweep.json) priced the bloom
+chain at **7.7 ms of a 23.4 ms frame** — the largest single item in it, and more than the entire streamed
+city at 3.8. That is the number this step is aimed at, **and it prices a chain the console no longer runs.**
 
-**The route, and it is not negotiable if a row is to be comparable.** Settle at `[1500,-1500]` h200
-pitch −1.3 yaw π. Warm the rect's four corners (`[1380,-1620] [1620,-1380] [1380,-1380] [1620,-1620]`).
-Return to the settle pose. **Reading A.** Fly the ten legs — the four corners, then `[1380,-1500]` h180,
-`[1620,-1500]` h200, `[1500,-1620]` h220, `[1500,-1380]` h180, then the first two corners again.
-**Reading B.** The window is the delta of the two `frame.dtHistogramMs` readings; moving is every bin below
-the 100 ms tail; read the MEAN and the vsync ladder beside it.
+The sweep was flown on app `5937214+`. The console's bloom default moved to a **half-resolution prefilter**
+later the same day (`7ffd681`, the operator's night verdict), and `git merge-base` confirms the sweep's app
+is an ancestor of that change. `bloomhalf` was separately measured at **−4.4 ms** off a 21.52 baseline. So
+the chain that costs 7.7 ms has not existed since; subtracting one from the other across two sessions and
+two baselines is arithmetic, not a measurement.
 
-**Pass every pose field explicitly** (`yaw: 3.141592653589793`, `projection: 'perspective'`) — the console
-completes a partial pose from the one it holds, so an omitted field is no longer a black screen but an arm
-flown at whatever yaw the last operator left is not the route.
+**So: fly `nobloom` against `field` in one session before designing anything.** Both links exist. Until that
+number is on the table, the size of the prize is unknown — it could be ~3 ms, which is still the largest
+board-side term, or it could be less than the floor.
 
-### 3.2 — Instance the unit models
+### 3.2 — What has already been tried, so you do not pay for it twice
 
-**12 197 draws.** ~80 a car, because a vehicle is a part hierarchy rather than a mesh. The
-[frame audit](../../audit/frame-path-vs-aaa.md) ranked GPU-driven work as *interesting only at this load*;
-this is the load. **Instancing comes before a culling pipeline** — the audit says so and the numbers agree:
-150 units of 3–5 types is a handful of models drawn many times, which is what instancing is for.
+| lever | result | link |
+| --- | --- | --- |
+| fewer levels (`bloom4`) | **0.2 ms** — noise. The tail mips are 12x10, 6x5, 3x3 px here; the money is in the FIRST levels | [sweep](../../benchmarks/opensa-engine/2026-09-05-mobile-map-ablation-sweep.json) |
+| `rg11b10ufloat` storage (`bloomrg11`) | **−2.4 ms** | [levers](../../benchmarks/opensa-engine/2026-09-05-mobile-bloom-levers.json) |
+| half-res prefilter (`bloomhalf`) | **−4.4 ms**, and it SHIPPED as the console default | same |
+| both together (`bloomboth`) | **17.38 — the same as half alone. They are ALTERNATIVES, not additive** | same |
+| dual-filter downsample + f16 colour (`bloomvendor`) | **indistinguishable**, and the prediction that it would be was pre-registered | [vendor levers](../../benchmarks/opensa-engine/2026-09-05-mobile-vendor-levers.json) |
 
-**What bounds it**: `multi-draw indirect` and `bindless` are WebGPU **proposals**, not shipped surface.
-Compute shaders and single `drawIndirect` are core. Design against that, not against the desktop shape.
+**Read the last row before writing a plan.** Both vendor levers provably do less work — five taps instead of
+thirteen, half-width ALU — and the frame does not notice, because ~90 % of frames already sit on one display
+interval and a lever worth tenths cannot be seen from under a vsync floor. That is the shape of this
+device, and it is why §3.1 comes first.
 
-### 3.3 — The 2D symbology layer
+### 3.3 — What you may not do
 
-`overlay-2d` is **6.17 ms of an 11.65 ms CPU body** at 150 units — twice `engine-frame`. At the declared
-count the CPU goes into the **2D layer, not the 3D one.** This is
-[5/02](5-symbology-and-picking-as-product/readme.md)'s owed `board` − `field` subtraction, and
-[9/01](9-the-mobile-frame/readme.md) already lists what is known to be waste in it: a label plate built from
-four `arcTo` calls for a 1 px radius, and a fresh path per unit symbol per frame where a sprite cache is the
-standard answer.
+- **Frame time may not be bought with resolution, sampling or anti-aliasing** (the user's standing call,
+  2026-09-04). `?scale=`, `?msaa=` and `?scene=` are measurement arms and are not shipping paths.
+- **Any change that alters the picture goes to the operator as an A/B on the device before it is kept.**
+  `bloomhalf` shipped that way, at NIGHT, because a half-res bright pass can only lose a sub-pixel emitter
+  where there is one lit — a daylight A/B on it was indistinguishable and settled nothing.
+- A [protected-list](1-the-map-profile/protected-list.md) item is released by a field verdict and nothing
+  else.
+- A feature ships on a phone and on a desk in the same change.
 
-### 3.4 — What 4/04 still owes
+### 3.4 — The other terms, for scale
 
-Built today, unverified on the device: a **look verdict** that the sway now reads as continuous at map zoom,
-`framesSkipped` before and after over a still map with foliage in frame, and **4/01's battery/thermal delta
-re-taken** — this step is the thing most likely to have moved it, and it costs 4/01's whole win on any view
-with foliage.
-
-### 3.5 — The decision that needs the user, not you
-
-[5/05](5-symbology-and-picking-as-product/readme.md) step 4. The user has decided that a unit should be *"an
-ordinary GTA SA car — model, physics, drives on the map surface"*, which reverses a framing taken with them
-on 2026-08-26 and written up as a
-[restriction](../../restrictions/architecture.md) (now annotated UNDER REVIEW rather than deleted).
-
-**Do not build it before putting the separation back to them**, with its five costs attached: collision
-returns to the map profile's pak, the layer boundary moves (`apps/dispatch` currently reaches the game layer
-through the environment driver alone), see-only residency stops qualifying, a dynamic body still may not
-spawn outside its collision, and the frame budget re-opens at a load that is already 12 197 draws.
-
-The separation is the part to settle: a **fed** unit's position is owned upstream and correcting it makes the
-map disagree with the server, while a car the console **drives** is owned by nobody else. Those are two
-different objects that both look like a car on a map.
+From the same sweep, all against a 23.4 ms baseline: **the streamed world 3.8**, the cumulus field 1.8, the
+env probe 1.6, the sky LUT 1.0. **Only the first two clear the instrument's floor** — the null arm put that
+at ~2.5 ms that session, and `?ablate=probe` is a NULL ARM on this surface anyway (`apps/dispatch` never
+assigns `Engine.probeCenter`, so the pass has never rendered a face here — `surface.probeFaces` says so).
 
 ---
 
-## 4. The rules that shape any answer here
+## 4. The instruments you have that the last agent did not
 
-**The instrument's floor is measured per session and never carried over.** A null arm — one that removes
-nothing — read **2.47 ms** on the morning of 09-05 and **~1.0 ms** that evening. `render/ablation.ts` used to
-claim ~0.5 ms; that was inferred from the frame count, never measured.
-
-**A delta is not a measurement until a control says it is not noise.** Twice in one day three windows agreed
-on a story that was false — once for the probe, once for the vendor levers — and the same discipline caught
-both: bracket the arm with its own baseline and sample both twice.
-
-**An arm must be proven non-null before its number is read.** `?ablate=probe` was priced at 1.6 ms on a
-surface where the probe has never rendered a face, because `apps/dispatch` never assigns `probeCenter`. The
-report now carries `surface.probeFaces` so this cannot repeat silently; check what a pass is gated on in the
-**host**, not only in the engine.
-
-**Standing calls from the user.** Frame time may not be bought with resolution, sampling or anti-aliasing
-(2026-09-04). Any change that alters the picture goes to the operator as an A/B **on the device** before it
-is kept. A [protected-list](1-the-map-profile/protected-list.md) item is released by a field verdict and by
-nothing else. A feature ships on a phone and on a desk in the same change.
+- **`overlay-2d` is split permanently**, and `symbology.render` is split under it: `sym:calls`, `sym:units`,
+  `sym:labels`, `sym:scale`. The recorder is passed in by the host, so plan mode and every test pay nothing.
+  This is what turned a 6 ms unattributed remainder into a number.
+- **`?sprites=0`** (`nosprites` on the panel) — the symbology's own drawing path, as a control arm.
+- **`scripts/debug/canvas-symbol-arms.mjs`** — a desk-side Canvas2D A/B in headless Chromium, ten seconds,
+  no device. It answered "is a blit cheaper at all" and, more usefully, put a SCALE under the device number.
+- The report carries `marksHidden`, `spriteVariants`, `probeFacesRendered` and `surface.probeFaces`.
+- The fake device records `firstInstance`, without which instanced draws are untestable.
 
 ---
 
-## 5. Where the seams are
+## 5. The rules this session paid for, in the order they cost the most
 
-| what | where |
-| --- | --- |
-| the one place a console verdict lands | `apps/dispatch/src/world/console-budget.ts` |
-| what a surface may ask for / what the device grants | `packages/engine/src/render/budget.ts`, `resolveRenderBudget` |
-| the ablation arms | `packages/engine/src/render/ablation.ts`, `apps/dispatch/src/world/capture-ablation.ts` |
-| the query knobs a capture reads | `apps/dispatch/src/world/capture-budget.ts` |
-| the panel's link table (its test pins that a pair differs by ONE field) | `tools-debug/phone-console/app/links.mjs` |
-| render-on-demand, and 4/04's animation rate | `apps/dispatch/src/world/render-gate.ts` |
-| units as models | `apps/dispatch/src/map/unit-models.ts`, `world/model-source.ts` |
-| what the mock board drives | `apps/dispatch/src/ops/seed.ts` (`DEMO_MODELS`), pinned against `scripts/phone.sh` |
+**A change can ship completely inert and every test can pass.** Instancing landed, the device returned
+**11 810 draws — unchanged to the unit**. The run key asked "is every submesh visible" and nothing ever is:
+every caller hides submeshes and re-shows a set. Seven new tests passed because they exercised the mechanism
+rather than the workload. *Test the configuration your callers actually produce.*
+
+**A monotonic sequence is warm-up, not a lever.** The sprite arm's first pairing read a confident −0.58 ms;
+six alternating windows showed the number falling steadily while the arm alternated, and the sign flipped by
+the last pair. Third time in this chain that three windows agreed on a false story.
+
+**Measure the instrument before the effect.** The desk control's first version timed single frames against a
+~100 µs `performance.now()` clamp and read a clean 15 % win it had no resolution to see. A sample is a block
+of 40 frames now.
+
+**Fly the baseline twice, in the same session.** `field` read 20.43 and 20.03 ninety seconds apart, and 20.25
+after the change — which is the only reason today's deltas mean anything. Earlier in the day the same arm
+spanned 26.8–59.9 ms on a hot device.
+
+**Read what a pass is gated on in the HOST, not only in the engine.** `?ablate=probe` was priced at 1.6 ms on
+a surface where the probe has never rendered a face.
 
 ---
 
 ## 6. Still unpaid, by everyone
 
-- **No row in `docs/benchmarks/` records battery, charging state or die temperature.** Every thermal
-  argument in this chain is made without them.
-- **No capture records how many console tabs the browser holds**, which was the null arm's one unclosed
-  candidate for its own spread. A capture that cannot count its competitors cannot bound its own noise.
-- **Upstream has not been merged.** `AlexSergey/opensa` cannot be fetched from the web container (no
-  credentials, and `add_repo` is refused there), so the fork's divergence is unmeasured. Do it from a
-  checkout that can.
+- **No row records battery, charging state or die temperature.** Every thermal argument in this chain is made
+  without them, including "the device had not moved" above — which rests on a re-flown baseline instead.
+- **No capture records how many browser tabs compete with it**, which is the null arm's one unclosed
+  candidate for its own spread.
+- **Upstream has never been merged.** `AlexSergey/opensa` cannot be fetched from the web container (no
+  credentials, `add_repo` refused), so the fork's divergence is unmeasured. Do it from a checkout that can.
+- **A `?models=0` arm.** The fleet's own cost was measured against a window where the models happened not to
+  load — a real arm would make that reproducible.
+- **The CSS box is not held constant.** The browser chrome collapses between 360x320, 360x570 and 360x609;
+  the pinned buffer holds the scene still, but the overlay follows the box, so its pixel count moves between
+  windows that are otherwise identical.

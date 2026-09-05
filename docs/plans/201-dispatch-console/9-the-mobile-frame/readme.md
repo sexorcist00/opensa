@@ -756,3 +756,50 @@ a frame at ~50 fps.
 **Next here is not an optimisation, it is a split**: `symbology.render` gets the same treatment
 `overlay-2d` just got, and the 6 ms is attributed before any part of it is touched. Making that split
 permanent is the whole reason this line stopped being a remainder, and the same move is owed one level down.
+
+**And that split was taken, and it named the cost.** `sym:units` **4.07 / 4.18** (two windows), `sym:labels`
+1.57, `sym:calls` 0.77, `sym:scale` 0.25 — summing to 6.66, inside the range the six sprite windows had
+measured for the whole span, so the split reports the cost rather than adding one. A unit came to **27 µs**
+and a call to **19** while a unit does roughly twice the drawing, which is the same conclusion from a third
+direction: nearly flat per entity where the drawing per entity is not.
+
+### 08 — The load, removed: instancing and the per-unit path (2026-09-05)
+
+Two changes, both aimed at what the split had just named, and both measured against an empty map re-flown
+three times across the session (**20.03 / 20.43 / 20.25 ms** — a 0.4 ms spread).
+
+**[Instancing the unit models](../../../benchmarks/opensa-engine/2026-09-05-mobile-vehicle-instancing.json)**
+— the [frame audit](../../../audit/frame-path-vs-aaa.md)'s top item. A vehicle is a part hierarchy, so every
+part was its own draw per car; opaque order is decided by depth, so a run of consecutive slots drawing the
+same submeshes is one draw per submesh however many cars are in it. **11 810 → 3 571 draws, triangles
+identical at 1 488 514.** `multi-draw indirect` and `bindless` are WebGPU proposals, so this is plain
+instanced `drawIndexed` — which is what the audit named as the honest first move.
+
+**It shipped INERT the first time and that is the more useful half of the step.** The run key asked whether
+every submesh of a car was visible, and nothing ever is: `apps/dispatch` hides all of them and re-shows the
+body set, the game's handle does the same for extras and damage. Every car failed the key, every car was
+drawn alone, and the device returned **11 810 — unchanged to the unit** while seven new tests passed. They
+exercised the mechanism rather than the configuration every caller produces. The fix was smaller than the
+mistake: `opaqueOrder` already IS the set an instance draws, so interning it per model makes the comparison
+one integer.
+
+**[The per-unit allocations](../../../benchmarks/opensa-engine/2026-09-05-mobile-per-unit-allocation.json)** —
+three objects per entity per frame (`gtaToEngine`'s array, `project`'s point, the hit rect), ~190 times a
+frame at ~50 fps. `projectInto(x, y, z, out)` writes into a point the layer owns, the hit rects are pooled
+and reused, and the concatenation that copied every rect every frame went with them.
+
+| | before | after |
+| --- | --- | --- |
+| `sym:units` | 4.04 ms | **1.62** (−60 %, same mark count) |
+| CPU body at the board | 11.04 | **7.86** |
+| frame at the board | 26.30 ms | **23.81** |
+| board over the empty map | +6.1 ms | **+3.6** |
+
+**p50 did not move** — 18 ms both sides. Half the frames were already landing on one display interval and
+still are; what this bought is the other half, and p95 says so (50 → 38): a tail losing collector pauses
+rather than a floor moving.
+
+**So the board is no longer where the frame goes**, and the 20.2 ms empty map is the whole remaining budget.
+The post chain is the biggest thing in it — see [the handoff](../handoff.md), whose first instruction is to
+re-fly `nobloom`, because the 7.7 ms that makes it the largest item prices a chain the console stopped
+running when the half-resolution prefilter became its default.
