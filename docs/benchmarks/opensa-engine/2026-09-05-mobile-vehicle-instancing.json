@@ -1,0 +1,36 @@
+{
+  "note": "201/9-08: the unit models instanced. The frame audit's top item, taken on the device — and the first attempt at it shipped INERT, which is the half of this row worth reading.",
+  "app": "8cda1fd+",
+  "build": "07:40 05-09-2026",
+  "pak": { "out": "./build/phone-cars", "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre" },
+  "device": "MGA-LX3 / ARM Bifrost @ DPR 2, ?surface=720x640 pinned",
+  "pose": "[1500,-1500] h900 pitch -1.15 yaw pi perspective, 150 units + ~40 calls, fleet loaded (unitsAsModels 150, 5 types)",
+  "structural": {
+    "drawsBefore": 11810,
+    "drawsAfter": 3571,
+    "change": "-69.8 %, and it is exact rather than sampled: a draw count is a count.",
+    "trianglesBefore": 1488514,
+    "trianglesAfter": 1488514,
+    "residencyMbBefore": 80.224,
+    "residencyMbAfter": 80.244,
+    "reading": "the same geometry submitted in a third of the calls. Triangles identical to the unit is the check that nothing stopped being drawn — an instanced draw that lost its run would show here as a shortfall, and a wrong part offset would not (it renders, wrongly), which is why the unit tests carry that half."
+  },
+  "whatIsLeft": {
+    "count": "~3 459 of the 3 571 are cars (112 is the world).",
+    "why": "the TRANSLUCENT phase is not instanced and is not asked to be: its submesh order is a function of the eye and differs per car (074/16 round 6 — unsorted, a steering wheel draws over its own windscreen). So glass stays one draw per car per submesh, and at ~21 translucent submeshes a car that is most of what remains.",
+    "next": "if this is worth attacking, the question is the SUBMESH COUNT per car rather than the instancing — ~78 submeshes for one vehicle is a build-time property of how the model is cut, not a runtime one."
+  },
+  "frameTime": {
+    "claimed": "NOTHING. The windows either side of this change were taken hours apart on a device that has been running all session, and the CSS box differed between them (360x320 against 360x609) because the browser chrome collapses. dtMean readings across the day's fleet-loaded windows span 26.8 to 59.9 ms with nothing changed, which is wider than any effect could be read through.",
+    "why": "the same rule the null arm and the vendor levers established: an arm is subtracted from a baseline flown in the SAME thermal window, and a delta is not a measurement until a control says it is not noise. The draw count needs neither, so it is what this row asserts.",
+    "owed": "a frame-time pairing flown cold, both arms in one session, ideally with a `?instancing=0` control in the shape `?sprites=0` already has."
+  },
+  "theInertFirstAttempt": {
+    "what": "the run key asked whether every submesh of a car was visible, on the reasoning that comparing masks pairwise would cost submeshCount compares per adjacent pair per frame.",
+    "why it was wrong": "nothing is ever fully visible. `apps/dispatch` hides EVERY submesh at claim and re-shows the body set — the _dam twins, the _vlo LOD and the unchosen extras ride in the same buffers, so a car whose visibility is never set draws its own wreck through itself — and the game's handle does the same for extras, variants and damage. Every car failed the key and was drawn alone.",
+    "howItPresented": "it typechecked, it linted, seven new unit tests passed, and the device returned 11 810 draws — the number to the unit that it had been before instancing existed. The tests exercised the mechanism rather than the workload, on a fleet nobody had configured the way every caller configures one.",
+    "theFix": "the SET is what groups, and it was already derived and cached: `opaqueOrder` is exactly the list of submeshes an instance draws. Interned per model it compares as one integer, and the cost is paid where the order is built — once per visibility change — rather than per frame. The cheap-comparison worry that produced the wrong key is answered without the key being wrong.",
+    "theTestThatWouldHaveCaught it": "five cars that hide every submesh and re-show the same two: two draws, not ten."
+  },
+  "boundedBy": "multi-draw indirect and bindless are WebGPU PROPOSALS, so the one-call-for-everything shape the 2026 desktop standard uses is unavailable. Compute plus single drawIndirect is core; this uses neither, only instanced drawIndexed, which is what the frame audit named as the honest first move."
+}
