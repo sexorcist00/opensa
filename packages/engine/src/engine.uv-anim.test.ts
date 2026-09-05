@@ -138,7 +138,11 @@ describe('rigid UV animations on a fake device', () => {
       engine.frame(camera());
 
       const draws = gpu.draws.filter((draw) => draw.pipeline === 'rigid-opaque');
-      expect(draws.map((draw) => draw.bindGroupOffsets[1])).toEqual([[0], [0]]);
+      // Two dynamic offsets on this group since 201/9-08: the uv-anim slot, then the PART.
+      expect(draws.map((draw) => draw.bindGroupOffsets[1])).toEqual([
+        [0, 0],
+        [0, 0],
+      ]);
     });
 
     it('destroying an animated model frees its uniform, and a plain one frees no shared buffer', async () => {
@@ -208,7 +212,11 @@ describe('rigid UV animations on a fake device', () => {
       expect(draws).toHaveLength(2);
       // Both submeshes share one texture array, so the ARRAY alone would have bound group 1 once and drawn
       // them at the same transform — the offset has to be part of what triggers a rebind.
-      expect(draws.map((draw) => draw.bindGroupOffsets[1])).toEqual([[0], [UV_ANIM_STRIDE]]);
+      // The uv-anim slot moves; the PART offset stays 0 because both submeshes are part 0.
+      expect(draws.map((draw) => draw.bindGroupOffsets[1])).toEqual([
+        [0, 0],
+        [UV_ANIM_STRIDE, 0],
+      ]);
     });
 
     it('a model with no animations binds offset 0 on every submesh', async () => {
@@ -221,7 +229,11 @@ describe('rigid UV animations on a fake device', () => {
       engine.frame(camera());
 
       const draws = gpu.draws.filter((draw) => draw.pipeline === 'rigid-opaque');
-      expect(draws.map((draw) => draw.bindGroupOffsets[1])).toEqual([[0], [0]]);
+      // Two dynamic offsets on this group since 201/9-08: the uv-anim slot, then the PART.
+      expect(draws.map((draw) => draw.bindGroupOffsets[1])).toEqual([
+        [0, 0],
+        [0, 0],
+      ]);
     });
   });
 });

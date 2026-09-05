@@ -1277,7 +1277,8 @@ fn fsProbeView(in: ProbeViewOut) -> @location(0) vec4f {
 #include <frame>
 
 // Rigid-part dynamics (074/08 B2→B5): vehicle-style entities — CPU-flattened part matrices in a storage
-// buffer, parts drawn with firstInstance = slot × partCount + part (instance_index reads the matrix).
+// buffer. Since 201/9-08 a draw passes the SLOT as firstInstance and names its PART in a uniform, so the
+// shader computes the row (slot × partCount + part) and one draw can cover every instance of a model.
 // slots.x = texture-array layer, slots.y = the lamps-on twin, slots.z = the carcols PAINT slot (resolved
 // per instance — B5 shares one model across differently-painted cars). fsRigid = opaque (alpha forced 1),
 // fsRigidBlend = premultiplied glass on the blend pipeline.
@@ -1365,6 +1366,16 @@ struct RigidVsOut {
 // selects the submesh's slot out of the model's own animation list; slot 0 is (0,0,1,1), so a car — and
 // every static submesh of an animated model — runs the identity and comes out bit-identical.
 @group(1) @binding(10) var<uniform> rigidUvAnim: vec4f;
+// WHICH PART THIS DRAW IS, and how many parts a row of this model holds (201/9-08). x = the part index,
+// y = the model's part count; a second dynamic offset on the same bind group slides it, and the buffer is
+// built once per model because both numbers are constants of the model rather than of the frame.
+//
+// It exists so the per-instance buffers can be read from an INSTANCED draw. They are laid out slot-major —
+// one instance's parts contiguous — because the write side wants that: setRoot sends a whole car's matrices
+// in ONE writeBuffer, and a part-major layout would make that partCount writes per car per frame, ~80 of
+// them, 150 times. So the layout stays and the ADDRESSING moves here: the draw passes the SLOT through
+// firstInstance, and the row is computed rather than looked up.
+@group(1) @binding(11) var<uniform> rigidPart: vec4<u32>;
 
 // MaterialClass — the high nibble of slots.w. Kept in sync with renderware/vehicle/types.ts.
 const MAT_PLATE_BACK: u32 = 4u;
@@ -1375,7 +1386,11 @@ const MAT_PLATE_FACE: u32 = 5u;
 
 @vertex
 fn vsRigid(in: RigidVsIn) -> RigidVsOut {
-  let model = rigidMatrices[in.instance];
+  // in.instance is the instance's SLOT: the draw passes it as firstInstance, and an instanced draw walks
+  // slots upward from there. The row this part occupies is the slot's block plus the part's offset inside
+  // it — which is what lets ONE draw cover a whole model's worth of cars.
+  let row = in.instance * rigidPart.y + rigidPart.x;
+  let model = rigidMatrices[row];
   let world = model * vec4f(in.position, 1.0);
   var out: RigidVsOut;
   out.clip = frame.viewProj * world;
@@ -1387,7 +1402,7 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   // toward the unpainted material colour at midnight.
   var color = vec4f(mix(in.color.rgb, in.night.rgb, frame.params.x), in.color.a);
   if (in.slots.z > 0u) {
-    color = vec4f(rigidPaint[in.instance * 4u + (in.slots.z - 1u)].rgb, in.color.a);
+    color = vec4f(rigidPaint[row * 4u + (in.slots.z - 1u)].rgb, in.color.a);
   }
   out.color = color;
   // Max-CHANNEL delta, same rule as the world paths: saturated neon reads darker than day in luma.
@@ -1401,7 +1416,7 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   // The plate row is read HERE, where the instance index still exists, and only the one layer this submesh
   // needs is forwarded: its material class already says which of the two arrays that layer belongs to.
   let matClass = in.slots.w >> 4u;
-  let plate = rigidPlate[in.instance];
+  let plate = rigidPlate[row];
   var plateLayer = 0.0;
   if (matClass == MAT_PLATE_FACE) {
     plateLayer = plate.x;
@@ -1412,7 +1427,7 @@ fn vsRigid(in: RigidVsIn) -> RigidVsOut {
   // per LAMP, but a DFF authors ONE lamp material per end, so the mesh can only go dark per PAIR: both bits
   // of an end have to be set before the lit twin and the glow are withheld. The per-lamp half of the effect —
   // beam, pool light, corona — is geometric and dies one lamp at a time in vehicle-lamp.system.ts.
-  let lampRow = rigidLamp[in.instance];
+  let lampRow = rigidLamp[row];
   let smashed = u32(lampRow.w);
   let lampOut = (out.lampTag == 1u && (smashed & 0x3u) == 0x3u) ||
                 (out.lampTag == 2u && (smashed & 0xCu) == 0xCu);

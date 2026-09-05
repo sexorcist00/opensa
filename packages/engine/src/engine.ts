@@ -581,6 +581,15 @@ interface VehicleInstanceState {
   plate: { city: number; textSlot: number };
   slot: number;
   submeshVisible: Uint8Array;
+  /**
+   * Every submesh of this instance is visible — the key an instanced run groups on (201/9-08).
+   *
+   * One draw covers a run of slots, so every slot in it must want the same submeshes drawn. Comparing whole
+   * visibility masks pairwise would be `submeshCount` byte compares per adjacent pair per frame; this is the
+   * observation that makes it a boolean instead. A car that has lost a part is drawn on its own, exactly as
+   * every car was before this, and the map console — where nothing is ever hidden — is one run of 150.
+   */
+  visibleAll: boolean;
 }
 
 interface VehicleModel {
@@ -596,6 +605,16 @@ interface VehicleModel {
   lampBuffer: GPUBuffer;
   matrixBuffer: GPUBuffer;
   paintBuffer: GPUBuffer;
+  /**
+   * One `vec4<u32>` per PART — `[part, partCount, 0, 0]` — {@link UV_ANIM_STRIDE} apart so a draw selects
+   * its own with a dynamic offset (201/9-08).
+   *
+   * Both numbers are constants of the model, so this is written once at creation and survives a capacity
+   * grow untouched. It is what makes an INSTANCED rigid draw expressible: the per-instance buffers are
+   * slot-major and must stay that way for the write side, so the shader computes `slot × partCount + part`
+   * from a slot it receives through `firstInstance` rather than reading a row index off `instance_index`.
+   */
+  partBuffer: GPUBuffer;
   partCount: number;
   /** One plate vec4 per matrix row (plan 082/03) — text slot + city background, per instance. */
   plateBuffer: GPUBuffer;
@@ -1171,6 +1190,7 @@ export class Engine {
       plate: { city: 0, textSlot: 0 },
       slot,
       submeshVisible: new Uint8Array(model.submeshes.length).fill(1),
+      visibleAll: true,
     };
     model.instances[slot] = state;
     this.writeVehiclePaint(model, slot, DEFAULT_PAINT);
@@ -1207,6 +1227,7 @@ export class Engine {
           return;
         }
         state.submeshVisible[submesh] = value;
+        state.visibleAll = value === 1 ? state.submeshVisible.every((flag) => flag !== 0) : false;
         // The one input to the opaque order that can move. Dropped rather than rebuilt: a car whose
         // visibility is set submesh by submesh (which is how `createVehicle`'s caller does it) would
         // otherwise rebuild the order once per submesh instead of once before the next draw.
@@ -1250,6 +1271,7 @@ export class Engine {
     const paintBuffer = this.createVehiclePaintBuffer(init.parts.length, VEHICLE_CAPACITY);
     const lampBuffer = this.createVehicleLampBuffer(init.parts.length, VEHICLE_CAPACITY);
     const plateBuffer = this.createVehiclePlateBuffer(init.parts.length, VEHICLE_CAPACITY);
+    const partBuffer = this.createVehiclePartBuffer(init.parts.length);
     const uvAnim = this.createModelUvAnim(init.uvAnimations ?? []);
     const uploads = init.textures.map((texture) => this.createModelTexture(texture, 'vehicle-texture'));
     const textures = uploads.map((upload) => upload.texture);
@@ -1266,6 +1288,7 @@ export class Engine {
       lampBuffer,
       matrixBuffer,
       paintBuffer,
+      partBuffer,
       partCount: init.parts.length,
       plateBuffer,
       submeshes: init.submeshes,
@@ -1330,6 +1353,7 @@ export class Engine {
     this.resources.destroyBuffer('uniform', model.paintBuffer);
     this.resources.destroyBuffer('uniform', model.lampBuffer);
     this.resources.destroyBuffer('uniform', model.plateBuffer);
+    this.resources.destroyBuffer('uniform', model.partBuffer);
     // NOT the shared identity: every non-animated model binds that one buffer, and destroying it with the
     // first prop unloaded would take the whole rigid lane down.
     if (model.uvAnimOwned) {
@@ -2427,20 +2451,23 @@ export class Engine {
     pass: GPURenderPassEncoder,
     model: VehicleModel,
     submesh: VehicleSubmesh,
-    current: { array: number; offset: number },
+    current: { array: number; offset: number; part: number },
   ): boolean {
     const array = submesh.array ?? 0;
     const offset = uvAnimOffset(submesh.uvAnim, model.uvAnimations.length);
-    if (array === current.array && offset === current.offset) {
+    // The PART moves per submesh where the array and the animation slot do not, so it is the one that
+    // usually forces the re-bind — which is still one per submesh rather than one per submesh per car.
+    if (array === current.array && offset === current.offset && submesh.part === current.part) {
       return true;
     }
     const group = this.rigidBindGroup(model, array);
     if (!group) {
       return false;
     }
-    pass.setBindGroup(1, group, [offset]);
+    pass.setBindGroup(1, group, [offset, submesh.part * UV_ANIM_STRIDE]);
     current.array = array;
     current.offset = offset;
+    current.part = submesh.part;
 
     return true;
   }
@@ -2712,6 +2739,7 @@ export class Engine {
     lampBuffer: GPUBuffer;
     matrixBuffer: GPUBuffer;
     paintBuffer: GPUBuffer;
+    partBuffer: GPUBuffer;
     plateBuffer: GPUBuffer;
     texture: GPUTexture;
     uvAnimBuffer: GPUBuffer;
@@ -2747,6 +2775,8 @@ export class Engine {
         // offset can slide it across the model's list; without it the binding would claim the whole buffer
         // and every offset past slot 0 would run off its end.
         { binding: 10, resource: { buffer: model.uvAnimBuffer, offset: 0, size: 16 } },
+        // The part slot (201/9-08), bounded to ONE entry for the same reason as the line above.
+        { binding: 11, resource: { buffer: model.partBuffer, offset: 0, size: 16 } },
       ],
       label: 'vehicle',
       layout: this.pipelines.rigidLayout,
@@ -2780,6 +2810,24 @@ export class Engine {
   }
 
   /** One plate vec4 per matrix row — indexed by the same `instance_index` as the matrices (082/03). */
+  /** `[part, partCount, 0, 0]` per part, one dynamic-offset slot each (201/9-08). Written once: both are
+   *  constants of the model, so a capacity grow leaves this buffer alone. */
+  private createVehiclePartBuffer(partCount: number): GPUBuffer {
+    const buffer = this.resources.createBuffer('uniform', {
+      label: 'vehicle-part',
+      size: Math.max(1, partCount) * UV_ANIM_STRIDE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    const row = new Uint32Array(4);
+    for (let part = 0; part < partCount; part += 1) {
+      row[0] = part;
+      row[1] = partCount;
+      this.device.queue.writeBuffer(buffer, part * UV_ANIM_STRIDE, row);
+    }
+
+    return buffer;
+  }
+
   private createVehiclePlateBuffer(partCount: number, capacity: number): GPUBuffer {
     return this.resources.createBuffer('uniform', {
       label: 'vehicle-plates',
@@ -3090,30 +3138,75 @@ export class Engine {
   private drawVehicleModel(pass: GPURenderPassEncoder, model: VehicleModel, translucent: boolean, eye: Vec3): number {
     let draws = 0;
     let bound = false;
-    // What group 1 currently holds: the texture ARRAY and the UV-anim SLOT. Cars and map objects both ship
-    // size-bucketed dictionaries, and the opaque order groups submeshes by array, so switches stay rare.
-    const group1 = { array: -1, offset: -1 };
+    // What group 1 currently holds: the texture ARRAY, the UV-anim SLOT and the PART. Cars and map objects
+    // both ship size-bucketed dictionaries, and the opaque order groups submeshes by array, so switches stay
+    // rare.
+    const group1 = { array: -1, offset: -1, part: -1 };
     const indexFormat: GPUIndexFormat = model.index16 ? 'uint16' : 'uint32';
-    for (const state of model.instances) {
-      if (!state) {
-        continue;
+    const bind = (): void => {
+      if (bound) {
+        return;
       }
+      pass.setPipeline(this.pipelines.get(translucent ? 'rigid-blend' : 'rigid-opaque'));
+      pass.setBindGroup(0, this.frameBindGroup);
+      model.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
+      pass.setIndexBuffer(model.indexBuffer, indexFormat);
+      bound = true;
+    };
+    const draw = (state: VehicleInstanceState, instances: number): void => {
       for (const index of this.submeshDrawOrder(state, model, translucent, eye)) {
         const submesh = model.submeshes[index];
-        if (!bound) {
-          pass.setPipeline(this.pipelines.get(translucent ? 'rigid-blend' : 'rigid-opaque'));
-          pass.setBindGroup(0, this.frameBindGroup);
-          model.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
-          pass.setIndexBuffer(model.indexBuffer, indexFormat);
-          bound = true;
-        }
+        bind();
         if (!this.bindRigidSubmesh(pass, model, submesh, group1)) {
           continue; // a world array still streaming in — the submesh appears the frame it lands
         }
-        pass.drawIndexed(submesh.indexCount, 1, submesh.indexOffset, 0, state.slot * model.partCount + submesh.part);
-        this.frameTriangles += submesh.indexCount / 3;
+        // The SLOT goes through firstInstance and the shader adds the part (201/9-08), so an instanced draw
+        // walks consecutive slots and reads each one's own matrices, paint, lamps and plate.
+        pass.drawIndexed(submesh.indexCount, instances, submesh.indexOffset, 0, state.slot);
+        this.frameTriangles += (submesh.indexCount / 3) * instances;
         draws += 1;
       }
+    };
+    // THE TRANSLUCENT PHASE CANNOT BE INSTANCED and is not asked to be: its submesh order is a function of
+    // the EYE and differs per car, which is the whole reason 074/16 round 6 built it — unsorted, a steering
+    // wheel draws over its own windscreen. So glass stays one draw per car per submesh, which is a handful.
+    if (translucent) {
+      for (const state of model.instances) {
+        if (state) {
+          draw(state, 1);
+        }
+      }
+
+      return draws;
+    }
+    // THE OPAQUE PHASE IS THE LOAD (201/9-08): at the console's declared board it was ~80 draws a car and
+    // 11 698 a frame for 150 of them. Depth decides opaque order, so a run of consecutive slots that want
+    // the same submeshes drawn is ONE draw per submesh however many cars are in it.
+    //
+    // A run breaks on a free slot and on any car that has lost a part — that car is drawn alone, exactly as
+    // every car was before this. It never breaks in the map console, where nothing is ever hidden.
+    let at = 0;
+    while (at < model.instances.length) {
+      const first = model.instances[at];
+      if (!first) {
+        at += 1;
+        continue;
+      }
+      if (!first.visibleAll) {
+        draw(first, 1);
+        at += 1;
+        continue;
+      }
+      let run = 1;
+      while (at + run < model.instances.length) {
+        const next = model.instances[at + run];
+        if (!next || !next.visibleAll) {
+          break;
+        }
+        run += 1;
+      }
+      draw(first, run);
+      at += run;
     }
 
     return draws;

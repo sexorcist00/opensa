@@ -54,6 +54,9 @@ export interface RecordedDraw {
    *  the rigid lane's UV-animation slot (plan 099/02) is selected this way. */
   bindGroupOffsets: (readonly number[] | undefined)[];
   bindGroups: (string | undefined)[];
+  /** The first INSTANCE this draw addresses. The rigid lane passes an instance's SLOT here and the shader
+   *  adds the part (201/9-08), so this is what says WHICH cars an instanced draw covered. */
+  firstInstance: number;
   /** Present for `drawIndexed`. */
   indexCount?: number;
   instanceCount: number;
@@ -393,11 +396,15 @@ function encoderRecorder(recorder: Recorder, pass: RecordedPass): Record<string,
   const bindGroupOffsets: (readonly number[] | undefined)[] = [];
 
   return {
-    draw(vertexCount: number, instanceCount = 1): void {
+    // WebGPU's positional tail is (firstVertex, firstInstance); only the second is recorded, so it is read
+    // out of a rest rather than named — an unused parameter before a used one is a lint error here.
+    draw(vertexCount: number, instanceCount = 1, ...tail: number[]): void {
+      const firstInstance = tail[1] ?? 0;
       pass.drawCount += 1;
       recorder.draws.push({
         bindGroupOffsets: [...bindGroupOffsets],
         bindGroups: [...bindGroups],
+        firstInstance,
         instanceCount,
         kind: 'draw',
         pass: pass.label,
@@ -405,11 +412,14 @@ function encoderRecorder(recorder: Recorder, pass: RecordedPass): Record<string,
         vertexCount,
       });
     },
-    drawIndexed(indexCount: number, instanceCount = 1): void {
+    /** Positional tail: (firstIndex, baseVertex, firstInstance) — see {@link RecordedDraw.firstInstance}. */
+    drawIndexed(indexCount: number, instanceCount = 1, ...tail: number[]): void {
+      const firstInstance = tail[2] ?? 0;
       pass.drawCount += 1;
       recorder.draws.push({
         bindGroupOffsets: [...bindGroupOffsets],
         bindGroups: [...bindGroups],
+        firstInstance,
         indexCount,
         instanceCount,
         kind: 'drawIndexed',

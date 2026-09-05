@@ -312,6 +312,16 @@ export async function compileAll(
         buffer: { hasDynamicOffset: true, minBindingSize: 16, type: 'uniform' },
         visibility: GPUShaderStage.VERTEX,
       },
+      // WHICH PART this draw is, and the model's part count (201/9-08) — a second dynamic offset on the same
+      // group, and the reason an INSTANCED rigid draw is expressible at all: the per-instance buffers are
+      // slot-major because the write side needs them to be (one `writeBuffer` per car per frame rather than
+      // one per part), so the row has to be computed in the shader from a slot and a part rather than read
+      // straight off `instance_index`. Built once per model — both numbers are constants of the model.
+      {
+        binding: 11,
+        buffer: { hasDynamicOffset: true, minBindingSize: 16, type: 'uniform' },
+        visibility: GPUShaderStage.VERTEX,
+      },
     ],
     label: 'rigid',
   });
