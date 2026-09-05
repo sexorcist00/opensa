@@ -314,8 +314,15 @@ node graph (`original`-only, so it lies on total conversions) — all in
 ## 6. Budgets and the honest risk
 
 Named with the user before the work ([the 201 budget table](../201-dispatch-console/readme.md)): **150 units
-drawn as models with symbols, 60 fps on a phone, ≤3 s to a working picture, a hard 300–500 MB residency
+drawn as models with symbols, 45 fps on a phone, ≤3 s to a working picture, a hard 300–500 MB residency
 ceiling.**
+
+**The frame rate was 60 until 2026-09-05, when the user lowered it to 45.** Measured against the new bar the
+same day: the empty map passes with margin (19.2 ms — 52 fps) and the declared 150-unit board misses by
+1.6 ms (23.8 — 42 fps). **Note what 45 means on the hardware rather than on paper**: the panel is 60 Hz, so
+there is no 45 fps mode — a 22.2 ms mean is a 67/33 mix of frames at 16.7 and 33.3 ms, which is judder by
+construction. If what the product wants is smoothness, the budgets this panel actually offers are 60 and 30;
+45 names the band between them and is a throughput target, not a smoothness one.
 
 **These four may not hold simultaneously in the live render**, and this plan says so rather than discovering
 it late. The evidence base is one synthetic mobile row at 41 fps with no streaming. Three honest outcomes,

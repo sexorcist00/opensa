@@ -126,7 +126,32 @@ at this pose can only be asked through the miss rate, and only about a change bi
 §3.2's two vendor levers came back indistinguishable, a result that was correctly predicted without this
 being the stated reason.
 
-### 3.1c — So what is actually left to do
+### 3.1c — AND THE BAR MOVED: 45 fps, not 60 (the user's call, 2026-09-05)
+
+Everything above was written against a 60 fps budget. It is **45** now, and that re-prices this whole
+section rather than merely relaxing it:
+
+| | ms | fps | against a 45 fps bar |
+| --- | --- | --- | --- |
+| empty map (`field`) | 19.2 | 52 | **passes, with margin** |
+| declared board (150 units + 40 calls) | 23.8 | 42 | **misses by 1.6 ms** |
+
+**So the map is done and the board is the only open number**, and 1.6 ms is AT the instrument's floor — it
+will be judged on the ladder, not on the mean (§3.1b), and the board is above the vsync floor where an
+ablation is legible, which is the one place §3.1d says a GPU question can still be asked.
+
+**There is no 45 fps on a 60 Hz panel, and this matters for what "passing" buys.** The frame is pinned to the
+display interval, so a 22.2 ms mean is a **67/33 mix of 16.7 and 33.3 ms frames** — judder by construction,
+not a smooth 45. A console that averages 45 fps this way looks worse than one that holds 30 flat. If the
+operator's complaint is ever *smoothness* rather than *throughput*, the budgets this panel offers are 60 and
+30, and the honest move is to pick one, not to tune within the band.
+
+**And it flips the bloom question's side.** At 60 the chain was load-bearing: it moved rung-1 occupancy from
+78 % to 95 %. At 45 the map clears the bar with the chain in. So bloom is now a **look and battery** decision
+for the operator, not a budget one — the same conclusion §3.1d reaches from the size of the levers, now with
+nothing riding on it.
+
+### 3.1d — So what is actually left to do
 
 Not a hunt for missing milliseconds. Three real options, in the order they cost:
 
