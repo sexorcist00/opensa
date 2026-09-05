@@ -1,0 +1,31 @@
+{
+  "note": "WHAT THE FRAME IS AND WHERE IT GOES at the declared board, after 9-08's instancing. Four settled windows in one session, arms alternating, the baseline flown twice — and the fourth arrived by accident and turned out to be the arm this was missing.",
+  "app": "8cda1fd+",
+  "build": "07:40 05-09-2026",
+  "pak": { "out": "./build/phone-cars", "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre" },
+  "device": "MGA-LX3 / ARM Bifrost @ DPR 2, ?surface=720x640 pinned on every window",
+  "pose": "[1500,-1500] h900 pitch -1.15 yaw pi perspective, identical in all four",
+  "windows": [
+    { "n": 1, "arm": "field", "units": 0, "marksDrawn": 0, "cars": 0, "frames": 479, "dtMeanMs": 20.43, "p50": 16, "p95": 34, "cpuBodyMs": 3.44, "submitMs": 1.59, "draws": 112, "triangles": 277970, "css": "360x570" },
+    { "n": 2, "arm": "board", "units": 150, "marksDrawn": 82, "cars": 150, "frames": 562, "dtMeanMs": 26.30, "p50": 18, "p95": 50, "cpuBodyMs": 11.04, "submitMs": 2.63, "draws": 3571, "triangles": 1488514, "css": "360x609" },
+    { "n": 3, "arm": "field (control)", "units": 0, "marksDrawn": 0, "cars": 0, "frames": 795, "dtMeanMs": 20.03, "p50": 16, "p95": 34, "cpuBodyMs": 3.15, "submitMs": 1.54, "draws": 112, "triangles": 277970, "css": "360x570" },
+    { "n": 4, "arm": "board, NO fleet", "units": 150, "marksDrawn": 190, "cars": 0, "frames": 473, "dtMeanMs": 25.39, "p50": 20, "p95": 44, "cpuBodyMs": 10.60, "submitMs": 1.87, "draws": 112, "triangles": 277970, "css": "360x609", "why": "the models did not finish loading in this window. Not planned, and it is the arm the set was missing: `board` minus the fleet, with the symbology load intact." }
+  ],
+  "theBaselineIsTrustworthy": "field read 20.43 and 20.03 — a 0.4 ms spread across two windows 90 seconds apart. Every subtraction below is against that, and the day's earlier 26.8-59.9 ms spread was a hot device rather than this one.",
+  "theAnswer": {
+    "fps": "at the declared board the console draws its MEDIAN frame in 18 ms (56 fps) and its MEAN in 26.3 ms (38 fps). Empty it is 16 ms median (63 fps) and 20.2 ms mean (50 fps). The report's `fps` field is derived from the MEDIAN, so quoting it alone overstates what the frame does across a window — both are given here on purpose.",
+    "decomposition": {
+      "theEmptyMap": "20.2 ms. Nothing to do with the board: 112 draws, 278 k triangles, 3.3 ms of CPU. This is the post chain (measured at 7.7 ms by 201/9's sweep), the streamed world (3.8), the clear/resolve/composite and vsync quantization.",
+      "theSymbology": "+5.2 ms (window 4 minus field). The 2D canvas layer at 150 units — and this is the largest term the board adds.",
+      "theFleet": "+0.9 ms (window 2 minus window 4). 150 cars, 3 459 extra draws and 1.21 M extra triangles, for under a millisecond of frame."
+    },
+    "whyTheFleetSubtractionIsValid": "the two windows differ in symbol count (82 against 190) as well as in cars, which would normally spoil it — except the CPU split shows the symbology cost is nearly IDENTICAL between them: sym:units 4.04 against 4.16, sym:labels 1.50 against 1.64, sym:calls 0.76 against 0.76. Hiding 110 of 150 marks saved ~0.1 ms, so the two windows carry the same symbology work and their difference is the fleet."
+  },
+  "theFindingUnderneath": {
+    "what": "hiding 110 of 150 marks moved `sym:units` by ~0.1 ms of 4.1.",
+    "means": "the per-unit cost is NOT the drawing, which is what the desk control said from the other side and what the flat 27 us/unit against 19 us/call already implied. Every unit is still projected and still records a hit area — picking runs off that — so the work that dominates this span happens whether or not a mark is drawn.",
+    "next": "the symbology's per-unit work is the largest remaining board-side term: two projections and their allocations, gtaToEngine twice, a colour string and a cache key per unit per frame, a hit-area object, a rank object. The drawing-side levers are spent."
+  },
+  "instancingInContext": "9-08 took the cars from 11 810 draws to 3 571 and this row is what that is worth in time: the fleet is now ~0.9 ms of a 26.3 ms frame. Before it, the fleet-loaded windows could not be told apart from thermal drift at all.",
+  "owed": "a repeat of window 4 taken deliberately rather than by accident (a `?models=0` arm would make it reproducible), and the CSS box held constant — the browser chrome collapsed between the field windows (360x570) and the board windows (360x609), which changes the overlay's pixel count though not the pinned scene buffer."
+}
