@@ -58,7 +58,7 @@ import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
 import { captureAblation } from './capture-ablation';
 import { captureBudget } from './capture-budget';
-import { captureSurface } from './capture-surface';
+import { canvasAspect, captureSurface } from './capture-surface';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
@@ -765,7 +765,16 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     const cpu: FrameCpuSample = { bodyMs, canvasPixels: canvas.width * canvas.height, segments: loopCpu.drain() };
 
     const ops = options.ops();
-    const aspect = canvas.width / Math.max(1, canvas.height);
+    // The aspect of what the VIEWER sees, not of the buffer it is drawn into (the operator's report,
+    // 2026-09-04). Without a pin the two are identical — the buffer is the CSS box times the DPR — so this
+    // changes nothing on any shipping surface. WITH one they diverge, and the camera followed the wrong
+    // half: `?surface=720x640` inside a 360x550 CSS box framed the world for 1.125 and the browser then
+    // stretched that buffer into a box of 0.655, so the whole map was **vertically stretched by ~1.7x**.
+    // Reading the box instead renders anamorphically — non-square pixels in the buffer — which the stretch
+    // undoes, leaving geometry correct and only the vertical resolution soft, which is the pin's honest
+    // cost and is already in the report. `rayAt` and the footprint take the same number, so picking under a
+    // pin was wrong in exactly the same way: a thumb lands where the operator aimed it now.
+    const aspect = canvasAspect(canvas);
     // Before the state is read, so the streamer follows where the held keys and the flight have taken the
     // view THIS frame rather than where it was last frame.
     applyHeldKeys(camera, keyboard, dt);

@@ -88,6 +88,14 @@ export function consoleUrls(state = {}) {
   //
   // The operator links below carry none of this: a pinned buffer is stretched into whatever room the layout
   // gives it, which is right for a measurement and wrong for somebody working the map.
+  //
+  // **What that stretch does NOT do, since 2026-09-04: distort the world.** It used to. The camera framed
+  // for the BUFFER's aspect while the browser stretched that buffer into the CSS box, so a 720x640 pin
+  // inside a 360x550 box rendered for 1.125 and displayed at 0.655 — the whole map ~1.7x too tall, and
+  // every look verdict taken through a measurement link was worthless (the operator's report, and it is how
+  // this was found). The camera reads the displayed box now (`canvasAspect`, `world/boot.ts`), so a pin
+  // costs vertical RESOLUTION and nothing else. **A look verdict still belongs on an unpinned link**: soft
+  // is soft, and `map` is the one that is native.
   const capture = 'inventory=1&surface=720x640';
   const empty = `${query}&units=0&calls=0&${capture}`;
 

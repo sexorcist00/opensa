@@ -371,15 +371,30 @@ is free. **The honest next arm is `rg11b10ufloat`**: the same 4 bytes, the float
 reports it renderable (`rg11b10ufloat-renderable` is in the device's own feature list in every snapshot of
 this run). It is not in the ladder because it was not built.
 
-**The look verdict, and the instrument gets in its way.** The operator judged `msaa1` on the phone at map
-zoom: *"noticeably worse - low resolution and no anti-aliasing"*. Only the second half belongs to the arm.
-**`?surface=720x640` pins the drawing buffer and the browser then UPSCALES it to a CSS box that was 320-609
-px tall across this run**, so every arm - the baseline included - is soft, and a look verdict taken through a
-pinned page conflates the pin with the parameter. The pin is not the bug (it is what made 08-31's circuit
-subtractable at all); the rule is that **a look arm is flown UNPINNED and a number arm is flown pinned, and
-they are two different flights.** The aliasing half stands on its own though - one sample loses MSAA and
-alpha-to-coverage on every cutout pipeline - and it is moot for the recommendation, since `msaa1` is not the
-arm the numbers point at.
+**The look verdict is VOID, and finding out why is the best thing this session did.** The operator judged
+`msaa1` on the phone at map zoom — *"noticeably worse: low resolution and no anti-aliasing"* — and then, an
+hour later, said the map had not looked right from the very first link. It had not. **The camera framed for
+the drawing BUFFER while the browser stretched that buffer into the CSS box**, so `?surface=720x640` inside a
+360x550 box rendered a world for an aspect of 1.125 and displayed it at 0.655: **the whole map ~1.7x too
+tall**, circles as ellipses, on every pinned page all evening. Picking rode the same number, so a thumb
+landed where nobody aimed it.
+
+**Every NUMBER in this chain survives it** — the GPU did identical work whatever the canvas was stretched to,
+and all five arms carried the same pin — and **every look verdict taken through a measurement link does not**,
+`msaa1`'s included. Fixed the same day (`canvasAspect`, `world/capture-surface.ts`, 5 tests): the camera reads
+the displayed box, which is a no-op on any surface that does not pin, and under a pin renders anamorphically
+so the stretch restores the geometry. **SILENT in the full sense** — it typechecks, it lints, every test
+passes (this is geometry, not behaviour), and it cannot be seen on any shipping surface. It was found by an
+operator's eye and by nothing else.
+
+What remains true after the fix: a pin costs vertical RESOLUTION (640 stretched into ~1100), so **a look arm
+is flown UNPINNED and a number arm is flown pinned — two different flights**, and `map` is the unpinned link.
+And the pin STAYS at `720x640` rather than going to the full-screen `720x1218` (re-decided with the operator,
+2026-09-04): 1218 was tried on 2026-08-31 and **Android killed the tab part-way through the circuit** —
+`target` residency 59.87 MB against 32.35, ~27 MB added to a ~98 MB total — and 640 also lands this series on
+the existing 150-unit row, which was taken at `canvasPixels` 460 800. The aliasing half of the verdict stands
+on its own (one sample loses MSAA and alpha-to-coverage on every cutout pipeline) and is moot anyway, since
+`msaa1` is not the arm the numbers point at.
 
 **Method notes the next ladder should not re-discover.** A leg is measured in SCREENFULS (`fly.ts` travels
 1.2 of them a second), so 150 m legs at ~310 m of span last under half a second: a first six-leg attempt

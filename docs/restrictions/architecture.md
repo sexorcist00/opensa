@@ -875,6 +875,37 @@ the doctor fails on `gone` with the way back, and `main` is a job so the recover
 a person with a keyboard. Both directions are tested. Nothing catches it in a plain checkout — a branch whose
 remote is gone is an ordinary local branch, and only the project's main-only rule makes it a trap.
 
+## A camera's ASPECT comes from what is DISPLAYED, never from the buffer it draws into
+
+**The rule.** The projection's aspect ratio is the aspect of the box the viewer sees. It is not
+`canvas.width / canvas.height` — that is the drawing buffer, and the two are the same number only while
+nothing has pinned or scaled the buffer. Picking reads the same ratio, so it inherits whatever the camera got
+wrong.
+
+**Why it is not obvious.** On every ordinary surface the buffer IS the CSS box times the device pixel ratio,
+so the two expressions agree exactly and the wrong one looks correct forever. They diverge the moment
+anything fixes the buffer independently of the layout — which is precisely what a MEASUREMENT does, because
+comparable arms need a constant pixel count while the browser's chrome collapses and returns.
+
+**What it cost.** `apps/dispatch` framed the world for the buffer. With `?surface=720x640`
+([201/9-01](../plans/201-dispatch-console/9-the-mobile-frame/readme.md)) inside a 360x550 CSS box that is a
+world composed for an aspect of **1.125** and then stretched by the browser into a box of **0.655** — the
+whole map roughly **1.7x too tall**, circles drawn as ellipses, and a thumb landing where the operator had
+not aimed it. Every pinned page carried it: the entire 2026-09-04 ladder, and both look verdicts taken
+through one.
+
+**What survives such a bug and what does not**, because the split is the useful part: the GPU does identical
+work whatever the canvas is stretched to, and every arm carried the same pin, so the **frame-time numbers are
+untouched** — while **every judgement made by eye through a pinned page is worthless**. A measurement rig can
+be wrong about the picture and right about the cost at the same time.
+
+**SILENT, in the full sense this folder means it.** It typechecks. It lints. Every test passes — this is
+geometry, and a test asserts behaviour. It is invisible on every shipping surface, since none of them pins.
+It was found by an operator looking at their own phone and saying the map did not look right, an hour after
+a whole evening of measurement had been taken through it. Caught since 2026-09-04 by `canvasAspect`
+(`apps/dispatch/src/world/capture-surface.ts`) and its five tests, which pin the divergent case rather than
+the agreeing one.
+
 ## An effect's RETURN VALUE is its cleanup — a shorthand body must return a cleanup or nothing
 
 React calls whatever `useEffect` returns as the effect's cleanup function. A concise arrow body returns the
