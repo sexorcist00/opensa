@@ -566,6 +566,24 @@ interface VehicleInstanceState {
   entity: RigidEntity;
   lamps: { brakes: boolean; headlights: boolean; intensity: number; smashed: number };
   /**
+   * Which SET of opaque submeshes this instance draws, as an interned id — the key an instanced run groups
+   * on (201/9-08). Valid whenever {@link VehicleInstanceState.opaqueOrder} is.
+   *
+   * One draw covers a run of slots, so every slot in it must want the same submeshes drawn. The first
+   * version of this asked *"is nothing hidden"*, on the reasoning that comparing masks pairwise would cost
+   * `submeshCount` compares per adjacent pair per frame — and it made the whole optimisation INERT, because
+   * hiding submeshes is what every caller does. `apps/dispatch` hides all of them and re-shows the body set
+   * (the `_dam` twins, the `_vlo` LOD and the unchosen extras ride in the same buffers, so a car whose
+   * visibility is never set draws its own wreck through itself), and the game's handle does the same for
+   * extras, variants and damage. Nothing is ever `visibleAll`, so nothing was ever instanced, and the draw
+   * count on the device came back completely unchanged.
+   *
+   * The set is what matters and it is ALREADY derived and cached: `opaqueOrder` is exactly the list of
+   * submeshes this instance draws. Interning it per model turns the comparison into one integer, and the
+   * cost is paid where the order is built — once per visibility change — rather than per frame.
+   */
+  opaqueKey: number;
+  /**
    * The OPAQUE phase's submesh order, cached until `setSubmeshVisible` changes something (201/9-07).
    *
    * It is a function of two things that do not move between frames — `submesh.array`, a constant of the
@@ -581,15 +599,6 @@ interface VehicleInstanceState {
   plate: { city: number; textSlot: number };
   slot: number;
   submeshVisible: Uint8Array;
-  /**
-   * Every submesh of this instance is visible — the key an instanced run groups on (201/9-08).
-   *
-   * One draw covers a run of slots, so every slot in it must want the same submeshes drawn. Comparing whole
-   * visibility masks pairwise would be `submeshCount` byte compares per adjacent pair per frame; this is the
-   * observation that makes it a boolean instead. A car that has lost a part is drawn on its own, exactly as
-   * every car was before this, and the map console — where nothing is ever hidden — is one run of 150.
-   */
-  visibleAll: boolean;
 }
 
 interface VehicleModel {
@@ -604,7 +613,6 @@ interface VehicleModel {
   instances: (null | VehicleInstanceState)[];
   lampBuffer: GPUBuffer;
   matrixBuffer: GPUBuffer;
-  paintBuffer: GPUBuffer;
   /**
    * One `vec4<u32>` per PART — `[part, partCount, 0, 0]` — {@link UV_ANIM_STRIDE} apart so a draw selects
    * its own with a dynamic offset (201/9-08).
@@ -614,6 +622,10 @@ interface VehicleModel {
    * slot-major and must stay that way for the write side, so the shader computes `slot × partCount + part`
    * from a slot it receives through `firstInstance` rather than reading a row index off `instance_index`.
    */
+  /** Interned opaque submesh SETS, so two instances that draw the same one compare as one integer
+   *  (201/9-08). Bounded by how many distinct configurations a model is ever given. */
+  orderKeys: Map<string, number>;
+  paintBuffer: GPUBuffer;
   partBuffer: GPUBuffer;
   partCount: number;
   /** One plate vec4 per matrix row (plan 082/03) — text slot + city background, per instance. */
@@ -1184,13 +1196,13 @@ export class Engine {
     const state: VehicleInstanceState = {
       entity: new RigidEntity(parts),
       lamps: { brakes: false, headlights: false, intensity: 1, smashed: 0 },
+      opaqueKey: -1,
       opaqueOrder: null,
       paint: DEFAULT_PAINT,
       // Slot 0 of each array until the host assigns one: an unplated car shows the stock placeholder.
       plate: { city: 0, textSlot: 0 },
       slot,
       submeshVisible: new Uint8Array(model.submeshes.length).fill(1),
-      visibleAll: true,
     };
     model.instances[slot] = state;
     this.writeVehiclePaint(model, slot, DEFAULT_PAINT);
@@ -1227,7 +1239,6 @@ export class Engine {
           return;
         }
         state.submeshVisible[submesh] = value;
-        state.visibleAll = value === 1 ? state.submeshVisible.every((flag) => flag !== 0) : false;
         // The one input to the opaque order that can move. Dropped rather than rebuilt: a car whose
         // visibility is set submesh by submesh (which is how `createVehicle`'s caller does it) would
         // otherwise rebuild the order once per submesh instead of once before the next draw.
@@ -1287,6 +1298,7 @@ export class Engine {
       instances: new Array<null | VehicleInstanceState>(VEHICLE_CAPACITY).fill(null),
       lampBuffer,
       matrixBuffer,
+      orderKeys: new Map<string, number>(),
       paintBuffer,
       partBuffer,
       partCount: init.parts.length,
@@ -3183,8 +3195,9 @@ export class Engine {
     // 11 698 a frame for 150 of them. Depth decides opaque order, so a run of consecutive slots that want
     // the same submeshes drawn is ONE draw per submesh however many cars are in it.
     //
-    // A run breaks on a free slot and on any car that has lost a part — that car is drawn alone, exactly as
-    // every car was before this. It never breaks in the map console, where nothing is ever hidden.
+    // A run breaks on a free slot and on any car drawing a DIFFERENT set of submeshes — a wreck, another
+    // extra, a variant. Every dispatch car of one type is configured identically, so the console is one run
+    // per model; a street of damaged cars degrades to what this did before, one draw per car per submesh.
     let at = 0;
     while (at < model.instances.length) {
       const first = model.instances[at];
@@ -3192,15 +3205,17 @@ export class Engine {
         at += 1;
         continue;
       }
-      if (!first.visibleAll) {
-        draw(first, 1);
-        at += 1;
-        continue;
-      }
+      // Building the order is what assigns the key, and it is cached — so asking each candidate for its
+      // order is how the run is extended, not an extra pass over anything.
+      this.submeshDrawOrder(first, model, false, eye);
       let run = 1;
       while (at + run < model.instances.length) {
         const next = model.instances[at + run];
-        if (!next || !next.visibleAll) {
+        if (!next) {
+          break;
+        }
+        this.submeshDrawOrder(next, model, false, eye);
+        if (next.opaqueKey !== first.opaqueKey) {
           break;
         }
         run += 1;
@@ -3679,6 +3694,13 @@ export class Engine {
     // otherwise re-binds on every submesh. Translucency keeps its back-to-front order — correctness first.
     order.sort((a, b) => (model.submeshes[a.index].array ?? 0) - (model.submeshes[b.index].array ?? 0));
     state.opaqueOrder = order.map((entry) => entry.index);
+    const key = state.opaqueOrder.join(',');
+    let interned = model.orderKeys.get(key);
+    if (interned === undefined) {
+      interned = model.orderKeys.size;
+      model.orderKeys.set(key, interned);
+    }
+    state.opaqueKey = interned;
 
     return state.opaqueOrder;
   }

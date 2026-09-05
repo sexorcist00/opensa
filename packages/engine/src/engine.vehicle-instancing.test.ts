@@ -160,6 +160,29 @@ describe('rigid instancing', () => {
       expect(runs.every((run) => run.first === 0)).toBe(true);
     });
 
+    it('instances cars that HIDE the same submeshes — which is what every real caller does', async () => {
+      // The regression that made the first version of this inert, and it was invisible in every test: the
+      // run key asked "is nothing hidden", and nothing ever is. `apps/dispatch` hides every submesh and
+      // re-shows the body set, because the _dam twins, the _vlo LOD and the unchosen extras ride in the same
+      // buffers; the game's handle does the same for extras, variants and damage. The draw count on the
+      // device came back completely unchanged, and only the device said so.
+      const { cars, engine } = await fleet(5);
+      for (const car of cars) {
+        car.setSubmeshVisible(0, false);
+        car.setSubmeshVisible(1, false);
+        car.setSubmeshVisible(2, false);
+        car.setSubmeshVisible(0, true);
+        car.setSubmeshVisible(2, true);
+      }
+      engine.frame(camera);
+
+      const runs = rigid();
+
+      // Two submeshes shown, five cars, two draws — the set is what groups, not the absence of hiding.
+      expect(runs).toHaveLength(2);
+      expect(runs.every((run) => run.instances === 5)).toBe(true);
+    });
+
     it('names each submesh its own PART, so a row is the slot plus the part', async () => {
       const { engine } = await fleet(2);
       engine.frame(camera);
