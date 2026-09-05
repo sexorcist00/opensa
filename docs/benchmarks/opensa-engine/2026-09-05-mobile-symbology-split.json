@@ -1,0 +1,27 @@
+{
+  "note": "THE 6 ms ATTRIBUTED. `overlay:symbols` was the frame's largest CPU line all day and had no breakdown; this is the split that gives it one, plus the first look at the operator's mark rule. Same treatment `overlay-2d` got that morning, one level down.",
+  "app": "adc8182+",
+  "build": "07:40 05-09-2026",
+  "pak": { "out": "./build/phone-cars", "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre" },
+  "device": "MGA-LX3 / ARM Bifrost @ DPR 2, ?surface=720x640 pinned",
+  "pose": "[1500,-1500] h900 pitch -1.15 yaw pi perspective, the same settled pose the sprite arm used",
+  "theSplit": {
+    "window": "438 frames settled, 150 units + 41 calls, every mark drawn (unitsAsModels 0 in this window, so nothing was hidden)",
+    "ms": { "sym:units": 4.072, "sym:labels": 1.568, "sym:calls": 0.772, "sym:scale": 0.253, "overlay:symbols (remainder)": 0.148 },
+    "sums": "6.66 ms, which lands inside the 6.0-7.0 ms range the six sprite-arm windows measured for the whole span — the split is faithful rather than an added cost",
+    "perEntity": { "unit": "27.1 us", "call": "19.3 us" },
+    "reading": [
+      "THE UNITS PASS IS 61 % of the span and is where any further work goes.",
+      "A unit costs 27 us and a call 19 us while a unit does roughly TWICE the drawing (two projections and a chevron against one projection and a diamond). A cost that is nearly flat per entity while the drawing per entity is not is a cost that is mostly NOT the drawing — which is what the desk control said from the other direction.",
+      "`sym:scale` is 0.25 ms for ONE scale bar a frame — a third of what forty calls cost. It projects two points and draws a line and a label, and it assigns `ctx.font` TWICE (small, then back). This file's own oldest note says a font assignment re-parses the shorthand; at ~0.1 ms each that is what this span mostly is. It runs last now, so the restore has nothing left to protect."
+    ]
+  },
+  "theMarkRule": {
+    "what": "the operator's call, 2026-09-05: a mark only for units the shift is about, since a unit IS a car on the map now. Selected, committed to a call, or nothing else drawing it.",
+    "observed": "with the fleet loaded, marksHidden 110 of 150 and symbols 80 (41 calls + the units that earned one). The rule fires as designed.",
+    "measured": "NOT YET. The windows that carried the fleet also carried 11 810 draws and a different frame, and the settled window above had no models in it, so there is no pair here that differs by the rule alone.",
+    "predicted": "PRE-REGISTERED, so the next window can refute it: a hidden mark skips the second projection, the colour string, the blit and the label request, leaving one projection and a hit area. Priced off the call's 19 us, a hidden unit should land near 8-12 us, so 110 of them is roughly 1.5-2.0 ms off a 4.07 ms units pass. If the arm comes back under a millisecond the estimate was wrong, not the rule."
+  },
+  "owed": "an arm that differs by the mark rule alone (`?marks=all`, the shape `?sprites=0` already has), flown against this split with the fleet loaded in both windows.",
+  "alsoSeen": "with 150 cars drawn the frame is a different animal: 11 810 draws, engine-frame 4.9 ms, dtMean 44 ms. That is the instancing work the frame audit ranked first and it is untouched by anything here."
+}
