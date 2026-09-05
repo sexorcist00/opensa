@@ -29,6 +29,8 @@ export const LINK_NAMES = [
   'bloomrg11',
   'bloomhalf',
   'bloomboth',
+  'night',
+  'nighthalf',
   'noprobe',
   'noskylut',
   'flat',
@@ -154,6 +156,13 @@ export function consoleUrls(state = {}) {
     inventory: `${app}?${query}&inventory=1`,
     map: `${app}?${query}`,
     msaa1: `${app}?${empty}&msaa=1`,
+    // THE LOOK PAIR, and it has to be at NIGHT (201/9-05). `bloomhalf` is measured at −4.4 ms and its known
+    // cost is sub-pixel EMITTERS: at half resolution the bright-pass threshold runs on a 2x2 average, so a
+    // street light one pixel across is diluted below it and stops blooming. At hour 10 there is nothing lit
+    // to lose and the daylight A/B on 2026-09-05 was indistinguishable — which settles nothing. These two
+    // differ by the arm alone (`links.test.mjs`), so what an operator sees between them IS the arm.
+    night: `${app}?${empty}&hour=22`,
+    nighthalf: `${app}?${empty}&hour=22&bloomscale=0.5`,
     nobloom: `${app}?${empty}&ablate=bloom`,
     nocells: `${app}?${empty}&ablate=cells`,
     nocloud: `${app}?${empty}&ablate=cloud`,

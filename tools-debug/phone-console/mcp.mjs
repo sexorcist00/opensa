@@ -171,7 +171,9 @@ export const TOOLS = [
             'is pricing and nothing else. `nocells`, `nocloud`, `nobloom`, `noprobe`, `noskylut` and ' +
             "`bloom4` are 201/9's ABLATION arms, and they exist because this device has no " +
             '`timestamp-query` and no browser flag brings it: a pass is priced by REMOVING it and re-flying ' +
-            'the same route, so each one is `field` minus one group of passes. Read `surface.ablated` in ' +
+            'the same route, so each one is `field` minus one group of passes. `night` and `nighthalf` are the LOOK ' +
+            'pair — the same map at hour 22, differing by the bloom arm alone, because a half-resolution bright ' +
+            'pass can only lose a sub-pixel emitter where there is one lit. Read `surface.ablated` in ' +
             'the snapshot before believing any of them. Also the map itself, its inventory report, the ' +
             'flat 2D map, the tile bake, or the share build.',
           enum: [
@@ -191,6 +193,8 @@ export const TOOLS = [
             'bloomrg11',
             'bloomhalf',
             'bloomboth',
+            'night',
+            'nighthalf',
             'bloom4',
             'noprobe',
             'noskylut',

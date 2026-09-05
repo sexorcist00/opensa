@@ -243,3 +243,39 @@ describe('the ablation arms (201/9)', () => {
     });
   });
 });
+
+describe('the bloom arms and the night look pair (201/9-05)', () => {
+  describe('negative cases', () => {
+    it('never lets the look pair differ by anything but the arm — otherwise the A/B is about something else', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.nighthalf).toBe(`${links.night}&bloomscale=0.5`);
+    });
+
+    it('does not judge the half-res prefilter in daylight, where there is no lit emitter to lose', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.night).toContain('hour=22');
+      expect(links.nighthalf).toContain('hour=22');
+      expect(links.bloomhalf).not.toContain('hour=');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is the field run with one budget field moved, for each measurement arm', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.bloomrg11).toBe(`${links.field}&bloomformat=rg11b10ufloat`);
+      expect(links.bloomhalf).toBe(`${links.field}&bloomscale=0.5`);
+      expect(links.bloomboth).toBe(`${links.field}&bloomformat=rg11b10ufloat&bloomscale=0.5`);
+    });
+
+    it('carries no board on any of them, like every arm of the map circuit', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const arm of [links.bloomrg11, links.bloomhalf, links.bloomboth, links.night, links.nighthalf]) {
+        expect(arm).toContain('units=0&calls=0');
+      }
+    });
+  });
+});
