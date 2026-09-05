@@ -1,0 +1,32 @@
+{
+  "note": "201/9-01's sprite change, flown on the device against its own control — and the answer is that it buys nothing this device can resolve. Filed because a null result costs the same to take as a positive one and is worth more than the change it refuses to justify.",
+  "app": "f0f0336+",
+  "build": "07:40 05-09-2026",
+  "pak": { "out": "./build/phone-cars", "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre" },
+  "device": "MGA-LX3 / ARM Bifrost @ DPR 2, css 360x320, ?surface=720x640 pinned on every window",
+  "pose": "[1500,-1500] h900 pitch -1.15 yaw pi perspective — ONE settled pose, held identical across all six windows. Not the ten-leg route: this arm is about a CPU span that the camera path does not change, and holding the pose still removes a variable the route would add.",
+  "arms": {
+    "board": "the shipping path since 2026-09-05 — each mark rasterized once into a sprite and blitted per instance",
+    "nosprites": "`?sprites=0`, the layer's own fallback — the mark rebuilt as a path per instance, which is what shipped before. Proven NON-NULL in every window by `symbology.spriteVariants` reading 0 against the sprite arm's 6-9."
+  },
+  "windows": [
+    { "n": 1, "arm": "board", "overlaySymbolsMs": 7.014, "unitsAsModels": 0, "spriteVariants": 9, "symbols": 190, "frames": 339 },
+    { "n": 2, "arm": "nosprites", "overlaySymbolsMs": 6.429, "unitsAsModels": 0, "spriteVariants": 0, "symbols": 191, "frames": 413 },
+    { "n": 3, "arm": "board", "overlaySymbolsMs": 6.162, "unitsAsModels": "0 -> 150 mid-window", "spriteVariants": 6, "symbols": 190, "frames": 439 },
+    { "n": 4, "arm": "nosprites", "overlaySymbolsMs": 6.103, "unitsAsModels": 150, "spriteVariants": 0, "symbols": 190, "frames": 463 },
+    { "n": 5, "arm": "board", "overlaySymbolsMs": 5.971, "unitsAsModels": 150, "spriteVariants": 9, "symbols": 190, "frames": 476 },
+    { "n": 6, "arm": "nosprites", "overlaySymbolsMs": 6.542, "unitsAsModels": 150, "spriteVariants": 0, "symbols": 190, "frames": 395 }
+  ],
+  "reading": {
+    "verdict": "INDISTINGUISHABLE. board 7.014 / 6.162 / 5.971 (range 1.04 ms), nosprites 6.429 / 6.103 / 6.542 (range 0.44). The sprite arm's own spread SPANS the control arm's entirely, and the sign of the difference flips with the pairing: windows 1-2 read -0.58 ms in the control's favour, windows 5 and 6 read +0.57 in the sprite arm's.",
+    "whatTheSequenceActuallyShows": "the first four windows fall monotonically — 7.014, 6.429, 6.162, 6.103 — while the arm alternates. That descent is warm-up and caching, not the lever, and reading windows 1-2 alone would have filed a confident -0.58 ms result. Third time this repository has had three windows agree on a false story.",
+    "whyItWasPredictable": "the desk control (2026-09-05-desk-canvas-symbol-arms) put the whole effect at 0.03-0.06 ms per 150 marks. This session's spread on the same span is ~1 ms. The lever was always going to be an order of magnitude under the floor, and the desk number said so before the device did.",
+    "modelsAreNotAConfoundHere": "`drawUnit` draws its chevron whether or not a 3D model exists under it, so `overlay:symbols` is the same work at unitsAsModels 0 and 150. Windows 4-6 are the ones taken with the fleet loaded throughout and they carry the same verdict as the whole set."
+  },
+  "theFindingThatMatters": {
+    "claim": "the drawing is a MINORITY of this span, so neither arm was ever going to move it.",
+    "evidence": "150 marks cost ~0.3 ms of canvas work at a desk. Even at a large device penalty that is one or two of these six milliseconds. The rest is what the layer does per unit AROUND the drawing: two projections and their allocations, `gtaToEngine` twice, `aheadOf`, a colour string built per unit per frame, a sprite cache key built per unit per frame, a hit-area object, a rank object — 190 times a frame, at ~50 fps.",
+    "next": "split `symbology.render` the way `overlay-2d` was split, and attribute the 6 ms before optimising any part of it. Making the overlay's own split permanent this session is what turned this line from an unattributed remainder into a number at all."
+  },
+  "owed": "the decision on whether the sprite path stays the default. It is not a regression and it is provably less work per instance; it is also a module, a cache, a fallback and an arm that this device cannot show a reason for."
+}

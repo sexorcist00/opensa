@@ -718,3 +718,41 @@ Small, individually boring, and all of them on the phone's main thread every fra
    order because 9/04 is the largest unexplained number and the cheapest to test.
 4. **9/07** last: it is the only group whose win is certain and small, so it must not be allowed to absorb the
    session that the uncertain, large ones need.
+
+### The symbology layer, priced — and the sprite that could not be seen (2026-09-05)
+
+**The operator's report opened this**, not a plan: 150 label plates, too large, growing when the call drawer
+was hidden. The size was a canvas bug ([architecture.md](../../../restrictions/architecture.md)); the density
+was [3/03](../3-the-operator-surface-on-a-phone/readme.md)'s. What is 9/01's is the third finding underneath
+them — **`overlay-2d` at 6.17 ms of an 11.65 ms CPU body was an UNATTRIBUTED REMAINDER**, because the split
+inside it counted down after three frames and had been silent about the steady state since it was written.
+
+Made permanent, it says the span is `overlay:symbols` and almost nothing else (`overlay-2d` 0.19,
+`overlay:clear` 0.16, `overlay:sketches` 0.07). So the layer's own draw is the frame's largest CPU line, and
+it now has a name.
+
+**The sprite change, and the honest result.** 9/01 already listed "a fresh path per unit symbol per frame
+where a sprite cache is the standard answer" as known waste, and that is what was built: each mark
+rasterized once by variant and blitted per instance, which is MapLibre's icon atlas and deck.gl's
+`IconLayer`. Two measurements, in this order:
+
+| | 150 marks |
+| --- | --- |
+| [desk control](../../../benchmarks/opensa-engine/2026-09-05-desk-canvas-symbol-arms.json), headless Chromium | blit **~0.275 ms** against path **~0.32** — cheaper in all three paired invocations |
+| [the device arm](../../../benchmarks/opensa-engine/2026-09-05-mobile-symbol-sprite-arm.json), six windows | **INDISTINGUISHABLE** — board 7.014 / 6.162 / 5.971, nosprites 6.429 / 6.103 / 6.542 |
+
+**The desk number predicted the device's null**: 0.03–0.06 ms of effect against a ~1 ms session spread was
+always going to be invisible. The device sequence is the more useful half — the first four windows fall
+monotonically while the arm alternates, so windows 1–2 alone read a confident **−0.58 ms** that the bracket
+then refuted. Third time in this chain.
+
+**And the finding that outlives both is what they rule OUT.** 150 marks cost ~0.3 ms of canvas work at a
+desk. Even at a large device penalty that is one or two of these six milliseconds, so **the drawing is a
+minority of the span and no drawing-side lever can move it.** The rest is what the layer does per unit
+*around* the drawing — two projections and their allocations, `gtaToEngine` twice, `aheadOf`, a colour string
+built per unit per frame, a cache key built per unit per frame, a hit-area object, a rank object — 190 times
+a frame at ~50 fps.
+
+**Next here is not an optimisation, it is a split**: `symbology.render` gets the same treatment
+`overlay-2d` just got, and the 6 ms is attributed before any part of it is touched. Making that split
+permanent is the whole reason this line stopped being a remainder, and the same move is owed one level down.
