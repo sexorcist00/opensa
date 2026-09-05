@@ -133,3 +133,37 @@ those assertions.**
 
 Detail for all of the above: [`edge-cases/engine-rendering.md`](../edge-cases/engine-rendering.md),
 [`architecture/`](../architecture/).
+
+## Under a vsync lock, a frame TIME is a miss rate — a performance claim may not be subtracted from it
+
+**The rule.** Where the frame is pinned to the display interval, `dtMean` is set by the MIX of vsync rungs
+and by nothing else: work that fits under the deadline is free, work that does not costs a whole interval.
+So a mean frame time is *how often the frame misses*, restated in milliseconds. **A design may not budget
+against it, and a measurement may not subtract from it to find unattributed work** — there is no remainder
+to attribute.
+
+**Why it is not obvious.** The number is in milliseconds, it moves when you change the renderer, and it
+moves in the direction you expect. Every ablation delta taken this way is real; what is wrong is the model
+underneath, which treats the frame as a sum of costs. On a device that is NOT vsync-bound the same
+arithmetic is correct, which is why the habit survives the move to one that is.
+
+**What it cost.** A row filed on 2026-09-05 priced the whole bloom chain at 2.43 ms of a 19.23 ms frame,
+subtracted the terms it could name, and told the next agent to go find *"the remaining ~13 ms"*. Those 13 ms
+do not exist. The rung mix alone predicts all three arms' means to within the same −0.9 ms offset (20.40 /
+19.57, 17.88 / 16.80, 19.87 / 18.88), so the mix IS the mean. The honest statement of the same measurement
+is *"the bloom chain pushes about one frame in five past the display deadline"* — rung-1 occupancy 78 % and
+81 % against 95 % — which is actionable where the subtraction was a phantom.
+
+**The corollary, which is not symmetric.** CPU work is timed directly and finely (`cpu.bodyMeanMs` separated
+3.54 / 3.40 / 3.11 from 2.97 on those arms). GPU work is not, and not merely for want of `timestamp-query`:
+`outside` — frame minus body — is GPU time and present WAIT added together, and nothing on this adapter
+separates them. **A GPU-side change smaller than one rung is therefore invisible by construction rather than
+by noise**, which is why two vendor levers that provably do less work read as indistinguishable. Ask a
+GPU-side question where the frame is not on the floor, or do not ask it on this device.
+
+**Caught:** no, and it is silent in the way this folder means it. The capture is complete and
+self-consistent, the delta is real, the arithmetic runs, and the conclusion is wrong. The only check is to
+predict the mean from the rung mix and see that it already lands — a minute's work that nothing prompts you
+to do. The measurement protocol is in
+[`docs/benchmarks/readme.md`](../benchmarks/readme.md) as the third rule an ablation row must satisfy; the
+row it came from is [the nobloom re-flight](../benchmarks/opensa-engine/2026-09-05-mobile-nobloom-refly.json).

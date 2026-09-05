@@ -29,7 +29,7 @@ comparing any two numbers** — the runs come from two different harnesses and s
 How to produce a run: [`../development/benchmarks.md`](../development/benchmarks.md) (`?bench=all`, the
 `[bench]` console protocol, the headless harness at `tools-debug/bench-harness/`).
 
-## Two rules an ablation row has to satisfy, both learned by breaking them
+## Three rules an ablation row has to satisfy, all learned by breaking them
 
 **An arm is subtracted from a baseline flown in the SAME thermal window** (2026-09-05). The console's `field`
 read 23.44, 23.66 and 21.52 across one day with nothing changed — the device heats — so a fix is never judged
@@ -47,6 +47,32 @@ under it is a sample rather than a measurement. A null arm is invisible in every
 report is complete, self-consistent and plausible. The defence is to read what the pass is gated on in the
 HOST before believing the arm that removes it, and to fly a control that removes nothing whenever a delta
 matters.
+
+**And on a device under a VSYNC LOCK, `dtMean` is a MISS RATE, not a cost — do not subtract from it to find
+work** ([the nobloom re-flight](opensa-engine/2026-09-05-mobile-nobloom-refly.json), 2026-09-05). The frame is
+pinned to the display interval: work that fits under the deadline is free, and work that does not costs a
+whole interval, so the mean is set by the MIX of vsync rungs and by nothing else. The check is arithmetic and
+takes a minute — predict each arm's mean from its rung mix alone, with no cost model, and see whether it
+lands:
+
+| arm | predicted from the rung mix | measured | offset |
+| --- | --- | --- | --- |
+| `field` #1 | 20.40 ms | 19.57 | −0.83 |
+| `nobloom` | 17.88 ms | 16.80 | −1.08 |
+| `field` #2 | 19.87 ms | 18.88 | −0.99 |
+
+The same offset three times — the sub-interval frames the render gate lets through. **A frame time built
+this way has no remainder to attribute**, and the row that first read it as one told the next agent to go
+find "the remaining ~13 ms", which does not exist. State the finding as what it is: *this pass pushes about
+one frame in five past the deadline*, which is the same fact and the one that survives being acted on.
+
+**The corollary is what the device can measure at all, and it is not symmetric.** CPU work is timed directly
+and finely — `cpu.bodyMeanMs` separated 3.54 / 3.40 / 3.11 from 2.97 across those arms. GPU work is not, and
+not merely for want of `timestamp-query`: `outside` (frame minus body) is GPU time and present WAIT added
+together and nothing on this adapter separates them. **So a GPU-side change smaller than one rung is
+invisible here by CONSTRUCTION rather than by noise** — which is why two vendor levers that provably do less
+work read as nothing — and a GPU question has to be asked where the frame is NOT on the floor, or not asked
+on this device.
 
 ## File naming
 
