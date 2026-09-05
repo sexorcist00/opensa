@@ -9,13 +9,42 @@
   },
   "device": "desk container, headless Chromium /opt/pw-browsers/chromium — NOT the 2/03 phone",
   "perFrameMs150Marks": {
-    "blit": { "p50": [0.275, 0.2725, 0.275, 0.275, 0.2825, 0.315] },
-    "path": { "p50": [0.3425, 0.3, 0.35, 0.305, 0.3425, 0.305] }
+    "blit": {
+      "p50": [
+        0.275,
+        0.2725,
+        0.275,
+        0.275,
+        0.2825,
+        0.315
+      ]
+    },
+    "path": {
+      "p50": [
+        0.3425,
+        0.3,
+        0.35,
+        0.305,
+        0.3425,
+        0.305
+      ]
+    }
   },
   "reading": {
     "verdict": "the blit arm is the cheaper of the two in every one of the three paired invocations, ~0.275 ms against ~0.32 ms for 150 marks — roughly 10-20 %, or 0.03-0.06 ms a frame at this count.",
     "smallPrint": "the path arm's SECOND sample is consistently below its first (0.3425 -> 0.300, 0.35 -> 0.305, 0.3425 -> 0.305) while the blit arm does not move, so the honest comparison is against path's warmed sample and the win is at the low end of that range.",
     "theOtherFinding": "150 marks cost ~0.3 ms HERE while the phone reports `overlay:symbols` at 7.37 ms at 192 symbols. Even at a 10x device penalty that leaves most of the span unexplained, so on the phone the DRAWING is a minority of that line and the next place to look is everything else the layer does per unit — two projections, a colour string, a cache key, a hit-area object and a rank object, 150 times a frame."
   },
-  "owed": "the device arm. `?sprites=0` and the panel's `nosprites` link exist for it; the panel process has to be restarted before it serves the new link table."
+  "owed": "the device arm. `?sprites=0` and the panel's `nosprites` link exist for it; the panel process has to be restarted before it serves the new link table.",
+  "theScaleBar": {
+    "question": "`sym:scale` measures ~250 us a frame on the device for ONE scale bar — a third of what forty calls cost — and the obvious explanation was the two `ctx.font` assignments it makes, since this layer's oldest note is that assigning the font re-parses the shorthand.",
+    "measuredHereUs": {
+      "fontAlternating": 0.6,
+      "fontRepeated": 0.1,
+      "wholeBar": 3.0
+    },
+    "verdict": "REFUTED as an absolute explanation. Alternating two shorthands costs 0.6 us an assignment against 0.1 for repeating one — so the churn IS ~6x, exactly as the note says, and it is 1.2 us a frame. The WHOLE bar, font churn included, is 3 us.",
+    "whatItLeaves": "the device spends ~250 us on 3 us of desk work — the same ~80x ratio `sym:units` carried before its allocations were removed. Two candidates and only the device can separate them: (a) font handling really is that much more expensive on this phone, which its own history supports (`overlay:clear` was 212 ms before `warmTextMetrics` landed, and font resolution was the cause); (b) the span instrument itself, since `sym:scale` wraps the least work of the four `sym:*` spans — though `overlay:sketches` reads 0.03-0.06 ms in the same captures, which puts the floor below that and makes (b) the weaker of the two.",
+    "doNotShipTheGuess": "no change was made. A ~1 % micro-fix on a refuted inference, unmeasurable from here, is what this session learned twice not to do."
+  }
 }

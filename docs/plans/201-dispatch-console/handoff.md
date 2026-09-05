@@ -124,6 +124,13 @@ assigns `Engine.probeCenter`, so the pass has never rendered a face here — `su
 - **`?sprites=0`** (`nosprites` on the panel) — the symbology's own drawing path, as a control arm.
 - **`scripts/debug/canvas-symbol-arms.mjs`** — a desk-side Canvas2D A/B in headless Chromium, ten seconds,
   no device. It answered "is a blit cheaper at all" and, more usefully, put a SCALE under the device number.
+  **Use it before spending a device round on any 2D question.** It has already refuted one of mine: the
+  decomposition explained `sym:scale`'s ~250 µs a frame by its two `ctx.font` assignments, and the desk says
+  alternating two shorthands is **0.6 µs** an assignment while the whole scale bar is **3 µs**. The churn is
+  real and ~6x, and it is 1.2 µs — so the device spends ~250 µs on 3 µs of desk work, the same ~80x ratio
+  `sym:units` carried before its allocations went. Nothing was shipped on the refuted guess; the two
+  candidates that survive are in [the row](../../benchmarks/opensa-engine/2026-09-05-desk-canvas-symbol-arms.json),
+  and only the device can separate them.
 - **`world.vehicleDrawsOpaque` / `world.vehicleDrawsBlend`** — the 3 571 draws split by rigid phase. The
   opaque half instances (roughly submeshes x MODELS); the blend half cannot, because its order is a function
   of the eye, so it stays one draw per car per submesh. Which of the two the remainder is was an inference

@@ -17,6 +17,11 @@
  *
  * Both arms are run TWICE and interleaved, because a delta taken from two blocks run back to back includes
  * whatever the machine was doing between them.
+ *
+ * **It also prices the SCALE BAR and the font churn inside it**, which is a different question with the same
+ * shape: `sym:scale` measures ~250 us a frame on the device for one bar, and the obvious explanation was the
+ * two `ctx.font` assignments it makes (this layer's oldest note is that assigning the font re-parses the
+ * shorthand). That explanation is REFUTED here — see the header of that block.
  */
 import { chromium } from 'playwright';
 
@@ -153,7 +158,53 @@ const result = await page.evaluate(() => {
   const a2 = timeArm(path, 30);
   const b2 = timeArm(blit, 30);
 
-  return { blit: [b1, b2], path: [a1, a2], units: N };
+  // THE SCALE BAR, priced apart. Per-OP microseconds rather than per-frame milliseconds, because these are
+  // single calls rather than a loop over the board.
+  const OPS = 2000;
+  function perOp(run) {
+    for (let i = 0; i < OPS; i += 1) run(i);
+    const samples = [];
+    for (let s = 0; s < 20; s += 1) {
+      const at = performance.now();
+      for (let i = 0; i < OPS; i += 1) run(i);
+      samples.push(((performance.now() - at) / OPS) * 1000);
+    }
+    samples.sort((a, b) => a - b);
+
+    return Number(samples[10].toFixed(4));
+  }
+  const FONT = '600 11px ui-sans-serif, system-ui, -apple-system, sans-serif';
+  const SMALL = '500 10px ui-sans-serif, system-ui, -apple-system, sans-serif';
+
+  return {
+    blit: [b1, b2],
+    path: [a1, a2],
+    scaleBarUs: {
+      fontAlternating: perOp((i) => {
+        ctx.font = i % 2 ? FONT : SMALL;
+      }),
+      fontRepeated: perOp(() => {
+        ctx.font = FONT;
+      }),
+      wholeBar: perOp(() => {
+        ctx.strokeStyle = 'rgba(232, 238, 246, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(18, 595);
+        ctx.lineTo(18, 600);
+        ctx.lineTo(118, 600);
+        ctx.lineTo(118, 595);
+        ctx.stroke();
+        ctx.font = SMALL;
+        ctx.fillStyle = 'rgba(232, 238, 246, 0.85)';
+        ctx.textAlign = 'left';
+        ctx.fillText('250 m', 18, 588);
+        ctx.font = FONT;
+        ctx.textAlign = 'center';
+      }),
+    },
+    units: N,
+  };
 });
 
 await browser.close();
