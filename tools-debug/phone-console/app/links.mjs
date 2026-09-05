@@ -18,6 +18,7 @@ export const LINK_NAMES = [
   'cleared',
   'engine',
   'board',
+  'nosprites',
   'msaa1',
   'rgb10a2',
   'scale75',
@@ -164,6 +165,11 @@ export function consoleUrls(state = {}) {
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.
     board: `${app}?${query}&units=150&calls=40&${capture}`,
+    // THE SYMBOLOGY ARM (201/9-01): `board` with the symbol sprites off, so the marks are rebuilt as paths
+    // the way they were before 2026-09-05. `nosprites` − `board` is what a blit is worth on this device —
+    // the only way to price it here, since the adapter has no `timestamp-query`. Its own fallback, not a
+    // second path written for the measurement, so what it measures is exactly what shipped before.
+    nosprites: `${app}?${query}&units=150&calls=40&${capture}&sprites=0`,
     // The overlay canvas cleared every frame with nothing drawn into it (201/9-01). `engine` below skips the
     // `clearRect` as well, so the compositor may skip the layer whole — which is why the two-arm pair could
     // not say whether the ~21 ms it removed was the layer or its content.

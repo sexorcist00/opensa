@@ -175,7 +175,9 @@ export const TOOLS = [
             'pair — the same map at hour 22, differing by the bloom arm alone, because a half-resolution bright ' +
             'pass can only lose a sub-pixel emitter where there is one lit. Read `surface.ablated` in ' +
             'the snapshot before believing any of them. Also the map itself, its inventory report, the ' +
-            'flat 2D map, the tile bake, or the share build.',
+            'flat 2D map, the tile bake, or the share build. `nosprites` is the symbology arm: `board` with the ' +
+            'symbol sprites off, so a mark is rebuilt as a path per instance the way it was before ' +
+            '2026-09-05 — its difference from `board` is what a blit is worth on this device.',
           enum: [
             'map',
             'inventory',
@@ -183,6 +185,7 @@ export const TOOLS = [
             'cleared',
             'engine',
             'board',
+            'nosprites',
             'msaa1',
             'rgb10a2',
             'scale75',

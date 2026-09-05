@@ -22,6 +22,7 @@ import { bindGestures } from '../map/gestures';
 import { bindKeys } from '../map/keys';
 import { groundPoint, MAP_YAW, MapCamera, type MapProjection } from '../map/map-camera';
 import { SymbologyLayer, warmOverlaySurface, warmTextMetrics } from '../map/overlay-2d';
+import { spritesFrom } from '../map/symbol-sprites';
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, SketchStore } from '../map/sketch';
 import { drawTileLayer } from '../map/tile-layer';
@@ -74,7 +75,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
   overlay.style.touchAction = 'none';
 
   const camera = new MapCamera(OPENING);
-  const symbology = new SymbologyLayer();
+  const symbology = new SymbologyLayer(dpr, spritesFrom(dispatchParams(), dpr));
   // The flat map's content (201/6-02). It is opened asynchronously and the mode works without it — a plan
   // over a grid is what this screen was before the pyramid existed, and it stays the honest fallback.
   let tiles: null | TileSource = null;

@@ -51,9 +51,21 @@ export const ALPHA_STEPS = 16;
 export type CanvasFactory = (width: number, height: number) => HTMLCanvasElement | null;
 
 export class SymbolSprites {
-  /** How many distinct sprites were rasterized — the claim that the cache bounds itself, as a number. */
+  /**
+   * How many distinct sprites were actually RASTERIZED — the claim that the cache bounds itself, as a number.
+   *
+   * Refusals are not counted, which is what makes `spriteVariants: 0` in a capture read as *this run drew
+   * every mark as a path*: the control arm below and a host with no canvas produce the same honest zero.
+   */
   get size(): number {
-    return this.cache.size;
+    let built = 0;
+    for (const sprite of this.cache.values()) {
+      if (sprite !== null) {
+        built += 1;
+      }
+    }
+
+    return built;
   }
 
   /** Sprites built this session, by variant key. */
@@ -144,6 +156,21 @@ export function quantizeAlpha(alpha: number): number {
 const CHEVRON_HALF = 16;
 /** The same for a call: a diamond of half-diagonal 8 strokes to 9, rotated to ~12.7 across. */
 const DIAMOND_HALF = 15;
+
+/**
+ * The sprite cache a surface should use, and the control arm that switches it off (`?sprites=0`).
+ *
+ * A blit is only faster than a path if somebody measured it, and this device has no `timestamp-query` — so
+ * the price is read the way every other pass here is priced (`capture-ablation.ts`): run the same route with
+ * ONE thing different. The arm is the layer's own fallback rather than a second code path written for the
+ * measurement, so what it measures is exactly what shipped before.
+ *
+ * Any value other than `0` leaves sprites on, deliberately: an arm that silently ran as the default is a
+ * measurement of the default filed under another name.
+ */
+export function spritesFrom(params: URLSearchParams, dpr: number): SymbolSprites {
+  return params.get('sprites') === '0' ? new SymbolSprites(dpr, () => null) : new SymbolSprites(dpr);
+}
 
 function defaultCanvas(width: number, height: number): HTMLCanvasElement | null {
   if (typeof document === 'undefined') {

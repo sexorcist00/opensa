@@ -51,6 +51,7 @@ import { mountMinimap } from '../map/minimap';
 import { SymbologyLayer, warmOverlaySurface, warmTextMetrics } from '../map/overlay-2d';
 import { ScreenProjector } from '../map/projection';
 import { drawSketches, type MapTool, type Measurement, SketchStore } from '../map/sketch';
+import { spritesFrom } from '../map/symbol-sprites';
 import { DEFAULT_TILE_SIZE } from '../map/tiles';
 import { UnitModels } from '../map/unit-models';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
@@ -537,7 +538,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // arrives between frames and changes none of the values the render gate compares, so without it the fleet
   // would appear on whatever frame the operator happened to cause next.
   const unitModels = new UnitModels(engine, openModelSource(world.gameDir), () => gate.wake());
-  const symbology = new SymbologyLayer();
+  const symbology = new SymbologyLayer(dpr, spritesFrom(params, dpr));
   const sketch = new SketchStore();
   // A click on the radar is "look over there", not "zoom in on that": the flight keeps the operator's
   // current span, so an overview stays an overview and a street view stays a street view.
