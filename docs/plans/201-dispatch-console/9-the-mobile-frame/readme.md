@@ -545,13 +545,24 @@ of the window's frames onto the vsync floor (rung 1: 67 % against 59 %). **It is
 this chain**: unlike the bloom result it changes no pixel anybody can see, because the field it re-bakes is
 identical for minutes. The amortized version still owes its own arm and a verdict that the clouds move.
 
-**AND THE TWO PASSES THIS STEP HOLDS UP AS THE SOLVED EXAMPLES ARE NOT FREE EITHER.** The same sweep priced
-what is LEFT of each after its own amortization: **`noprobe` is 1.6 ms and `noskylut` is 1.0 ms** — together
-**2.6 ms, more than the cumulus bake this step was opened on**. That is not a refutation of the pattern (both
-would cost far more unamortized) but it does mean neither is the finished article this step assumed, and
-neither has a step of its own. What is owed is a read of what actually runs on a frame that should skip them:
-an early return that still records a pass, a uniform write, a bind-group rebuild, or an interval short enough
-that the amortization is thinner than it looks.
+**AND THE TWO PASSES THIS STEP HOLDS UP AS THE SOLVED EXAMPLES ARE NOT THE SAME CASE — the code read settles
+which is which, 2026-09-05.** The sweep priced what is LEFT of each after its own amortization at `noprobe`
+**1.6 ms** and `noskylut` **1.0 ms**, and the first thing to say is that those two arms were flown ~40 minutes
+after their baseline, inside the same session whose `field` drifted 2.1 ms across the day. So the numbers are
+a band, not a reading — which is exactly why the next move was to READ THE CODE rather than to fix anything.
+
+- **The probe is real, and the amortization is thinner than the word suggests.** `PROBE_FRAME_INTERVAL` is
+  **2**: a cube face renders every OTHER frame, in its own submit. On a map with no car on it the whole cube
+  is rendered for nobody — the rigid lane's reflection term is its only reader. Fixed by demand rather than
+  by cadence (`Engine.hasReflectiveInstance`, 3 tests): no reflective instance, no faces, and nothing about
+  the latency or the sharpness moves. That is the variant
+  [the lever's own card](../../../performance/applied/env-probe-cadence.md) called the free one, and both
+  halves of its trigger had fired.
+- **The sky LUT cannot be what its arm says.** Its key is QUANTIZED (`skyLutKey`: elevation × 200, the
+  colours × 100) and this console's hour is static unless an operator moves it, so `refreshSkyLut` builds a
+  string and returns early on every frame after the first — microseconds, not a millisecond. Its 1.0 ms is
+  the drift band, and there is nothing there to fix. **It is left alone deliberately**: a "fix" for a pass
+  that is already an early return would have been a change with no defect behind it.
 
 ### 07 — The per-frame allocations, and one capability that retains what it never reads
 

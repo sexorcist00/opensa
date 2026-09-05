@@ -3279,6 +3279,46 @@ export class Engine {
   }
 
   /**
+   * Render one env-probe face (074/16 step 2) in its own submit and return the probe mix for params4.w.
+   * The face camera is written into the SHARED frame uniform first — queue ordering guarantees the probe
+   * submit sees it and the main pass (whose write follows) sees the real camera again.
+   */
+  /**
+   * Whether anything that READS the environment probe exists at all — the demand gate on its refresh.
+   *
+   * **The probe is not amortized to nothing; it is amortized to a face every other frame** — six faces a
+   * cube, `PROBE_FRAME_INTERVAL` frames apart — and 201/9's sweep priced what is left at **1.6 ms of a
+   * 21.5 ms frame** on the 2/03 phone, which is a top-three line rather than a rounding error. Its only
+   * consumer is the rigid lane's reflection term (the car pipe), so on a frame with no vehicle instance the
+   * whole cube is rendered for nobody.
+   *
+   * **This is the variant [the lever's own card](../../../docs/performance/applied/env-probe-cadence.md)
+   * calls the one that costs no quality**, as against a longer interval or a smaller face, which both trade
+   * reflection latency or sharpness. Nothing samples what is not drawn.
+   *
+   * **What it costs, stated rather than discovered:** a probe that stopped refreshing holds the world it
+   * last saw, so the first car to appear after a long drive reflects a stale street until the cube comes
+   * round — 12 frames at the shipped cadence, ~200 ms, which is the same latency the card already accepts as
+   * invisible on blurred paint. It is bounded by that cadence rather than unbounded, because the gate opens
+   * the moment an instance exists.
+   *
+   * The test is over INSTANCES rather than over what a pass actually drew: an instance that exists is one a
+   * cull may admit this frame, and a gate keyed on last frame's draws would refuse the probe on exactly the
+   * frame a car arrives.
+   */
+  private hasReflectiveInstance(): boolean {
+    for (const model of this.vehicleModels.values()) {
+      for (const state of model.instances) {
+        if (state) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * The visible cells' blend bundles, back-to-front by cell distance, into the reused array (201/9-07).
    *
    * Two arrays rather than one because the sort key is not the value: cells carry a distance and the pass
@@ -3417,11 +3457,6 @@ export class Engine {
   }
 
   /**
-   * Render one env-probe face (074/16 step 2) in its own submit and return the probe mix for params4.w.
-   * The face camera is written into the SHARED frame uniform first — queue ordering guarantees the probe
-   * submit sees it and the main pass (whose write follows) sees the real camera again.
-   */
-  /**
    * Env-probe scheduling (074/16 step 2): one face every PROBE_FRAME_INTERVAL frames, in its OWN submit
    * before the main pass. writeBuffer is queue-ordered against submits, so the ONE frame uniform (recorded
    * into every bundle) holds the face camera for the probe submit and the main camera for the frame submit —
@@ -3433,7 +3468,7 @@ export class Engine {
       return;
     }
     const probeCenter = this.probeCenter;
-    if (!probeCenter || this.environment.reflectionStrength <= 0) {
+    if (!probeCenter || this.environment.reflectionStrength <= 0 || !this.hasReflectiveInstance()) {
       // Written rather than left: the staging array is reused now (201/9-07), so a skipped probe would
       // otherwise ship the last frame's mix into a frame that has no reflection at all.
       frameData[91] = 0;
