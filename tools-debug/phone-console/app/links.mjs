@@ -36,6 +36,7 @@ export const LINK_NAMES = [
   'bloomvendor',
   'night',
   'nighthalf',
+  'nightnobloom',
   'noprobe',
   'noskylut',
   'flat',
@@ -165,11 +166,6 @@ export function consoleUrls(state = {}) {
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.
     board: `${app}?${query}&units=150&calls=40&${capture}`,
-    // THE SYMBOLOGY ARM (201/9-01): `board` with the symbol sprites off, so the marks are rebuilt as paths
-    // the way they were before 2026-09-05. `nosprites` − `board` is what a blit is worth on this device —
-    // the only way to price it here, since the adapter has no `timestamp-query`. Its own fallback, not a
-    // second path written for the measurement, so what it measures is exactly what shipped before.
-    nosprites: `${app}?${query}&units=150&calls=40&${capture}&sprites=0`,
     // The overlay canvas cleared every frame with nothing drawn into it (201/9-01). `engine` below skips the
     // `clearRect` as well, so the compositor may skip the layer whole — which is why the two-arm pair could
     // not say whether the ~21 ms it removed was the layer or its content.
@@ -192,11 +188,23 @@ export function consoleUrls(state = {}) {
     // differ by the arm alone (`links.test.mjs`), so what an operator sees between them IS the arm.
     night: `${app}?${empty}&hour=22`,
     nighthalf: `${app}?${empty}&hour=22&bloomscale=0.5`,
+    // THE REMOVAL question, which is a different question from the prefilter one above and has never been
+    // put to an operator. 2026-09-05 measured what dropping the chain BUYS — the map stutters on 44.6 % of
+    // consecutive frame pairs and on 7.9 % without it, 5.6x
+    // (`docs/benchmarks/opensa-engine/2026-09-05-mobile-frame-pacing.json`) — and nothing has ever measured
+    // what it COSTS to look at. `night` minus this arm is that cost, at the hour where bloom has something
+    // to do; the day pair is the one that already came back indistinguishable and settled nothing.
+    nightnobloom: `${app}?${empty}&hour=22&ablate=bloom`,
     nobloom: `${app}?${empty}&ablate=bloom`,
     nocells: `${app}?${empty}&ablate=cells`,
     nocloud: `${app}?${empty}&ablate=cloud`,
     noprobe: `${app}?${empty}&ablate=probe`,
     noskylut: `${app}?${empty}&ablate=skylut`,
+    // THE SYMBOLOGY ARM (201/9-01): `board` with the symbol sprites off, so the marks are rebuilt as paths
+    // the way they were before 2026-09-05. `nosprites` − `board` is what a blit is worth on this device —
+    // the only way to price it here, since the adapter has no `timestamp-query`. Its own fallback, not a
+    // second path written for the measurement, so what it measures is exactly what shipped before.
+    nosprites: `${app}?${query}&units=150&calls=40&${capture}&sprites=0`,
     rgb10a2: `${app}?${empty}&scene=rgb10a2unorm`,
     scale50: `${app}?${empty}&scale=0.5`,
     scale75: `${app}?${empty}&scale=0.75`,

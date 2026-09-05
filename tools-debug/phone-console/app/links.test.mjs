@@ -259,6 +259,23 @@ describe('the bloom arms and the night look pair (201/9-05)', () => {
       expect(links.nighthalf).toContain('hour=22');
       expect(links.bloomhalf).not.toContain('hour=');
     });
+
+    // The REMOVAL question is not the prefilter question, and its arm has to differ from `night` by the
+    // whole chain rather than by where the pyramid starts. Sharing a pair between the two would put a
+    // verdict about one of them on the other's URL.
+    it('never lets the REMOVAL pair differ by anything but the ablation', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.nightnobloom).toBe(`${links.night}&ablate=bloom`);
+      expect(links.nightnobloom).not.toContain('bloomscale');
+    });
+
+    it('does not judge REMOVAL in daylight either — that pair came back indistinguishable once already', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.nightnobloom).toContain('hour=22');
+      expect(links.nobloom).not.toContain('hour=');
+    });
   });
 
   describe('positive cases', () => {
@@ -281,7 +298,14 @@ describe('the bloom arms and the night look pair (201/9-05)', () => {
     it('carries no board on any of them, like every arm of the map circuit', () => {
       const links = consoleUrls(SERVED);
 
-      for (const arm of [links.bloomrg11, links.bloomhalf, links.bloomboth, links.night, links.nighthalf]) {
+      for (const arm of [
+        links.bloomrg11,
+        links.bloomhalf,
+        links.bloomboth,
+        links.night,
+        links.nighthalf,
+        links.nightnobloom,
+      ]) {
         expect(arm).toContain('units=0&calls=0');
       }
     });
