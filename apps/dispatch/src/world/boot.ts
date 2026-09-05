@@ -733,6 +733,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   let drawnBodyMs = 0;
   /** The streaming stats of the last DRAWN frame — what an idle wake compares against (201/4-01). */
   let lastStream: StreamStats = IDLE_STREAM;
+  /** 4/04: did the last DRAWN frame carry geometry the wind moves? The gate's one non-value signal. */
+  let lastSwayVisible = false;
   /** Whether the chrome has already been told the console is idle; one readout, not one per skipped frame. */
   let idleReported = false;
   /** The last readout sent, so going idle can re-send it marked idle rather than inventing a frame's worth
@@ -798,6 +800,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         pose: camera.pose(),
         selection: overlayOn ? options.selection() : null,
         sketch: overlayOn ? sketch.revision() : 0,
+        // 4/04: the only signal here that is not a value the host holds — the engine says whether the LAST
+        // frame drew anything the wind moves, and time is what changes that picture. Reading last frame's
+        // answer is right rather than convenient: geometry does not enter or leave the frustum between two
+        // wakes without the pose changing, and a pose change already draws.
+        sways: lastSwayVisible,
       })
     ) {
       if (!idleReported) {
@@ -940,6 +947,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       time('readout', () => options.onReadout(lastPayload as DispatchReadout));
     }
     lastStream = stream;
+    lastSwayVisible = stats.swayVisible;
     bodyMs = performance.now() - now;
     drawnBodyMs = bodyMs;
     schedule(false);

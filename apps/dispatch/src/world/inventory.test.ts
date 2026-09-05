@@ -47,6 +47,7 @@ function stats(overrides: Partial<EngineStats> = {}): EngineStats {
     residencyBytes: 37 * 1024 * 1024,
     roadsignQuadsRecorded: 0,
     submitMs: 0.4,
+    swayVisible: false,
     trianglesRecorded: 120_000,
     ...overrides,
   };

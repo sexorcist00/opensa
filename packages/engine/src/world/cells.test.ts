@@ -612,3 +612,43 @@ describe('CellStore placement mapper (074/22 picking)', () => {
     });
   });
 });
+
+describe('CellStore wind sway (201/4-04)', () => {
+  /** A cell whose vertices carry the given sway amplitude in `nightPrelit`'s alpha (offset 28 + 3). */
+  function cellWithSway(amplitude: number): Uint8Array {
+    const vertexCount = 3;
+    const vertexData = new Uint8Array(vertexCount * OSCELL_VERTEX_STRIDE);
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      vertexData[vertex * OSCELL_VERTEX_STRIDE + 31] = amplitude;
+    }
+
+    return cellBytes({ vertexData });
+  }
+
+  describe('negative cases', () => {
+    it('says a cell with no sway amplitude is still air, whatever the wind does', async () => {
+      // The condition that keeps 4/01 alive: a view with no vegetation in it must still rest.
+      const engine = await bootedEngine();
+
+      expect(engine.cells.load('0,0', cellWithSway(0)).sways).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('finds a swaying cell from the vertices themselves, with no format flag to add', async () => {
+      // The amplitude is data the pak already carries, so a world built before this existed answers
+      // correctly and no `.oscell` version moves.
+      const engine = await bootedEngine();
+
+      expect(engine.cells.load('0,0', cellWithSway(255)).sways).toBe(true);
+    });
+
+    it('needs only ONE swaying vertex — a single palm in a street of concrete is still a moving picture', async () => {
+      const engine = await bootedEngine();
+      const vertexData = new Uint8Array(3 * OSCELL_VERTEX_STRIDE);
+      vertexData[2 * OSCELL_VERTEX_STRIDE + 31] = 1;
+
+      expect(engine.cells.load('0,0', cellBytes({ vertexData })).sways).toBe(true);
+    });
+  });
+});

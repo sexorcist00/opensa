@@ -23,6 +23,7 @@ function signals(overrides: Partial<FrameSignals> = {}): FrameSignals {
     pose: pose(),
     selection: null,
     sketch: 0,
+    sways: false,
     ...overrides,
   };
 }
@@ -202,6 +203,66 @@ describe('RenderGate while the world is still arriving (the 2026-08-31 VOID)', (
       expect(gate.shouldDraw(signals({ created: 2, pending: 0 }))).toBe(true);
       expect(gate.shouldDraw(signals({ created: 2, pending: 0 }))).toBe(false);
       expect(gate.idleFrames).toBe(1);
+    });
+  });
+});
+
+describe('sway keeps the frame awake (201/4-04)', () => {
+  describe('negative cases', () => {
+    it('still rests on a map with nothing the wind moves', () => {
+      // The whole point of the condition: a console looking at a car park must not pay for foliage it
+      // cannot see. `sways: false` is the flat map, a dead-calm hour, and any view without vegetation.
+      const gate = new RenderGate();
+
+      expect(gate.shouldDraw(signals({ sways: false }), 0)).toBe(true);
+      expect(gate.shouldDraw(signals({ sways: false }), 1000)).toBe(false);
+      expect(gate.shouldDraw(signals({ sways: false }), 100_000)).toBe(false);
+    });
+
+    it('does not draw for the wind before a NAMED period has passed', () => {
+      // The rate is a number the surface reads. A surface that would rather trade smoothness for battery
+      // names a period, and gets sway at that period rather than at the display's rate.
+      const gate = new RenderGate(200);
+      gate.shouldDraw(signals({ sways: true }), 0);
+
+      expect(gate.shouldDraw(signals({ sways: true }), 100)).toBe(false);
+      expect(gate.shouldDraw(signals({ sways: true }), 199)).toBe(false);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('draws every wake while wind-animated geometry is in frame — the verdict asked for continuous', () => {
+      // The operator, 2026-09-04: the palms sway "once in a while rather than continuously, and that is
+      // critical". At the default interval of 0 a frame with sway in it never rests, which IS the display's
+      // rate, and the console's whole render-on-demand win is what it costs on such a view.
+      const gate = new RenderGate();
+      gate.shouldDraw(signals({ sways: true }), 0);
+
+      for (const now of [16, 32, 48, 64]) {
+        expect(gate.shouldDraw(signals({ sways: true }), now), `at ${now} ms`).toBe(true);
+      }
+      expect(gate.idleFrames).toBe(0);
+    });
+
+    it('draws for the wind once its named period is up, then measures the next one from THAT frame', () => {
+      const gate = new RenderGate(200);
+      gate.shouldDraw(signals({ sways: true }), 0);
+
+      expect(gate.shouldDraw(signals({ sways: true }), 200)).toBe(true);
+      // Measured from the frame that drew, not from a wall-clock grid: otherwise a late wake would be
+      // followed immediately by another, and the rate would burst rather than hold.
+      expect(gate.shouldDraw(signals({ sways: true }), 300)).toBe(false);
+      expect(gate.shouldDraw(signals({ sways: true }), 400)).toBe(true);
+    });
+
+    it('rests again the moment the wind-animated geometry leaves the frame', () => {
+      // The signal is read per frame rather than latched: pan a palm out of view and the map goes back to
+      // resting, which is what makes this a condition rather than a switch that kills 4/01 outright.
+      const gate = new RenderGate();
+      gate.shouldDraw(signals({ sways: true }), 0);
+      gate.shouldDraw(signals({ sways: true }), 16);
+
+      expect(gate.shouldDraw(signals({ sways: false }), 32)).toBe(false);
     });
   });
 });

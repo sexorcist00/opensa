@@ -214,6 +214,20 @@ export interface EngineStats {
   roadsignQuadsRecorded: number;
   submitMs: number;
   /**
+   * Whether anything the WIND MOVES was drawn this frame — the one input a render-on-demand host cannot
+   * derive from values of its own (201/4-04).
+   *
+   * **Every other frame signal is a state; sway is a clock.** The world shader displaces a vertex by
+   * `nightPrelit.a × windStrength` against engine uptime, so the picture changes because time passed — and a
+   * console that draws only when a value changed skips the wind along with the frame. From the operator's
+   * seat that is palms moving *"once in a while rather than continuously"*, which is how this was found
+   * (2026-09-04, the 2/03 device) and which the user called the thing that killed the world's liveliness.
+   *
+   * True when the wind is blowing AND a visible cell carries sway geometry — so a view of a car park still
+   * rests, and only a view with foliage in it pays. Clutter counts: grass and bushes sway on the same clock.
+   */
+  swayVisible: boolean;
+  /**
    * Triangles submitted this frame — baked cell bundles (counted at load) plus every out-of-bundle
    * `drawIndexed`, instance counts included. The number the bench reports as `avgTriangles`: it is what
    * separates a geometry problem from a fragment one, so it counts what was SUBMITTED, not what survived
@@ -972,6 +986,7 @@ export class Engine {
     residencyBytes: 0,
     roadsignQuadsRecorded: 0,
     submitMs: 0,
+    swayVisible: false,
     trianglesRecorded: 0,
   };
   private targetKey = '';
@@ -1427,6 +1442,7 @@ export class Engine {
     let total = 0;
     let triangles = 0;
     let roadsignQuads = 0;
+    let swayCells = 0;
     this.frameTriangles = 0;
     for (const cell of this.cells.all()) {
       total += 1;
@@ -1444,6 +1460,10 @@ export class Engine {
         ) &&
         frustumIntersectsSphere(this.frustumPlanes, cell.bounds[0], cell.bounds[1], cell.bounds[2], cell.bounds[3]);
       if (cell.visible) {
+        // 4/04: does TIME change this picture? Only where the wind is blowing and a visible cell carries
+        // geometry it moves. `cell.sways` was counted once at load, so this is one add per cell — counted
+        // rather than OR-ed because the branch would put `frame()` over the complexity gate.
+        swayCells += Number(cell.sways);
         bundles.push(cell.bundle);
         if (cell.blendBundle) {
           blendCells.push({
@@ -1604,6 +1624,9 @@ export class Engine {
     this.statsValue.drawsRecorded = draws;
     this.statsValue.trianglesRecorded = triangles + this.frameTriangles;
     this.statsValue.roadsignQuadsRecorded = roadsignQuads;
+    // The wind has to be blowing for sway to be motion: at `windStrength` 0 the same geometry is still air,
+    // and a console watching a dead-calm map may rest exactly as it did before this existed.
+    this.statsValue.swayVisible = this.swayInFrame(swayCells);
     this.statsValue.residencyBytes = this.resources.totalBytes();
 
     return this.statsValue;
@@ -3506,13 +3529,6 @@ export class Engine {
     pass.end();
   }
 
-  /**
-   * Env-probe scheduling (074/16 step 2): one face every PROBE_FRAME_INTERVAL frames, in its OWN submit
-   * before the main pass. writeBuffer is queue-ordered against submits, so the ONE frame uniform (recorded
-   * into every bundle) holds the face camera for the probe submit and the main camera for the frame submit —
-   * no second bind group needed. Off frames still write the CURRENT mix into params4.w, or the paint would
-   * flicker between the probe and the analytic fallback at half the frame rate.
-   */
   private scheduleProbe(frameData: Float32Array): void {
     if (!this.ablation.probe) {
       return;
@@ -3614,6 +3630,26 @@ export class Engine {
     const qz = Math.min(Math.max(lz, bounds.min[2]), bounds.max[2]);
 
     return distanceTo(qx, qy, qz);
+  }
+
+  /**
+   * Env-probe scheduling (074/16 step 2): one face every PROBE_FRAME_INTERVAL frames, in its OWN submit
+   * before the main pass. writeBuffer is queue-ordered against submits, so the ONE frame uniform (recorded
+   * into every bundle) holds the face camera for the probe submit and the main camera for the frame submit —
+   * no second bind group needed. Off frames still write the CURRENT mix into params4.w, or the paint would
+   * flicker between the probe and the analytic fallback at half the frame rate.
+   */
+  /**
+   * Does TIME change this frame's picture? (201/4-04)
+   *
+   * All three have to hold. Sway geometry must be VISIBLE — a view of a car park is still air and a
+   * render-on-demand console goes on resting through it. The wind must be BLOWING — at `windStrength` 0 the
+   * shader's displacement is zero however much amplitude the vertices carry. And the world must actually be
+   * DRAWN — under `?ablate=cells` there is no geometry in the frame to move, and an arm that quietly kept
+   * the loop awake would be an arm measuring something other than what it removed.
+   */
+  private swayInFrame(swayCells: number): boolean {
+    return swayCells > 0 && this.environment.windStrength > 0 && this.ablation.cells;
   }
 
   /** One RGBA layer into a plate array. */

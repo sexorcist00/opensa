@@ -49,6 +49,20 @@ export interface FrameSignals {
   readonly selection: Selection;
   /** The sketch store's revision (201/7-05) — a tap that adds a point changes the picture. */
   readonly sketch: number;
+  /**
+   * Wind-animated geometry is in frame, so TIME changes the picture (201/4-04).
+   *
+   * **The one signal here that is not a value**, and the reason this gate needed a new kind of input at all.
+   * Every field above is compared against the last drawn frame's; two equal frames draw equal pixels. Sway
+   * is a clock — the world shader displaces a vertex against engine uptime — so nothing above ever changes
+   * because the wind blew, and the palms moved only when something ELSE woke the frame. The operator's words
+   * for that (2026-09-04) were *"once in a while rather than continuously, and that is critical"*, and the
+   * user's were that it killed the world's liveliness.
+   *
+   * `Engine.stats.swayVisible` answers it: the wind is blowing AND a visible cell carries geometry it moves.
+   * A view of a car park is still air and still rests.
+   */
+  readonly sways: boolean;
 }
 
 export class RenderGate {
@@ -72,17 +86,26 @@ export class RenderGate {
   get boardChanged(): boolean {
     return this.boardDirty;
   }
+
   /** Frames this gate has skipped since boot — the number `idle draws → 0` is read off. */
   get idleFrames(): number {
     return this.skipped;
   }
   private boardDirty = true;
+  /** When the last frame was drawn — the animation rate is measured from it, not from a wall-clock grid. */
+  private drawnAt = 0;
 
   private forced = true;
 
   private last: FrameSignals | null = null;
 
   private skipped = 0;
+
+  /**
+   * @param animationIntervalMs the shortest gap between two frames drawn for the WIND alone. 0 is the
+   *   display's rate — what the 2026-09-05 verdict asked for; a larger number trades smoothness for rest.
+   */
+  constructor(private readonly animationIntervalMs = 0) {}
 
   /**
    * Whether the frame that is about to run must draw. Records the signals when it says yes.
@@ -101,12 +124,19 @@ export class RenderGate {
    * world that never finishes arriving keeps the loop awake instead of resting on a picture that is wrong,
    * which is the trade a map surface should take.
    */
-  shouldDraw(signals: FrameSignals): boolean {
-    if (!this.forced && this.last !== null && signals.pending === 0 && same(this.last, signals)) {
+  shouldDraw(signals: FrameSignals, now = performance.now()): boolean {
+    if (
+      !this.forced &&
+      this.last !== null &&
+      signals.pending === 0 &&
+      !this.animationDue(signals, now) &&
+      same(this.last, signals)
+    ) {
       this.skipped += 1;
 
       return false;
     }
+    this.drawnAt = now;
     this.boardDirty =
       this.forced || this.last === null || this.last.ops !== signals.ops || this.last.selection !== signals.selection;
     this.forced = false;
@@ -122,6 +152,28 @@ export class RenderGate {
    */
   wake(): void {
     this.forced = true;
+  }
+
+  /**
+   * Whether the wind alone is reason enough to draw this frame (201/4-04).
+   *
+   * **The rate is a NUMBER the surface reads, never a branch** — the same rule the render budget follows
+   * ([the restriction](../../../../docs/restrictions/architecture.md)). At `animationIntervalMs` 0 a frame
+   * with sway in it draws every wake, which is the display's rate and the smooth continuous render the
+   * verdict asked for; a surface that would rather trade smoothness for battery names a period instead and
+   * gets sway at that rate.
+   *
+   * **What it costs is stated rather than discovered**: on a view with foliage in it this is the whole of
+   * [4/01](../../../../docs/plans/201-dispatch-console/4-a-console-is-not-a-game/readme.md)'s win, because
+   * most of this map has foliage in it. That is the trade the operator's verdict chose, and 4/01's battery
+   * figure has to be re-taken under it.
+   */
+  private animationDue(signals: FrameSignals, now: number): boolean {
+    if (!signals.sways) {
+      return false;
+    }
+
+    return now - this.drawnAt >= this.animationIntervalMs;
   }
 }
 

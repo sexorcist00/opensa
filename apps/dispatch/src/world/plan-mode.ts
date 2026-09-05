@@ -264,6 +264,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
         pose: camera.pose(),
         selection: options.selection(),
         sketch: sketch.revision(),
+        // The FLAT map draws a baked raster and no world geometry at all, so nothing in it sways and the
+        // wind is not a reason to spend a frame. 4/04 is a 3D-mode cost by construction.
+        sways: false,
       })
     ) {
       if (!idleReported && lastPayload !== null) {

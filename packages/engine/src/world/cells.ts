@@ -6,6 +6,7 @@
 import {
   decodeOscell,
   type Oscell,
+  OSCELL_VERTEX_STRIDE,
   type OscellBreakable,
   OscellChannel,
   type OscellGroup,
@@ -86,6 +87,18 @@ export interface CellHandle {
    *  `EngineStats.roadsignQuadsRecorded`. Read off the header, not counted: the quads are indistinguishable
    *  from any other beam geometry once welded. */
   roadsignQuads: number;
+  /**
+   * Whether ANY vertex in this cell carries a wind-sway amplitude (201/4-04).
+   *
+   * The world shader sways a vertex by `nightPrelit.a × windStrength`, so a cell with no such vertex is
+   * still air whatever the wind does — and a console that draws on demand needs to know the difference,
+   * because time itself changes the picture only where this is true. Counted ONCE at load for the same
+   * reason {@link CellHandle.triangles} is: a bundle is recorded once and never rebuilt.
+   *
+   * It is a property of the DATA rather than of a flag the pak carries, so no format version moves and a
+   * pak built before this existed answers correctly.
+   */
+  sways: boolean;
   /** Triangles baked into the two bundles — summed per visible cell into `EngineStats.trianglesRecorded`.
    *  Counted once at load because a bundle is recorded once and never rebuilt. */
   triangles: number;
@@ -401,6 +414,7 @@ export class CellStore {
       })),
       placements: this.picking ? worldPlacements(cell) : [],
       roadsignQuads: cell.roadsignQuads,
+      sways: anyVertexSways(cell.vertexData),
       triangles: bundleGroups.reduce((sum, group) => sum + group.indexCount / 3, 0),
       uniform,
       vertexBuffer,
@@ -571,4 +585,34 @@ function worldPlacements(cell: Oscell): CellHandle['placements'] {
       txd: cell.names[placement.txdRef] ?? '',
     };
   });
+}
+
+/**
+ * The interleaved vertex's WIND-SWAY byte: `nightPrelit`'s alpha, the amplitude in metres the world shader
+ * multiplies by `windStrength` (074/06 row 10). `nightPrelit` is the `unorm8x4` at offset 28, so its alpha
+ * is the fourth byte of it.
+ */
+const SWAY_BYTE_OFFSET = 31;
+
+/**
+ * Does this cell contain anything the wind moves? (201/4-04)
+ *
+ * One linear pass over one byte per vertex, at LOAD, beside the upload that already touches every one of
+ * them — so it costs a fraction of the work the cell is already paying and never runs again. The alternative
+ * was a flag in the pak, which is a format version and a rebuild of every world for an answer the vertices
+ * already carry.
+ *
+ * **The question it answers is what a render-on-demand console cannot answer any other way**: whether TIME
+ * changes this picture. Every other frame signal is a value the host can compare; sway is a clock, and a
+ * console that skips the frame skips the wind with it — which is what an operator saw as the palms moving
+ * "once in a while rather than continuously".
+ */
+function anyVertexSways(vertexData: Uint8Array): boolean {
+  for (let offset = SWAY_BYTE_OFFSET; offset < vertexData.length; offset += OSCELL_VERTEX_STRIDE) {
+    if (vertexData[offset] !== 0) {
+      return true;
+    }
+  }
+
+  return false;
 }

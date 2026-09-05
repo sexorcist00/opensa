@@ -416,8 +416,16 @@ export const UNNAMED_DISTRICT = 'unnamed — pass ?district=';
  *  about twelve seconds — long enough to be past the load and into steady state. */
 const MIN_FRAMES = 300;
 
+/**
+ * The NUMERIC fields of {@link EngineStats} — the only ones a mean can be taken of.
+ *
+ * `EngineStats` gained a boolean with 201/4-04 (`swayVisible`), and `keyof` would let it into a table whose
+ * whole job is to average. This says the constraint instead of casting past it.
+ */
+type NumericStat = { [K in keyof EngineStats]: EngineStats[K] extends number ? K : never }[keyof EngineStats];
+
 /** The engine timings this collector averages, and whether each needs `timestamp-query` to mean anything. */
-const TIMED: readonly (readonly [keyof EngineStats, boolean])[] = [
+const TIMED: readonly (readonly [NumericStat, boolean])[] = [
   ['submitMs', false],
   ['gpuPassMs', true],
   ['gpuPostMs', true],
