@@ -174,6 +174,29 @@ decided against real-world geography, so a globe and its CRS machinery buy nothi
   own engine. Used as a seed for
   [`docs/improvements/original-game-defects.md`](improvements/original-game-defects.md).
 
+## WebGPU and the mobile GPU it runs on
+
+The renderer is ours, so these are the specification and the vendor guidance it is written against — read
+them before designing a pass, not after measuring one (the user's pointer, 2026-09-05).
+
+- <https://github.com/gpuweb/gpuweb> — **the WebGPU specification itself**, plus WGSL and the issue tracker
+  where a behaviour that looks like a browser bug is usually already argued out. The format table is the
+  authority for what a target may be: `rg11b10ufloat` is filterable by default and renderable only with
+  `rg11b10ufloat-renderable`, which is what 201/9-05's post-chain budget asks the device for.
+- <https://developer.arm.com/community/arm-community-blogs/b/mobile-graphics-and-gaming-blog/posts/post-processing-effects-on-mobile-optimization-and-alternatives>
+  — Arm's own post-processing guidance, and the budget it names is the one to be judged against: **bloom
+  under 1 ms**, a whole post chain at 3 ms already "substantial". 201/9's sweep measured ours at 7.7 ms.
+- <https://community.arm.com/cfs-file/__key/communityserver-blogs-components-weblogfiles/00-00-00-20-66/siggraph2015_2D00_mmg_2D00_marius_2D00_slides.pdf>
+  — Bjørge, *Bandwidth-Efficient Rendering* (SIGGRAPH 2015): dual filtering, designed for exactly the Mali
+  family the 2/03 phone runs and now shipping as URP 17's `Dual` bloom mode. **Read the caveat with it**: our
+  chain is already a pyramid, so its headline speedup is against a Gaussian and does not transfer whole.
+- <https://bartwronski.com/2017/04/02/small-float-formats-r11g11b10f-precision/> — what 11/11/10 costs: six
+  mantissa bits, five in blue, banding on high-contrast gradients, and why post-effect and bloom buffers are
+  the canonical acceptable use.
+- <https://www.arm.com/technologies/graphics-technologies/arm-frame-buffer-compression> — AFBC, and the
+  sentence that killed a compute-shader bloom before it was written: it cannot compress storage images, so a
+  compute chain gives up framebuffer compression exactly where a tiler is bandwidth-bound.
+
 ## Articles & techniques
 
 - <https://discourse.threejs.org/t/starry-shader-for-sky-sphere/7578> — starfield shader survey (fed the
