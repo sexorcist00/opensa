@@ -479,7 +479,22 @@ of itself.
 rebake rate (a few Hz) before building it.
 **Owes:** the ladder with the bake amortized, and a look verdict that the clouds still move.
 
-**PRICED 2026-09-05: the bake is 1.8 ms** — `nocloud` reads 21.61 ms against the baseline's 23.44
+**BUILT AND VERIFIED 2026-09-05.** The bake now runs when the field has MOVED, at a rate that is DERIVED
+rather than picked: the 256² texture covers `12 × 0.45 × clump` units of field space, so one texel is that
+over 256 and the scroll is `‖(0.004, 0.002)‖` per second — **one texel every ~4.7 s**, and half a texel of
+travel is the threshold. That bound is not "it looks the same" but "the difference cannot be stored". The
+clump scale is part of the KEY rather than the timer (a weather change invalidates however recent the last
+bake was, exactly as `refreshSkyLut` keys its own input), and the test is on absolute travel rather than a
+deadline because the console scrubs its clock and time may run backwards.
+
+**The verification is a PAIR, and the pair is the lesson.** Re-flown minutes apart on the fixed app,
+`field` − `nocloud` is **0.34 ms** where it was **1.83 ms** before: the pass is gone. The absolute mean did
+NOT improve (23.44 → 23.66) — the two absolutes are forty minutes apart in one session and the device
+drifted by about the size of the win, which is now a rule in
+[the benchmarks readme](../../../benchmarks/readme.md): an arm is subtracted from a baseline flown in the
+same thermal window, and a fix is never judged by comparing today's absolute with an earlier one.
+
+**PRICED 2026-09-05: the bake was 1.8 ms** — `nocloud` reads 21.61 ms against the baseline's 23.44
 ([the sweep](../../../benchmarks/opensa-engine/2026-09-05-mobile-map-ablation-sweep.json)), and it moves 8 %
 of the window's frames onto the vsync floor (rung 1: 67 % against 59 %). **It is the cheapest honest fix in
 this chain**: unlike the bloom result it changes no pixel anybody can see, because the field it re-bakes is

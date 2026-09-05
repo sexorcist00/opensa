@@ -284,5 +284,39 @@
       29
     ],
     "verdict": "the 09-04 ladder was not flown through a black frame; its numbers and its conclusions stand"
+  },
+  "verification": {
+    "what": "201/9-06 shipped and re-flown as a PAIR, same session, minutes apart",
+    "app": "d0122b8+",
+    "field": {
+      "movingFrames": 417,
+      "movingMeanMs": 23.66,
+      "movingP50Ms": 22,
+      "movingP95Ms": 44,
+      "vsyncLadder": {
+        "1": 253,
+        "2": 137,
+        "3": 27
+      },
+      "windowMs": 76576.6,
+      "cellsCreatedInWindow": 29
+    },
+    "nocloud": {
+      "movingFrames": 423,
+      "movingMeanMs": 23.32,
+      "movingP50Ms": 20,
+      "movingP95Ms": 42,
+      "vsyncLadder": {
+        "1": 256,
+        "2": 144,
+        "3": 21,
+        "4": 2
+      },
+      "windowMs": 64057.7,
+      "cellsCreatedInWindow": 29
+    },
+    "gapMs": 0.34,
+    "gapBeforeMs": 1.83,
+    "verdict": "the bake is gone: what `nocloud` still removes fell from 1.83 ms to 0.34, inside noise. The ABSOLUTE mean did not improve (23.44 before the fix, 23.66 after) because the two absolutes are 40 minutes apart in one session and the device drifted by about the size of the win — which is why an arm is only ever subtracted from a baseline flown in the same thermal window (docs/benchmarks/readme.md)."
   }
 }
