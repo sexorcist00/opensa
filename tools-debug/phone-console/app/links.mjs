@@ -28,6 +28,7 @@ export const LINK_NAMES = [
   'bloom4',
   'bloomrg11',
   'bloomhalf',
+  'bloomboth',
   'noprobe',
   'noskylut',
   'flat',
@@ -128,6 +129,10 @@ export function consoleUrls(state = {}) {
     // pass that reads or writes the chain, which is what the 09-04 ladder's `rgb10a2` arm implied and this one
     // takes without UNORM's clipping. `bloomhalf` quarters the three passes that are 90 % of the chain and is
     // a LOOK change: the bright-pass threshold then runs on a 2x2 average, so sub-pixel emitters dim.
+    // The candidate DEFAULT rather than a diagnostic: the two levers are independent (one halves the bytes of
+    // every pass in the chain, the other quarters the pixels of the three biggest), and separately they read
+    // -2.4 ms and -4.4 ms off a 21.5 ms baseline.
+    bloomboth: `${app}?${empty}&bloomformat=rg11b10ufloat&bloomscale=0.5`,
     bloomhalf: `${app}?${empty}&bloomscale=0.5`,
     bloomrg11: `${app}?${empty}&bloomformat=rg11b10ufloat`,
     // The declared worst case: 201's budget table says 150 units each drawn as a model with a symbol over

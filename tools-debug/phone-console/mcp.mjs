@@ -190,6 +190,7 @@ export const TOOLS = [
             'nobloom',
             'bloomrg11',
             'bloomhalf',
+            'bloomboth',
             'bloom4',
             'noprobe',
             'noskylut',

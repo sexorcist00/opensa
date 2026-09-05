@@ -460,9 +460,31 @@ chain's bandwidth**.
 is the SIZE the chain starts at and how many full-resolution reads of `scene-color` exist at all — which is
 the half-resolution prefilter this step listed second and the 2026-08-12 attribution rejected for sub-pixel
 emitters at street level. That rejection is now the thing to re-price, at map zoom, with a look verdict; the
-level count is a tidy-up with no frame time in it. **Owes:** a `bloomhalf` arm (prefilter at half resolution,
-count unchanged) against `field` and `nobloom`, and the operator's eye on the emitters at 180–220 m before
-anything is kept.
+level count is a tidy-up with no frame time in it.
+
+**BOTH LEVERS BUILT AND FLOWN 2026-09-05**
+([the row](../../../benchmarks/opensa-engine/2026-09-05-mobile-bloom-levers.json)), against a `field`
+baseline re-flown BETWEEN them at **21.52 ms** — the same baseline read 23.44 and 23.66 earlier the same day,
+so the arms are subtracted from the one in their own thermal window and not from the sweep's:
+
+| arm | what it changes | mean | Δ | rung 1 | target MB |
+| --- | --- | --- | --- | --- | --- |
+| `field` | nothing | 21.52 ms | — | 67 % | 32.35 |
+| `bloomrg11` | the chain's targets → `rg11b10ufloat` | **19.16 ms** | −2.4 | 80 % | 29.42 |
+| `bloomhalf` | the pyramid starts at half size | **17.16 ms** | −4.4 | **91 %** | 27.95 |
+
+**`bloomhalf` is the first change measured on this device to put roughly nine frames in ten on ONE display
+interval** (p90 22 ms against 36), and neither arm buys that with resolution, sampling or anti-aliasing: the
+world is still drawn at full size into a 4× MSAA `rgba16float` scene and the post pass still writes every
+pixel. They are independent — one halves the bytes of every pass in the chain, the other quarters the pixels
+of the three biggest — so the combined arm is the candidate default (`bloomboth`, link added).
+
+**What is NOT settled is the look, and it is what decides whether either ships.** The daylight A/B at hour 10
+is indistinguishable, and that proves nothing: the cost `bloomhalf` is known to carry is sub-pixel EMITTERS,
+because at half resolution the bright-pass threshold runs on a 2×2 average and a street light one pixel
+across is diluted below it. That is a night question. **Owes:** the combined arm, and a NIGHT verdict — which
+needs a link carrying `?hour=` (the parameter parses; no panel link uses it and the agent link has no clock
+command).
 
 ### 06 — The per-frame bakes that are already cached one line above
 
