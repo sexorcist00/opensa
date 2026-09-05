@@ -1,0 +1,106 @@
+{
+  "note": "201/9-05b's owed measurement: the two vendor levers, flown as ONE combined arm against a bracketing baseline. Dual filtering's downsample kernel (Bjorge, Bandwidth-Efficient Rendering, SIGGRAPH 2015 — Arm's own for this Mali family: five taps against Jimenez's thirteen) and half-width colour maths (Arm price mediump at ~2x on their ALUs). Both were built as arms rather than defaults on a PRE-REGISTERED prediction, written into the plan and the link table before a single window was flown: neither was expected to clear the noise alone, so only the combined arm had a chance, and if that did not read either then the honest conclusion would be that they are unmeasurable here rather than zero.\n\nTHE PREDICTION HELD. Four windows, one route, one app, one browser tab navigated between arms:\n\n  order  arm           mean      moving   rung 1   p90\n  1      field         17.42 ms    558     89.6 %   26\n  2      bloomvendor   16.83 ms    578     93.1 %   20\n  3      field         16.89 ms    576     92.2 %   20\n  4      bloomvendor   17.86 ms    546     87.2 %   30\n\nThe two arms' ranges OVERLAP COMPLETELY — field 16.89-17.42, bloomvendor 16.83-17.86 — and the slowest window of the four is a vendor window. So the combined lever is indistinguishable from the baseline, and its point estimate (17.35 against 17.16) is if anything worse, which is what noise looks like.\n\nAND THE FIRST PAIRING WOULD HAVE LIED. Windows 1 and 2 alone read -0.59 ms with the vsync ladder moving 89.6 -> 93.1 % and p90 26 -> 20, which is exactly the shape of a real win. Window 3 — the baseline re-flown — landed at 16.89 with the same 92.2 % ladder and the same p90 20, so the ladder had moved with the WARM-UP rather than with the arm. This is the second time in one day that three windows agreed on a false story (the first was the null arm), and the discipline that caught it both times is the same: bracket the arm with its own baseline, and sample both twice.\n\nTHE NOISE FLOOR IN THIS WINDOW IS ~1.0 ms, not the 2.47 ms the null arm measured this morning. Four windows of two configurations span 16.83-17.86. The device is steadier now (later, cooler), which says the floor is a property of the SESSION rather than a constant of the device — so it is measured per session and never carried over.\n\nWHAT THIS DOES NOT SAY. It does not say the levers do nothing: dual5 provably issues eight fewer texture fetches per pixel per level, and f16 provably halves the ALU width of the colour maths. It says the frame does not notice, on this device, at this zoom, with 90 % of frames already sitting on a 16.7 ms display interval. A lever worth a few tenths of a millisecond cannot be seen from under a vsync floor.\n\nMGA-LX3 / ARM Bifrost @ DPR 2, pak `19:23 28-08-2026` ASTC over `los-santos-centre`, app `bd628f0` (a CLEAN stamp — no `+` — the first capture in this chain whose app is unambiguous). Board EMPTY, `?surface=720x640` pinned on every window, and every arm's effective budget read back out of the report before its numbers were kept.",
+  "app": "bd628f0",
+  "build": "19:23 28-08-2026",
+  "district": "los-santos-centre",
+  "device": {
+    "adapter": "arm bifrost",
+    "dpr": 2,
+    "grantedShaderF16": true,
+    "missing": ["texture-compression-bc", "timestamp-query"]
+  },
+  "surfacePin": { "deviceWidth": 720, "deviceHeight": 640, "pinned": true, "cssHeightsSeen": [491, 550, 570, 609] },
+  "route": "the chain's own: settle [1500,-1500] h200 pitch -1.3 yaw pi, the rect's four corners warmed, back to the settle pose, reading A, then ten legs, reading B",
+  "howDerived": "per window: delta of frame.dtHistogramMs between the post-warmup reading and the post-route reading; moving = every bin below the 100 ms tail; vsyncLadder = each moving bin rounded to the nearest 1/60 s interval; the reading is the MEAN, with the ladder read beside it",
+  "method": {
+    "oneTabThroughout": "the console was LAUNCHED once and navigated between arms thereafter (`navigated: true` on every switch). The null arm earlier the same day left tab count as its one unclosed confound; this run removes it by never opening a second console",
+    "bracketed": "field, vendor, field, vendor — so a monotonic drift cannot produce the ordering, and each arm is sampled twice",
+    "armsReadBack": "every window's `surface.bloomDownsample` and `surface.postPrecision` were read from the report before its numbers were kept. `postPrecision: 'f16'` confirms the device GRANTED shader-f16 rather than falling back"
+  },
+  "arms": {
+    "field": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640",
+      "budget": { "bloomDownsample": "box13", "bloomPrefilterScale": 0.5, "postPrecision": "f32" },
+      "windows": [
+        {
+          "order": 1,
+          "movingFrames": 558,
+          "movingMeanMs": 17.42,
+          "movingP50Ms": 16,
+          "movingP90Ms": 26,
+          "movingP95Ms": 32,
+          "movingP99Ms": 38,
+          "movingMaxMs": 82,
+          "vsyncLadder": { "1": 500, "2": 55, "3": 2, "5": 1 },
+          "rung1Pct": 89.6,
+          "tailFrames": 0
+        },
+        {
+          "order": 3,
+          "movingFrames": 576,
+          "movingMeanMs": 16.89,
+          "movingP50Ms": 16,
+          "movingP90Ms": 20,
+          "movingP95Ms": 32,
+          "movingP99Ms": 40,
+          "movingMaxMs": 56,
+          "vsyncLadder": { "1": 531, "2": 41, "3": 4 },
+          "rung1Pct": 92.2,
+          "tailFrames": 0
+        }
+      ],
+      "rangeMs": [16.89, 17.42],
+      "world": { "draws": 96, "triangles": 241863, "residencyMb": 64.539, "targetMb": 27.955 }
+    },
+    "bloomvendor": {
+      "query": "units=0&calls=0&inventory=1&surface=720x640&bloomdown=dual5&postprec=f16",
+      "budget": { "bloomDownsample": "dual5", "bloomPrefilterScale": 0.5, "postPrecision": "f16" },
+      "windows": [
+        {
+          "order": 2,
+          "movingFrames": 578,
+          "movingMeanMs": 16.83,
+          "movingP50Ms": 16,
+          "movingP90Ms": 20,
+          "movingP95Ms": 30,
+          "movingP99Ms": 36,
+          "movingMaxMs": 60,
+          "vsyncLadder": { "1": 538, "2": 35, "3": 4, "4": 1 },
+          "rung1Pct": 93.1,
+          "tailFrames": 0
+        },
+        {
+          "order": 4,
+          "movingFrames": 546,
+          "movingMeanMs": 17.86,
+          "movingP50Ms": 16,
+          "movingP90Ms": 30,
+          "movingP95Ms": 34,
+          "movingP99Ms": 50,
+          "movingMaxMs": 72,
+          "vsyncLadder": { "1": 476, "2": 60, "3": 9, "4": 1 },
+          "rung1Pct": 87.2,
+          "tailFrames": 0
+        }
+      ],
+      "rangeMs": [16.83, 17.86],
+      "world": { "draws": 96, "triangles": 241863, "residencyMb": 64.539, "targetMb": 27.955 }
+    }
+  },
+  "reading": {
+    "verdict": "INDISTINGUISHABLE. field 16.89-17.42, bloomvendor 16.83-17.86 — the ranges overlap and the slowest of the four windows is a vendor window",
+    "pointEstimates": { "fieldMeanMs": 17.16, "vendorMeanMs": 17.35, "deltaMs": 0.19 },
+    "sessionNoiseFloorMs": 1.03,
+    "whatTheFirstPairingSaid": "-0.59 ms with the ladder moving 89.6 -> 93.1 % and p90 26 -> 20 — the shape of a real win, refuted by the baseline re-flight at 16.89 / 92.2 % / p90 20",
+    "whyNothingShows": "90 % of frames already sit on ONE 16.7 ms display interval. dual5 removes eight texture fetches per pixel per level and f16 halves the colour ALU, and neither is worth a whole display interval on a chain that is already a few milliseconds after 9/05's half-res prefilter. A lever worth tenths cannot be seen from under a vsync floor"
+  },
+  "decision": {
+    "shipped": "NOTHING. Both stay arms; DEFAULT_RENDER_BUDGET and the console budget are untouched, so the game and the console run the kernel and the precision they always have",
+    "keptRatherThanDeleted": "the arms cost one extra pipeline compiled at boot and one shader module chosen at init, and they are the record that the vendor guidance was implemented and tried. A device with `timestamp-query`, or a surface not already pinned to the vsync floor, could still price them",
+    "noLookVerdictSought": "dual5 blurs slightly less than box13 and would have owed an operator A/B — but a change that buys no measurable frame time does not get to spend a look verdict, so none was requested"
+  },
+  "owed": {
+    "conditions": "no row in this folder records the battery level, the charging state or the die temperature, this one included",
+    "tabCount": "closed for this row by never opening a second console (navigated, not launched), but still not RECORDED by the report — a capture cannot yet count its own competitors"
+  }
+}

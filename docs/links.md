@@ -193,6 +193,10 @@ them before designing a pass, not after measuring one (the user's pointer, 2026-
   **Adapted rather than adopted, 2026-09-05** ([201/9-05b](plans/201-dispatch-console/9-the-mobile-frame/readme.md)):
   the DOWNSAMPLE kernel is in as `?bloomdown=dual5` — five taps against Jimenez's thirteen, where the
   argument is arithmetic — and the upsample stays ours, because that is the half the caveat is about.
+  **Flown the same day and it changes nothing measurable on this device**
+  ([the row](benchmarks/opensa-engine/2026-09-05-mobile-vendor-levers.json)): with 90 % of frames already on
+  one 16.7 ms display interval, eight fewer fetches per pixel per level is below the session's ~1 ms floor.
+  Kept as an arm, not shipped.
 - <https://bartwronski.com/2017/04/02/small-float-formats-r11g11b10f-precision/> — what 11/11/10 costs: six
   mantissa bits, five in blue, banding on high-contrast gradients, and why post-effect and bloom buffers are
   the canonical acceptable use.
@@ -204,7 +208,9 @@ them before designing a pass, not after measuring one (the user's pointer, 2026-
   back to memory — checked 2026-09-05 and already true throughout this engine (`loadOp: 'clear'` everywhere,
   the 4× colour resolves and discards, `depth32float` is `depthStoreOp: 'discard'`). **`mediump`**: their
   ALUs run half width at roughly twice the rate, which is `?postprec=f16` since 201/9-05b — colour only,
-  every coordinate left at `f32`, because an f16 UV cannot address a texel on this surface.
+  every coordinate left at `f32`, because an f16 UV cannot address a texel on this surface. Measured with
+  `dual5` in one combined arm and, like it, below this device's floor: the guidance is sound and the frame is
+  already on the vsync floor, which is a different problem.
 
 ## Articles & techniques
 

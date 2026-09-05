@@ -557,8 +557,42 @@ does not read above the noise either, **the honest conclusion is that they are u
 not that they are zero.** `dual5` additionally owes a LOOK verdict: five taps blur less than thirteen, so
 each level's support tightens, and the standing call sends that to the operator on the device.
 
-**Owes:** the `bloomvendor` arm against a `field` baseline flown in the same thermal window, with a null-arm
-control beside it; and a look pair for `dual5` if the frame time turns out to be worth anything.
+**FLOWN THE SAME DAY, AND THE PREDICTION ABOVE HELD**
+([the row](../../../benchmarks/opensa-engine/2026-09-05-mobile-vendor-levers.json)). Four windows, bracketed,
+each arm sampled twice, in ONE browser tab navigated between arms — which closes the tab-count confound the
+null arm left open that morning:
+
+| order | arm | mean | moving | rung 1 | p90 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `field` | 17.42 ms | 558 | 89.6 % | 26 |
+| 2 | `bloomvendor` | 16.83 ms | 578 | 93.1 % | 20 |
+| 3 | `field` | **16.89 ms** | 576 | 92.2 % | 20 |
+| 4 | `bloomvendor` | 17.86 ms | 546 | 87.2 % | 30 |
+
+**INDISTINGUISHABLE.** field spans 16.89–17.42, `bloomvendor` 16.83–17.86 — the ranges overlap and the
+slowest of the four windows is a vendor window. Nothing ships: both stay arms, and `DEFAULT_RENDER_BUDGET`
+and the console budget are untouched.
+
+**AND THE FIRST PAIRING WOULD HAVE LIED, WHICH IS THE PART WORTH KEEPING.** Windows 1 and 2 alone read
+**−0.59 ms** with the vsync ladder moving 89.6 → 93.1 % and p90 26 → 20 — the exact shape of a real win, and
+on the ladder rather than only on the mean, which is the column this chain trusts most. Window 3 is the
+baseline re-flown: **16.89 ms, 92.2 %, p90 20.** The ladder had moved with the WARM-UP, not with the arm.
+That is the second time in one day that three windows agreed on a false story, and the discipline that caught
+it both times is the same one: bracket the arm with its own baseline and sample both twice.
+
+**The noise floor here is ~1.0 ms, against the null arm's 2.47 ms that morning** — so **the floor is a
+property of the SESSION, not a constant of the device**, and it is measured per session rather than carried
+over. Both numbers are larger than either lever.
+
+**What this does NOT say.** It does not say the levers do nothing. `dual5` provably issues eight fewer
+texture fetches per pixel per level and `f16` provably halves the colour ALU; the frame does not notice,
+because after 9/05's half-res prefilter 90 % of frames already sit on ONE 16.7 ms display interval and a
+lever worth tenths cannot be seen from under a vsync floor. **No look verdict was sought for `dual5`**: a
+change that buys no measurable frame time does not get to spend one.
+
+**Why they are kept rather than deleted.** One extra pipeline compiled at boot and one module chosen at
+init. They are the record that the vendor guidance was implemented and tried, and a device with
+`timestamp-query` — or a surface not already pinned to the vsync floor — could still price them.
 
 **What was checked and found ALREADY DONE**, so no work was spent on it: the tiler's attachment rules, which
 are Arm's first recommendation and the cheapest to get wrong. The world pass clears rather than loads
