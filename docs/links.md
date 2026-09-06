@@ -149,6 +149,30 @@ decided against real-world geography, so a globe and its CRS machinery buy nothi
   `ticketscad.org` serves a ParkLogic domain-parking page, the reachable repository is legacy (Travis CI,
   Scrutinizer), and a widely-repeated spec for a "v4 NewUI" on Bootstrap 5 + GridStack + Leaflet could not
   be verified from any reachable source. Do not build on it without checking it yourself.
+## Speech synthesis (the dispatch radio voice)
+
+Gathered 2026-09-06 for [the dispatch-tts concept](concepts/dispatch-tts/readme.md). The licence column there
+is the shortlist, and these are the primary pages behind it.
+
+- <https://huggingface.co/hexgrad/Kokoro-82M> — **Kokoro-82M**, Apache 2.0, 82M parameters, runs CPU-only in
+  ~4 GB via ONNX. The model our own bench runs on, and the reason a self-hosted path costs nothing per
+  character. No emotion control at all — speed is the only lever, which is exactly what the bench heard.
+- <https://github.com/thewh1teagle/kokoro-onnx> — the ONNX runtime wrapper the bench uses (`kokoro-v1.0.onnx`
+  + `voices-v1.0.bin`, 311 MB + 27 MB); bundles espeak-ng through `espeakng-loader`, so no system package is
+  needed.
+- <https://www.resemble.ai/learn/models/chatterbox> — **Chatterbox**, MIT, 0.5B, zero-shot cloning from ~5 s
+  of reference audio plus an exaggeration knob. The only permissively-licensed model that answers both "our
+  players' own voices" and "a shout that is a shout".
+- <https://elevenlabs.io/blog/v3-audiotags> — ElevenLabs v3 audio tags (`[shouts]`, `[whispers]`): the one
+  mainstream API where delivery is an inline instruction rather than a parameter. The counterpart is
+  OpenAI's `gpt-4o-mini-tts`, which takes a natural-language instruction instead.
+- <https://github.com/SWivid/F5-TTS/discussions/997> — the F5-TTS licensing thread. **CC-BY-NC, and it is
+  inherited by anything fine-tuned on the base model** — the trap this concept's licence table exists to
+  avoid. `mrfakename/OpenF5-TTS-Base` is the Apache-2.0 reimplementation.
+- <https://github.com/semidark/kikiri-tts> — a documented recipe for fine-tuning Kokoro (patched StyleTTS2
+  training code, dataset prep, voicepack extraction). Read before anyone concludes that training our own is
+  out of reach.
+
 ## References the user wants watched before work starts
 
 - <https://www.youtube.com/watch?v=1dwufRp71EY> — **must be shown to the user before ANY work on the City

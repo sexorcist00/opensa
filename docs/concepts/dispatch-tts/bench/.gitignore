@@ -1,0 +1,6 @@
+# Model weights and generated audio: fetched or produced by bench.py, never committed.
+*.onnx
+*.bin
+*.wav
+out/
+.venv/

@@ -33,6 +33,14 @@ its research record into its `docs/plans/<n>-…/` folder, and a killed one move
   dispatcher's READ path as a greenfield service that validates the existing JWT and can be deleted. The
   throughput argument does not apply: ~37 position messages/s at 150 units. Graduates only on a measurement,
   a written event contract, and somebody willing to maintain a second toolchain on a phone.
+- **[dispatch-tts](dispatch-tts/readme.md)** — a spoken radio for the dispatch console, opened 2026-09-06:
+  the operator types Russian, the units hear English through a real-sounding police radio. The whole feature
+  is one added field on PCAD's existing `radio_broadcast`, and the game client already plays a canned English
+  radio bank — so this generalises a bank of fixed phrases into arbitrary text. Carries the 17 decisions taken
+  with the user, a listening bench that runs locally at zero cost ([`bench/`](dispatch-tts/bench/bench.py),
+  Kokoro-82M measured at a 1076 ms median on CPU), the licence shortlist (two of the six best-known open
+  models cannot be used commercially at all), and the honest answer on training our own. **Amends
+  [202 §7](../plans/202-pcad-dispatch/readme.md)**, which said the console does not become a radio.
 - **[webgl2-fallback-backend](webgl2-fallback-backend.md)** — a second rendering backend for devices with no
   WebGPU adapter. In scope by decision; carries its own counter-case (the reach window is closing, the tax is
   permanent). Gate on

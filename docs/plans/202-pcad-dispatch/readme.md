@@ -349,8 +349,15 @@ Settled 2026-08-06 and recorded so they are not reopened:
   conversion, one place (`apps/dispatch/src/map/coords.ts`).
 - **Not a game.** No player, no physics, no ECS in the map component — that boundary is
   [a restriction](../../restrictions/architecture.md) and it is what keeps the map embeddable.
-- **Not the voice/chat layer.** PCAD carries the dispatcher's traffic to units; the console does not become a
-  radio.
+- **Not the voice/chat layer — AMENDED 2026-09-06, and the amendment is narrow.** This said the console does
+  not become a radio. The user reopened it: the phantom radio (`r1`–`r4`) gets a **spoken English voice** —
+  the operator types Russian, the backend translates literally, synthesises, bakes the radio effect and hands
+  out a URL, and **both** clients play it, the game client (which already plays a canned English radio bank
+  through `loadAudioStream`) and the console. What survives is the boundary that mattered: **the console
+  PLAYS a file it is handed** — flat mono, no spatialisation, no synthesis, no translation, no audio graph —
+  so the shell↔map interface of §4 gains one message and no coupling, and the map component still owns no
+  part of the radio. Everything else belongs to PCAD. The research, the decisions and the model comparison
+  are in [the concept](../../concepts/dispatch-tts/readme.md).
 - **Not multi-role.** One role — the dispatcher. The field unit's screen is the plugin's business.
 - **Not populated with decoration.** Only real players are drawn, so nothing on the map is ever mistaken for
   data.
