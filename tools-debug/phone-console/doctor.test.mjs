@@ -28,7 +28,10 @@ function probe(overrides = {}) {
     nodeVersion: 'v22.4.0',
     openUrl: true,
     portOpen: async () => false,
-    readJson: async () => ({ build: { at: '2026-08-23', textures: 'astc' } }),
+    readJson: async (path) =>
+      path === 'package-lock.json' || path === 'node_modules/.package-lock.json'
+        ? { packages: { 'node_modules/tsx': { version: '4.0.0' } } }
+        : { build: { at: '2026-08-23', textures: 'astc' } },
     realpath: async (path) => `/home/user/opensa/${path}`,
     rebasing: async () => false,
     signal: true,
@@ -43,22 +46,36 @@ const find = (checks, id) => checks.find((check) => check.id === id);
 
 describe('phone console doctor', () => {
   describe('negative cases', () => {
-    it('fails a tree older than the lock — what a pull causes and the convert reports minutes later', async () => {
+    it('fails a tree the lock has moved past — what a pull causes and the convert reports minutes later', async () => {
       const checks = await runChecks(
         probe({
-          mtime: async (path) => (path === 'package-lock.json' ? 300 : path === 'build/webapp/index.html' ? null : 200),
+          readJson: async (path) =>
+            path === 'package-lock.json'
+              ? { packages: { 'node_modules/tsx': { version: '4.1.0' } } }
+              : path === 'node_modules/.package-lock.json'
+                ? { packages: { 'node_modules/tsx': { version: '4.0.0' } } }
+                : { build: { at: '2026-08-23', textures: 'astc' } },
         }),
         TARGET,
       );
 
       expect(find(checks, 'deps').state).toBe('fail');
+      expect(find(checks, 'deps').detail).toMatch(/node_modules\/tsx/);
       expect(find(checks, 'deps').fix).toBe('npm run phone:setup');
       // Carries the job, so the page offers it as a button rather than a command to retype on a phone.
       expect(find(checks, 'deps').job).toBe('setup');
     });
 
     it('fails when node_modules is not there at all', async () => {
-      const checks = await runChecks(probe({ mtime: async () => null }), TARGET);
+      const checks = await runChecks(
+        probe({
+          readJson: async (path) =>
+            path === 'node_modules/.package-lock.json'
+              ? null
+              : { packages: { 'node_modules/tsx': { version: '4.0.0' } } },
+        }),
+        TARGET,
+      );
 
       expect(find(checks, 'deps').detail).toMatch(/not installed/);
     });
@@ -190,6 +207,30 @@ describe('phone console doctor', () => {
   });
 
   describe('positive cases', () => {
+    it('passes a lockfile git rewrote without changing a version', async () => {
+      // 2026-09-06: a revert restored `package-lock.json` byte for byte, which made it NEWER than the
+      // installed tree, and the mtime check failed the device claiming "a pull added dependencies" — then
+      // offered a reinstall costing minutes for a tree that was already correct. The `"peer": true` markers
+      // an install rewrites are the same shape: they move no version and must not fail anything.
+      const checks = await runChecks(
+        probe({
+          // The lock is NEWER than the tree, which is exactly what failed the device before this check
+          // compared content — leave it in, or this test passes under the old logic too and guards nothing.
+          mtime: async (path) => (path === 'package-lock.json' ? 300 : 200),
+          readJson: async (path) =>
+            path === 'package-lock.json'
+              ? { packages: { 'node_modules/tsx': { peer: true, version: '4.0.0' } } }
+              : path === 'node_modules/.package-lock.json'
+                ? { packages: { 'node_modules/tsx': { version: '4.0.0' } } }
+                : { build: { at: '2026-08-23', textures: 'astc' } },
+        }),
+        TARGET,
+      );
+
+      expect(find(checks, 'deps').state).toBe('ok');
+      expect(find(checks, 'deps').detail).toBe('installed and current with package-lock.json');
+    });
+
     it('passes a phone that is ready, and says what the pak is', async () => {
       const checks = await runChecks(probe(), TARGET);
 

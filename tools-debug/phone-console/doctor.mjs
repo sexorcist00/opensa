@@ -34,22 +34,35 @@ export async function runChecks(probe, target) {
 
   // STALENESS, not existence — the rule `scripts/phone-setup.sh` learned the hard way: a tree that exists
   // but predates a pull is a tree the convert dies in, minutes later, inside the stage that needed the new
-  // dependency.
-  const installed = await probe.mtime('node_modules/.package-lock.json');
-  const lock = await probe.mtime('package-lock.json');
+  // dependency. That rule stands; what changed on 2026-09-06 is HOW staleness is decided.
+  //
+  // **It compared MTIMES and then asserted a cause.** Any git operation that rewrote `package-lock.json`
+  // without changing a byte of it — a revert, a checkout, a branch switch — made the file newer than the
+  // tree, and the check failed the device while stating "a pull added dependencies", which had not
+  // happened. The offered fix is a reinstall costing minutes on this phone, so the false alarm is not free.
+  // The lesson was already in this repo one check over: the served-app check compares CONTENT because
+  // "a timestamp comparison is guaranteed to lie here" (`webapp.mjs`). Same answer here.
+  //
+  // npm's hidden lockfile records what is actually installed, so the honest question is whether the
+  // versions it carries are the ones `package-lock.json` asks for. Immune to mtime, and immune to the
+  // `"peer": true` markers an install rewrites without moving a version.
+  const wanted = await probe.readJson('package-lock.json');
+  const installed = await probe.readJson('node_modules/.package-lock.json');
+  const drift = lockDrift(wanted, installed);
+  const depsStale = drift !== null && drift.length > 0;
   add({
     detail:
       installed === null
         ? 'node_modules is not installed'
-        : lock !== null && lock > installed
-          ? 'package-lock.json is NEWER than the installed tree — a pull added dependencies'
+        : depsStale
+          ? `${drift.length} package(s) differ from package-lock.json (e.g. ${drift.slice(0, 3).join(', ')})`
           : 'installed and current with package-lock.json',
     id: 'deps',
     label: 'dependencies',
-    state: installed === null ? 'fail' : lock !== null && lock > installed ? 'fail' : 'ok',
+    state: installed === null || depsStale ? 'fail' : 'ok',
     // `job` is what makes a fix a BUTTON on the page rather than a command to retype on a phone. Only the
     // safe ones carry it: nothing that discards a file is one tap away.
-    ...(installed === null || (lock !== null && lock > installed) ? { fix: 'npm run phone:setup', job: 'setup' } : {}),
+    ...(installed === null || depsStale ? { fix: 'npm run phone:setup', job: 'setup' } : {}),
   });
 
   add({
@@ -354,4 +367,23 @@ function since(ms) {
   }
 
   return ms < 5_400_000 ? `${Math.round(ms / 60_000)}m` : `${Math.round(ms / 3_600_000)}h`;
+}
+
+/**
+ * Which packages `package-lock.json` asks for that the installed tree does not carry AT THE SAME VERSION.
+ *
+ * `null` when there is no installed tree to compare against — that is "not installed", a different verdict.
+ * Only `node_modules/` keys are compared: the lockfile's root entry describes the workspace itself and npm's
+ * hidden lockfile does not carry it, so including it would report drift on every machine forever.
+ */
+function lockDrift(wanted, installed) {
+  if (installed === null || installed === undefined) {
+    return null;
+  }
+  const want = wanted?.packages ?? {};
+  const have = installed?.packages ?? {};
+
+  return Object.keys(want)
+    .filter((key) => key.startsWith('node_modules/') && want[key]?.version !== undefined)
+    .filter((key) => want[key].version !== have[key]?.version);
 }
