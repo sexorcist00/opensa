@@ -42,6 +42,15 @@ LEVEL_SPEED = {"routine": 1.0, "urgent": 1.12, "emergency": 1.22}
 
 DISPATCH_VOICES = ["af_heart", "af_bella", "am_onyx", "am_michael", "bm_george"]
 
+# Chatterbox does have an urgency lever: exaggeration drives how hard the delivery is
+# pushed, and lowering cfg_weight with it keeps the pace from collapsing. These are the
+# values the 2026-09-06 bench was judged on.
+LEVEL_CHATTERBOX = {
+    "routine": (0.4, 0.5),
+    "urgent": (0.8, 0.4),
+    "emergency": (1.4, 0.3),
+}
+
 
 @dataclass(frozen=True)
 class Phrase:
@@ -146,6 +155,63 @@ def run_kokoro(phrases: list[Phrase], out_dir: Path, models_dir: Path) -> list[d
     return rows
 
 
+def run_chatterbox(
+    phrases: list[Phrase], out_dir: Path, reference: Path | None = None
+) -> list[dict]:
+    """The backend that can shout, and clone a consenting player from a few seconds.
+
+    Measured on CPU it is 22-34 s for a four-second line - a realtime factor near 0.15,
+    which is why the concept puts it behind a GPU rather than beside Kokoro on the box
+    the Node backend already runs on.
+    """
+    try:
+        from chatterbox.tts import ChatterboxTTS
+    except ImportError:
+        print("[skip] chatterbox-tts is not installed")
+        return []
+
+    model = ChatterboxTTS.from_pretrained(device="cpu")
+    rows: list[dict] = []
+
+    for phrase in phrases:
+        exaggeration, cfg_weight = LEVEL_CHATTERBOX[phrase.level]
+        started = time.perf_counter()
+        wav = model.generate(
+            phrase.en,
+            exaggeration=exaggeration,
+            cfg_weight=cfg_weight,
+            **({"audio_prompt_path": str(reference)} if reference else {}),
+        )
+        synth_ms = (time.perf_counter() - started) * 1000.0
+        audio = wav.squeeze(0).numpy()
+
+        voice = reference.stem if reference else "default"
+        stem = f"chatterbox-{voice}-{phrase.id}"
+        sf.write(out_dir / f"{stem}-clean.wav", audio, model.sr)
+        sf.write(
+            out_dir / f"{stem}-radio.wav",
+            radio_chain(audio, model.sr, beep=phrase.level != "emergency"),
+            model.sr,
+        )
+
+        rows.append(
+            {
+                "backend": "chatterbox-0.5B",
+                "voice": voice,
+                "phrase": phrase.id,
+                "level": phrase.level,
+                "chars": len(phrase.en),
+                "audio_ms": round(len(audio) / model.sr * 1000.0, 1),
+                "synth_ms": round(synth_ms, 1),
+                "exaggeration": exaggeration,
+                "realtime_factor": round((len(audio) / model.sr * 1000.0) / synth_ms, 2),
+            }
+        )
+        print(f"  {stem}: {synth_ms / 1000.0:5.1f} s synth for {len(audio) / model.sr:.1f} s of audio")
+
+    return rows
+
+
 def build_montages(out_dir: Path, rows: list[dict], phrases: list[Phrase]) -> None:
     """One file per voice holding every transmission, so a voice is judged as a shift.
 
@@ -178,6 +244,12 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("out"))
     parser.add_argument("--models-dir", type=Path, default=Path("."))
     parser.add_argument("--phrases", type=Path, default=Path(__file__).parent / "phrases.json")
+    parser.add_argument(
+        "--chatterbox", action="store_true", help="also run Chatterbox (slow on CPU)"
+    )
+    parser.add_argument(
+        "--reference", type=Path, help="wav of a consenting speaker for Chatterbox to clone"
+    )
     args = parser.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -185,6 +257,8 @@ def main() -> None:
     print(f"{len(phrases)} phrases -> {args.out}")
 
     rows = run_kokoro(phrases, args.out, args.models_dir)
+    if args.chatterbox:
+        rows += run_chatterbox(phrases, args.out, args.reference)
     if rows:
         build_montages(args.out, rows, phrases)
 

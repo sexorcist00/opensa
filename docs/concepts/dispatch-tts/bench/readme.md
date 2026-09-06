@@ -46,9 +46,23 @@ a vehicle name the translator must leave alone.
 The English lines are written by hand. In production they come from the translator model — writing them here
 keeps the bench about the **voice**, which is the thing being chosen.
 
+## Chatterbox, and why it is behind a flag
+
+```bash
+.venv/bin/pip install chatterbox-tts          # ~5 GB with torch, weights ~3 GB more
+.venv/bin/python bench.py --out ./out --models-dir . --chatterbox [--reference voice.wav]
+```
+
+It is the only clean-licence model here that can shout (`exaggeration` 0.4 → 1.4 per urgency level) and the
+only one that can carry a consenting player's voice from a few seconds of `--reference`. **On CPU it runs at
+roughly 0.15× realtime** — 22–34 s for a four-second transmission — so it is off by default and belongs
+behind a GPU rather than on the box the Node backend already occupies.
+
+Installing it downgrades numpy to 1.26, which `kokoro-onnx` declares against but runs on regardless. If that
+stops being true, give each backend its own venv rather than pinning around it.
+
 ## What it does not do
 
 - **No cloud vendor.** Adding one is a function beside `run_kokoro` and an API key; the concept's §4 table
   says which are worth the key.
-- **No shout.** Kokoro has no emotion control, so urgency is rendered as speed alone (1.0 / 1.12 / 1.22).
-  That is not a shortcut in the bench — it is the model's ceiling, and hearing it is the point.
+- **No translation.** The English lines are fixed, so the bench measures the voice and never the translator.

@@ -99,7 +99,7 @@ Open weights, which is where decisions 12 (our own voices) and 15 (a capped bill
 | Model | Licence | Runs on | Cloning | Emotion |
 | --- | --- | --- | --- | --- |
 | **[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)** | Apache 2.0 | **CPU, ~4 GB RAM via ONNX** | no | no — speed only |
-| **[Chatterbox](https://www.resemble.ai/learn/models/chatterbox)** | **MIT** | GPU (CPU is slow) | **zero-shot from ~5 s** | **exaggeration knob** |
+| **[Chatterbox](https://www.resemble.ai/learn/models/chatterbox)** | **MIT** | GPU — **measured at ~0.15× realtime on CPU here, so not a CPU option** | **zero-shot from ~5 s** | **exaggeration knob** |
 | XTTS-v2 | **CPML — commercial use needs a licence** | GPU | yes | limited |
 | F5-TTS | **CC-BY-NC — non-commercial, and that survives fine-tuning** | GPU | yes | limited |
 | OpenF5-TTS-Base | Apache 2.0 | GPU | yes | limited |
@@ -139,8 +139,23 @@ survivable, because the text is already on screen; it is not survivable as a syn
 
 **What Kokoro cannot do, heard rather than argued**: it has no emotion control at all. The urgency levels in
 the bench are rendered as speed alone (1.0 / 1.12 / 1.22), and `Shots fired at an officer!` comes out as a
-slightly faster newsreader. If the product wants a shout, this model is not the one that gives it — which is
-the single sharpest finding of the bench and the reason Chatterbox is on the list.
+slightly faster newsreader. If the product wants a shout, this model is not the one that gives it.
+
+**Chatterbox, same machine, same phrase, same radio chain.** It *does* shout — one knob, `exaggeration`,
+taken from 0.4 to 1.4 with `cfg_weight` dropped 0.5 → 0.3 to keep the pace — and the difference is obvious
+by ear. The price is the finding:
+
+| Quantity | Chatterbox on CPU |
+| --- | --- |
+| Synthesis, one 4.0 s line | **33.7 s** |
+| Synthesis, one 4.3 s line | **22.3 s** |
+| Realtime factor | **~0.12–0.19×** |
+| Weights fetched | ~3.0 GB |
+
+**So the two clean-licence models split the problem exactly the way the product does not want it split.**
+Kokoro runs on the CPU the Node backend already occupies and cannot express urgency; Chatterbox expresses
+urgency and clones a consenting player, and is 20–30× too slow without a GPU. That is not a tie to be broken
+by preference — it is a hosting decision (§6's second rung) that a listening verdict cannot make on its own.
 
 ## 6. Training our own model
 
