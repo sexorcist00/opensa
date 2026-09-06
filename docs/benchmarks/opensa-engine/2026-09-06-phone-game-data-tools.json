@@ -85,5 +85,54 @@
     "alreadyCutoutCandidateWouldNotReach": 62,
     "readItRight": "NOT an optimisation finding. `current` is `classifyAlpha`'s absolute reading; `candidate` is the rule that ALREADY SHIPS, and the shipped classification is their UNION. So 1148 is what the shipped rule already buys, not headroom. What is left in the blend pass is 395 textures of 26 126 (1.5%).",
     "toolWasAlreadyCorrect": "Unlike the two tools fixed today, this one resolves its archive through `.find(existsSync)` and throws a readable error naming `--img` when neither candidate exists. It is the model for the rest of the class."
+  },
+  "lampCensus": {
+    "what": "Which vehicle models carry the standard lamp material, and which carry ivflights.",
+    "archive": "game-src/original/models/gta3.img (the stock fallback this fix added)",
+    "noStandardLampMaterial": 26,
+    "ofWhichWithIvflights": 0,
+    "carryingIvflightsAtAll": 0,
+    "toolDefect": "Died with an unhandled ENOENT on `build/original/opensa/models/gta3.img`, a built tree the phone never produces, while the stock archive sat beside it unread. Fixed in adad4184 with alpha-class-census's resolver; the run above is the verification."
+  },
+  "lodLinkCheck": {
+    "what": "Does every LOD link still point at its own LOD? A `lod` cell is a ROW INDEX, so any stage dropping or inserting an `inst` row re-points every link past it at another VALID row.",
+    "dir": "game-src/original",
+    "links": 6108,
+    "outOfRange": 0,
+    "fartherThan20u": 7,
+    "verdictMatchesDoc": "docs/debug/README.md calls stock clean with 0 findings, and `0 out of range` is that verdict. The seven `farther than 20 u` are all `BillBd*` in `law2_stream1.ipl` — stock billboards whose LOD legitimately stands off — and the README already says 20 u is the FLOOR of what the check guarantees, not a defect threshold.",
+    "linkCountDisagreesWithDoc": "6 108 against the doc's 6 103.",
+    "toolWasAlreadyCorrect": "Guards `data/gta.dat` under its default and exits 1 with a usage line. No fix needed."
+  },
+  "treeDisagreesWithDocBaselines": {
+    "what": "THREE tools now read a different count from the doc for the same path, and the two that are comparable to themselves both read HIGH.",
+    "datOrderCheck": {
+      "doc": 9268,
+      "phone": 9406,
+      "delta": 138
+    },
+    "lodLinkCheck": {
+      "doc": 6103,
+      "phone": 6108,
+      "delta": 5
+    },
+    "ideFlagHistogram": {
+      "doc": 14323,
+      "phone": 14276,
+      "delta": -47,
+      "notComparable": "Different program — plan 039's `scripts/ide-flag-histogram.ts` has zero commits in this repository's history. Excluded from the pattern."
+    },
+    "readItRight": "Every VERDICT matches the doc (clean is clean). Only the counts move, and both comparable ones move UP, so the phone's `game-src/original` carries slightly MORE than the copy the baselines were taken on. WHAT differs is not established. Until it is, a doc baseline may not be used as a before/after partner for a run on this device."
+  },
+  "txdDimensionCensus": {
+    "what": "Raster dimensions across every TXD of a tree: DXT that is not block-aligned (FATAL — never loads and takes its WHOLE dictionary down) and non-power-of-two but aligned (loads).",
+    "dir": "game-src/original",
+    "dictionaries": 2760,
+    "textures": 26126,
+    "dxtNotBlockAligned": 0,
+    "npotButAligned": 3,
+    "fatalClassIsClean": "0 unaligned DXT — the class that silently kills a whole dictionary is clean on this tree.",
+    "contradictsARestriction": "docs/restrictions/README.md states, of this exact class, `stock has 0 NPOT`. This tree has THREE. Consistent with the divergence recorded in treeDisagreesWithDocBaselines (this copy reads HIGH against every doc baseline), but NOT established as its cause. The three are not named here: the `--npot` listing run died when the phone's tunnel dropped before it printed.",
+    "crossCheck": "26 126 textures matches alpha-class-census's total exactly, from a different entry point."
   }
 }
