@@ -1,10 +1,40 @@
 # 201 — the handoff spec
 
-**Rewritten 2026-09-05 (evening) for the agent taking the POST CHAIN; §3.1 was flown later the same day
-and answered it, and §3.1b then corrected what the answer MEANS** — read both before anything else here,
-because the rest of §3 was written on a premise §3.1 removes, and §3.1b removes a wrong replacement for it
-that stood in this file for a couple of hours. The `## Status` table in [readme.md](readme.md) is the
-chain's state of record; this is the working spec it points at.
+**Rewritten 2026-09-06.** The post chain that this file was built around is CLOSED — §3.1 flew it and §3.1b
+says what the answer means; do not re-open either without reading both. What follows §0 is the state as it
+stands after two days that changed what this chain is optimising FOR.
+
+The `## Status` table in [readme.md](readme.md) is the chain's state of record; this is the working spec it
+points at.
+
+---
+
+## 0. Where the next session starts
+
+**Read these three first, in this order, and nothing here will surprise you:**
+
+1. **§3.1b** — `dtMean` on this device is a MISS RATE, not a cost. The frame is pinned to the display
+   interval, so there is no pool of unattributed milliseconds to hunt. An agent was sent after "the
+   remaining ~13 ms" and they do not exist.
+2. **§5c** — smoothness is a budget now, it is MEASURED (`paceChangeRate`), and it is the axis the operator
+   noticed unprompted when the frame time could not see it.
+3. **§5d** — the debug tools reach the phone since 2026-09-06, which is where 62 of the 100 of them have
+   always belonged.
+
+**What is open, ranked by what it would settle:**
+
+| what | why it is next | what it costs |
+| --- | --- | --- |
+| **PCAD carries no world time** | the console's clock follows a SERVER anchor and the anchor is published by the MOCK. 202's protocol never mentioned one, so this is a field the product still has to add — everything on our side is built and verified | a protocol change in `sexorcist00/pcad`, not here |
+| **The 62 game-data tools have never been run** | they became reachable today and nobody has looked. `ide-flag-histogram` says which authored IDE bits exist to honour; `dat-order-check` is a correctness question about the shipped data | minutes each, on the phone |
+| **The remaining chain-9 rungs** | the graphics ladder is a bloom switch and a prefilter scale; the user asked for a real optimisation ↔ quality axis (§5a) | a measurement before it is a UI task |
+| **Audio** | never planned, nothing exists, and the user has asked twice (§5e) | a bank parser, then Web Audio |
+
+**What is NOT open, so nobody spends a session re-deciding it:** the post chain (§3.1, 2.4 ms, closed),
+whether bloom ships (the operator released it at night — Smooth is the default), and the frame-rate budget
+(45 fps, the user's call; and read §3.1c on what 45 means on a 60 Hz panel).
+
+---
 
 Read [`CLAUDE.md`](../../../CLAUDE.md)'s chain first, then this.
 
@@ -322,6 +352,76 @@ measured.
 patch-ids and will tell you six commits are missing. That is not the question. The question is whether the
 CONTENT is superseded, and for five of these six the answer was *there was never anything there*, while for
 the sixth it was *yes, by a measurement taken after the branch stopped moving*.
+
+---
+
+## 5c. Smoothness is a budget, and it is measured (2026-09-06)
+
+**The frame rate budget is 45 fps** (the user's call) **and smoothness is a SECOND criterion beside it**, not
+a softer version of the first. They point at different work: throughput at the board's remaining 1.6 ms,
+smoothness at how often the frame changes rung at all.
+
+`frame-pacing.ts` measures it. `paceChangeRate` is stutters per consecutive pair — 0 is a perfectly even
+frame at ANY rate, a 60/30 alternation approaches 1 — and it is refresh-rate agnostic by construction, so it
+reads the same on a 144 Hz desk. **A distribution structurally cannot answer this**: the same histogram bins
+describe a flat 30 and a 60/30 stutter, which is why every row before this one read the vsync ladder by hand
+in its own prose.
+
+The number that made the case: **the empty map stutters on 44.6 % of consecutive frame pairs and 7.9 %
+without the bloom chain**, 5.6x
+([the row](../../benchmarks/opensa-engine/2026-09-05-mobile-frame-pacing.json)). The SAME arm's mean
+difference is 2.4–3.2 ms — at or under the instrument's floor, a number no row here may claim. **Two
+criteria, one change, an order of importance apart**, and the operator saw the smoothness one immediately
+and unprompted.
+
+**Take `paceChangeRate` on every arm from now on.** It is the axis the product was told to optimise and the
+only one the mean cannot report.
+
+---
+
+## 5d. The debug tools reach the phone now (2026-09-06)
+
+**62 of the 100 scripts in `scripts/debug/` read GAME DATA**, and the phone is the only machine that has
+any. Until today none of them was reachable from a session, and nobody had noticed — the panel runs a fixed
+job list, which is a security boundary (it answers on a tunnel one bearer token from the open internet).
+
+`phone_run debug SCRIPT=<name> [ARGS=…]` runs any of them. The name is a knob matched against `^[a-z0-9-]+$`
+and checked against the real directory; the child is spawned with an argument array and no shell. Nothing
+off the wire is concatenated into a command line, so the boundary did not move.
+
+**None of the 62 has been run.** That is the cheapest unexplored ground in this repository — the tools exist,
+they are registered, and the machine that can answer them is in the user's hand. Three worth taking first:
+`ide-flag-histogram` (which authored IDE bits are even present to honour), `dat-order-check` (does any `inst`
+row place a model whose IDE `gta.dat` lists later — a correctness question about the shipped data), and
+`alpha-class-census` (the alpha class of every texture, which decides the pass it is drawn in).
+
+**And two DESK censuses were run for the first time on 2026-09-06 after sitting unused**
+([the row](../../benchmarks/opensa-engine/2026-09-06-desk-censuses.json)): the ring residency policy asks for
+**276 cells at every pose** where the view policy asks for 26 at block zoom, and the label cap is **not** what
+limits labels on either surface — overlap is, and **six names in ten never reach a phone**. One of the two
+did not even run: it had rotted on an API change because nothing ever called it. **A registered tool with no
+caller is a repair job the day it is needed.**
+
+---
+
+## 5e. Audio: never planned, nothing exists (2026-09-06)
+
+The user has asked twice. The state, checked rather than remembered: **no `AudioContext`, no sample loading,
+nothing anywhere in the engine**, and no plan, roadmap entry or idea mentions audio at all. The only `audio`
+in the repository is `audio.txt`, a vehicle audio ASSIGNMENT row that `add-vehicles` edits inside the real
+game — which the real game then plays, not us. **SA's audio bank formats are not parsed**: no `SFXPak`, no
+`BankLkup`, nothing.
+
+**FMOD was assessed and is not recommended.** It has an HTML5 target, but the licence is proprietary with
+revenue terms, the wasm payload lands in an app that boots in seconds on a phone whose milliseconds this
+chain has spent two days defending, and the dispatch console ships as an embeddable widget with no runtime
+dependencies — a rule strong enough that `panel-window.tsx` refused `react-rnd` over it.
+
+**Web Audio is the answer, and the work is not the player.** It gives spatial panning, mixing and looping
+with no dependency, and a mute button on it is trivial. The real work is the DATA: reading SA's own banks so
+the world sounds as it was authored, which is a new format in `packages/renderware` of the same class as DFF
+and TXD. Order: bank parser (desk work, testable on fixtures) → one sound in a browser → engine audio with
+spatial panning → volume and mute.
 
 ---
 
