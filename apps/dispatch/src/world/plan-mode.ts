@@ -333,6 +333,8 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
         residencyMb: 0,
         tiles: tileNote,
         tool: sketch.tool(),
+        worldPinned: false,
+        worldSource: 'local',
       };
       options.onReadout(lastPayload);
     }
@@ -400,9 +402,15 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     locate(at: GtaGround): void {
       camera.flyTo(at, 500);
     },
+    // The flat map has no lit world, so the clock reaches nothing here. It still ANSWERS honestly rather
+    // than pretending to be pinned: `worldSource` is the local day, which is what a 2D map is showing.
+    pinnedHour: null,
     pose: () => camera.pose(),
     recallView(pose): void {
       camera.flyToPose(pose);
+    },
+    releaseHour(): void {
+      // Nothing to release.
     },
     /** Plan mode streams no pak, so there is no baked district table to search — and nothing to invent. */
     searchPlaces: () => [],
@@ -422,6 +430,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     },
     setTool(tool: MapTool): void {
       sketch.setTool(tool);
+    },
+    setWorldAnchor(): void {
+      // Nothing the server says about its day changes a tile.
     },
     setZoomLevel(level: ZoomLevel): void {
       // Plan mode has no world to measure: no pak, no ring, and no baked districts. So "everything there
@@ -445,6 +456,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     turnBy(radians: number): void {
       camera.turnTo(camera.pose().yaw + radians);
     },
+    worldSource: 'local',
     zoomBySteps(steps: number): void {
       camera.flyTo(camera.positionGta(), camera.span() * 2 ** -steps);
     },

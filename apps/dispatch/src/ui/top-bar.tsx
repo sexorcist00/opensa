@@ -12,6 +12,7 @@
 import type { CSSProperties, ReactElement } from 'react';
 
 import type { MapProjection } from '../map/map-camera';
+import type { WorldClockSource } from '../ops/world-clock';
 import type { GraphicsPreset } from '../world/graphics';
 import type { ThemeId } from './theme';
 
@@ -29,8 +30,11 @@ export function TopBar({
   onGraphics,
   onHour,
   onProjection,
+  onReleaseHour,
   onTheme,
+  pinned,
   projection,
+  source,
   theme,
   touch = false,
 }: {
@@ -45,9 +49,15 @@ export function TopBar({
   onGraphics: (preset: GraphicsPreset) => void;
   onHour: (hour: number) => void;
   onProjection: (projection: MapProjection) => void;
+  /** Hand the world back to the feed, or to the local day (201, 2026-09-06). */
+  onReleaseHour: () => void;
   onTheme: (theme: ThemeId) => void;
+  /** The dial is holding the hour, so the console is NOT showing the shift's world. */
+  pinned: boolean;
   /** What the map is drawing with right now — read back from the readout's pose, never held here. */
   projection: MapProjection;
+  /** Where the hour came from — `feed` is the server, `local` is this console's own day. */
+  source: WorldClockSource;
   /** The skin in force. Held by `App` and written to the root as `data-theme`, never held here. */
   theme: ThemeId;
   /** The pointer is a finger: the dial and the switch take a finger-sized target. */
@@ -75,6 +85,23 @@ export function TopBar({
           value={hour}
         />
         <span style={{ ...styles.mono, width: 42 }}>{clock(hour)}</span>
+        {/* 201, 2026-09-06: the world hour RUNS now, and the dial pins it. A console showing an hour the
+            shift does not share is only honest if it says so — and the operator needs a way back, or one
+            touch of the dial strands them off the server for the rest of the watch. `LIVE` is not a button
+            when nothing is pinned: it is the label saying the world is following. */}
+        {pinned ? (
+          <button onClick={onReleaseHour} style={buttonStyle(touch, false)} title="Follow the world clock again">
+            PINNED
+          </button>
+        ) : (
+          <span
+            aria-label={`World clock following the ${source}`}
+            style={{ color: COLORS.muted }}
+            title={FOLLOWING[source]}
+          >
+            {source === 'feed' ? 'LIVE' : 'OWN'}
+          </span>
+        )}
       </label>
 
       <button
@@ -157,6 +184,13 @@ export function TopBar({
     </div>
   );
 }
+
+/** What each source means, for the one place a hover is a bonus rather than the only label. */
+const FOLLOWING: Readonly<Record<WorldClockSource, string>> = {
+  feed: "The server's clock — every dispatcher on it sees this hour",
+  local: "This console's own day — no server has sent one",
+  operator: 'Pinned by the dial',
+};
 
 function buttonStyle(touch: boolean, primary: boolean): CSSProperties {
   if (primary) {

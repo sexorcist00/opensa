@@ -55,6 +55,14 @@ import { spritesFrom } from '../map/symbol-sprites';
 import { DEFAULT_TILE_SIZE } from '../map/tiles';
 import { UnitModels } from '../map/unit-models';
 import { readView, type SharedView, viewOfPose } from '../map/view-link';
+import {
+  DEFAULT_HOUR,
+  quantizeHour,
+  resolveWorldHour,
+  SA_HOURS_PER_SECOND,
+  type WorldClockSource,
+  type WorldTimeAnchor,
+} from '../ops/world-clock';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
 import { captureAblation } from './capture-ablation';
@@ -136,24 +144,37 @@ export interface DispatchHandle {
   inventory(): InventoryReport | null;
   /** Frame a GTA point at a sensible working height — what "locate" does in the panels. */
   locate(at: GtaGround): void;
-  /** The view as it is right now — what a bookmark stores. */
-  pose(): MapPose;
-  /** Fly back to a saved view: the rig (tilt, heading, projection) is taken at once, the ground is flown. */
-  recallView(pose: MapPose): void;
-  /** Places whose name matches, from the world's own baked district table (201/5-03's data). */
-  searchPlaces(query: string): readonly SearchedPlace[];
-  /** Swap in a rebound key map, live — the sheet rebinds while the console is running. */
-  setBindings(bindings: KeyBindings): void;
   /**
    * The graphics rung (201/9-05). LIVE — both its levers rebuild the bloom targets and nothing else, so
    * there is no reload and no confirm step; the operator judges it while looking at the map.
    */
+  /** What the operator's dial is holding, or null while the world follows its own clock (201, 2026-09-06). */
+  readonly pinnedHour: null | number;
+  /** The view as it is right now — what a bookmark stores. */
+  pose(): MapPose;
+  /** Fly back to a saved view: the rig (tilt, heading, projection) is taken at once, the ground is flown. */
+  recallView(pose: MapPose): void;
+  /** Give the world back to the feed, or to the local day when no server has spoken. */
+  releaseHour(): void;
+  /** Places whose name matches, from the world's own baked district table (201/5-03's data). */
+  searchPlaces(query: string): readonly SearchedPlace[];
+  /** Swap in a rebound key map, live — the sheet rebinds while the console is running. */
+  setBindings(bindings: KeyBindings): void;
   setGraphics(preset: GraphicsPreset): void;
+  /** PIN the world hour. Following again is {@link DispatchHandle.releaseHour}. */
   setHour(hour: number): void;
   /** Perspective or the plan view (201/7-01). The pose in the readout says which is live. */
   setProjection(projection: MapProjection): void;
   /** What a tap on the map does (201/7-05): select, or add a point to a ruler, cordon or circle. */
   setTool(tool: MapTool): void;
+  /**
+   * What the server says its own day is doing, taken at the moment it arrived.
+   *
+   * Anchored on the CONSOLE's clock rather than on a timestamp minted on the server: comparing the two
+   * would import every skew between them, and this is the whole of how several dispatchers watching one
+   * SA-MP server end up on the same hour (`ops/world-clock.ts`).
+   */
+  setWorldAnchor(anchor: { hour: number; hoursPerSecond: number }): void;
   /** Fly to one of the three zoom levels over the point already under the view (201/7-02). */
   setZoomLevel(level: ZoomLevel): void;
   /** Everything a shared link carries about the world half of the view (201/7-07). */
@@ -168,6 +189,8 @@ export interface DispatchHandle {
   tiltBy(radians: number): void;
   /** Turn the view by this many radians, eased like the compass rather than snapped. */
   turnBy(radians: number): void;
+  /** Where the hour on screen came from — the surface says it, and so does a capture. */
+  readonly worldSource: WorldClockSource;
   /** Zoom by whole steps: positive is in, negative is out, and each one is flown rather than jumped. */
   zoomBySteps(steps: number): void;
 }
@@ -208,6 +231,10 @@ export interface DispatchReadout {
   readonly tiles?: string;
   /** What a tap on the map currently does. `none` is selection, the console's normal behaviour. */
   readonly tool: MapTool;
+  /** The dial is holding {@link DispatchReadout.hour}, so this console is NOT on the shift's world clock. */
+  readonly worldPinned: boolean;
+  /** Where {@link DispatchReadout.hour} came from — a capture states it rather than leaving it inferred. */
+  readonly worldSource: WorldClockSource;
 }
 
 /** What a click resolved to — the app turns it into a {@link Selection}. */
@@ -525,7 +552,24 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const overlapMs = Math.max(0, gpuMs + openMs - (performance.now() - bothStart));
   const world = opened === null ? demoWorld(engine) : await streamedWorld(engine, params, opened);
   const environment = buildEnvironment(engine, opened?.timecyc ?? null, params);
-  let hour = numberParam(params, 'hour', 10);
+  /**
+   * The world clock (201, 2026-09-06). Time PASSES here now, and who says how fast is decided rather than
+   * assumed: the server's anchor when a feed has spoken, SA's own 24-minute day when nothing has, and the
+   * operator's dial over both — labelled, because a console showing an hour the shift does not share is
+   * only honest if it says so.
+   *
+   * **`?hour=` pins.** Every measurement in this chain is taken at a fixed hour, and a benchmark whose
+   * world drifted through dusk mid-window is a benchmark of nothing. Present in the query means the
+   * operator source, which outranks any feed — so the whole 201 series stays re-flyable with time running.
+   */
+  const worldClock: { anchor: null | WorldTimeAnchor; local: WorldTimeAnchor; operatorHour: null | number } = {
+    anchor: null,
+    local: { hour: DEFAULT_HOUR, hoursPerSecond: SA_HOURS_PER_SECOND, receivedAtMs: performance.now() },
+    operatorHour: params.has('hour') ? numberParam(params, 'hour', DEFAULT_HOUR) : null,
+  };
+  let hour = resolveWorldHour(worldClock, performance.now()).hour;
+  /** The quantum last applied, so the frame is redrawn on the step rather than on every advance. */
+  let appliedQuantum = Number.NaN;
   // The rung the console opens on, and the intensity timecyc would otherwise decide alone.
   let graphics = settingsFor(initialPreset(params));
   /**
@@ -543,9 +587,26 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   };
   const applyHour = (next: number): void => {
     hour = next;
+    appliedQuantum = quantizeHour(next);
     environment.apply(next);
     applyGraphics();
     pushFogOut(engine, params);
+  };
+  /**
+   * Advance the world if it has moved far enough to be worth a frame.
+   *
+   * Called once per loop pass. It applies on the STEP rather than on every advance, because `render-gate.ts`
+   * compares `hour` and a continuously-moving one makes every frame dirty — which would trade
+   * render-on-demand (201/4-01), a shipped feature with a battery figure, for a sky nobody can see moving.
+   * The step is derived from the sky LUT's own quantum in `world-clock.ts`.
+   *
+   * A pinned hour never moves, so a `?hour=` capture and an operator inspecting a scene both hold still.
+   */
+  const advanceWorld = (nowMs: number): void => {
+    const resolved = resolveWorldHour(worldClock, nowMs);
+    if (quantizeHour(resolved.hour) !== appliedQuantum) {
+      applyHour(resolved.hour);
+    }
   };
   applyHour(hour);
 
@@ -815,6 +876,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     const now = performance.now();
     const dt = now - previous;
     previous = now;
+    // Time passes. On the STEP, so an idle console still rests between one redraw and the next — see
+    // `advanceWorld`. A pinned hour makes this a comparison and nothing else.
+    advanceWorld(now);
     // Drained BEFORE this frame opens a segment of its own, so what comes out is the PREVIOUS body — the
     // work that actually ran inside the `dt` interval about to be reported.
     const cpu: FrameCpuSample = { bodyMs, canvasPixels: canvas.width * canvas.height, segments: loopCpu.drain() };
@@ -1002,6 +1066,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         pose: camera.pose(),
         residencyMb: stats.residencyBytes / (1024 * 1024),
         tool: sketch.tool(),
+        worldPinned: worldClock.operatorHour !== null,
+        worldSource: resolveWorldHour(worldClock, performance.now()).source,
       };
       time('readout', () => options.onReadout(lastPayload as DispatchReadout));
     }
@@ -1155,9 +1221,18 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     locate(at: GtaGround): void {
       camera.flyTo(at, LOCATE_SPAN);
     },
+    /** What the operator's dial is holding, or null while the world is following its own clock. */
+    get pinnedHour(): null | number {
+      return worldClock.operatorHour;
+    },
     pose: () => camera.pose(),
     recallView(pose: MapPose): void {
       camera.flyToPose(pose);
+    },
+    /** Hand the world back to whoever else is entitled to it — the feed, else the local day. */
+    releaseHour(): void {
+      worldClock.operatorHour = null;
+      advanceWorld(performance.now());
     },
     searchPlaces: (query) => world.districts.search(query),
     setBindings(next: KeyBindings): void {
@@ -1170,12 +1245,25 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       // CHOICE is the caller's, so it survives plan mode, where this method has nothing to do.
       applyHour(hour);
     },
-    setHour: applyHour,
+    setHour(next: number): void {
+      // The dial PINS. Following again is `releaseHour`, which the surface offers as its own control —
+      // a console that could only ever be pinned would drift from the shift with no way back.
+      worldClock.operatorHour = next;
+      applyHour(next);
+    },
     setProjection(projection: MapProjection): void {
       camera.setProjection(projection);
     },
     setTool(tool: MapTool): void {
       sketch.setTool(tool);
+    },
+    /**
+     * The server has spoken. Anchored on OUR clock at the moment it arrived, never on a timestamp minted
+     * there — see `world-clock.ts` for why that is the whole of the agreement between consoles.
+     */
+    setWorldAnchor(anchor: { hour: number; hoursPerSecond: number }): void {
+      worldClock.anchor = { ...anchor, receivedAtMs: performance.now() };
+      advanceWorld(performance.now());
     },
     setZoomLevel(level: ZoomLevel): void {
       camera.flyTo(camera.positionGta(), zoomSpan(level, camera.positionGta(), world));
@@ -1200,6 +1288,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     },
     turnBy(radians: number): void {
       camera.turnTo(camera.pose().yaw + radians);
+    },
+    /** Where the hour on screen came from, so the surface and the report can both state it. */
+    get worldSource(): WorldClockSource {
+      return resolveWorldHour(worldClock, performance.now()).source;
     },
     zoomBySteps(steps: number): void {
       camera.flyTo(camera.positionGta(), camera.span() * ZOOM_STEP ** -steps);

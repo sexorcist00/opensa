@@ -21,6 +21,7 @@ import { boardTickMs, REPLAY_TICK_MS } from './feed-rate';
 import { BoardHistory } from './history';
 import { initialOperations } from './seed';
 import { assignUnit, clearUnit, createIncidentAt, stepOperations } from './sim';
+import { DEFAULT_HOUR, SA_HOURS_PER_SECOND, wrapHour } from './world-clock';
 
 /**
  * The board's tick — the feed's publish rate, not a simulation rate (201/9-02).
@@ -70,6 +71,18 @@ export interface DispatchStore {
     trails: () => ReadonlyMap<string, Float32Array>;
   };
   readonly selection: Selection;
+  /**
+   * What the feed says the WORLD's day is doing, or null while nothing has said (201, 2026-09-06).
+   *
+   * The mock publishes it so the path is EXERCISED rather than hypothetical — the lesson this chain paid
+   * most for is that a change can ship completely inert with every test passing. When PCAD carries the
+   * field, this is where its value arrives and nothing downstream changes.
+   *
+   * It is deliberately NOT inside {@link Operations}: that object is the board and it is what replay
+   * reconstructs, so a world hour inside it would be dragged backwards by a scrub — the confusion 201/8-03
+   * separated the two clocks to prevent.
+   */
+  readonly worldTime: null | { hour: number; hoursPerSecond: number };
 }
 
 export function useOperations(): DispatchStore {
@@ -79,6 +92,13 @@ export function useOperations(): DispatchStore {
   const [selection, setSelection] = useState<Selection>(null);
   const [autoDispatch, setAutoDispatch] = useState(true);
   const [clock, setClock] = useState<Clock>(() => createClock(performance.now()));
+  /**
+   * The mock server's own day, republished on every board tick exactly as a real feed would.
+   *
+   * A fresh object per tick on purpose: the console anchors on the moment a message ARRIVED, so an
+   * unchanged reference would be a server that never spoke again and a world that quietly stopped.
+   */
+  const [worldTime, setWorldTime] = useState<null | { hour: number; hoursPerSecond: number }>(null);
 
   // The time axis, owned beside the board rather than inside it: `Operations` is an immutable snapshot and
   // a ring buffer cannot be (see `tracks.ts`). One writer — the tick below.
@@ -131,6 +151,13 @@ export function useOperations(): DispatchStore {
         // ALWAYS the live board, never the replayed one: recording what a scrub is showing would write the
         // past back into the history as if it had just happened.
         history.record(liveRef.current);
+        // What a server would send WITH the board: the world hour and how fast its day runs. The mock keeps
+        // SA's own — 24 hours in 24 real minutes — so the path a real feed will use is the path the console
+        // actually runs today, rather than one that is only exercised when PCAD finally carries the field.
+        setWorldTime({
+          hour: wrapHour(DEFAULT_HOUR + (now / 1000) * SA_HOURS_PER_SECOND),
+          hoursPerSecond: SA_HOURS_PER_SECOND,
+        });
         setLive((previous) =>
           stepOperations(previous, {
             // The tick's NOMINAL length, never the measured gap: a tab Android froze for thirty seconds
@@ -179,5 +206,5 @@ export function useOperations(): DispatchStore {
     [history],
   );
 
-  return { actions, autoDispatch, clock, historyWindow, ops, read, selection };
+  return { actions, autoDispatch, clock, historyWindow, ops, read, selection, worldTime };
 }

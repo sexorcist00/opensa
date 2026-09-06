@@ -58,7 +58,7 @@ const CALLS_RECT = { h: 480, w: 320, x: 12, y: 180 } as const;
 const UNITS_RECT = { h: 480, w: 300, x: 12, y: 180 } as const;
 
 export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}): ReactElement {
-  const { actions, autoDispatch, clock, historyWindow, ops, read, selection } = useOperations();
+  const { actions, autoDispatch, clock, historyWindow, ops, read, selection, worldTime } = useOperations();
   const [readout, setReadout] = useState<DispatchReadout | null>(null);
   /** Which surface is drawing, and how to change it (201/6-03) — the map reports it up, because the switch
    *  outlives any one surface and the chrome is what survives it. */
@@ -126,6 +126,18 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
   }, []);
   const locate = useCallback((at: GtaGround) => handleRef.current?.locate(at), []);
   const setHour = useCallback((hour: number) => handleRef.current?.setHour(hour), []);
+  const releaseHour = useCallback(() => handleRef.current?.releaseHour(), []);
+  /**
+   * Hand the feed's day to the world (201, 2026-09-06).
+   *
+   * A new object every board tick is what makes this fire: the console anchors on the moment a message
+   * ARRIVED, so a server that stopped speaking has to look different from one repeating itself.
+   */
+  useEffect(() => {
+    if (worldTime !== null) {
+      handleRef.current?.setWorldAnchor(worldTime);
+    }
+  }, [worldTime]);
   // The sheet's key is the one command React owns: the map has no panel to open, and the input layer would
   // have to reach back into this tree to do it.
   useEffect(() => {
@@ -274,8 +286,11 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
       onGraphics={applyGraphics}
       onHour={setHour}
       onProjection={setProjection}
+      onReleaseHour={releaseHour}
       onTheme={applyTheme}
+      pinned={readout?.worldPinned ?? false}
       projection={readout?.pose.projection ?? 'perspective'}
+      source={readout?.worldSource ?? 'local'}
       theme={theme}
       touch={touch}
     />
