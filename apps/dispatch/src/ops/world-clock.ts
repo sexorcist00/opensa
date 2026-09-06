@@ -101,3 +101,44 @@ export function wrapHour(hour: number): number {
 
 /** Where a console with no server and no operator opens: mid-morning, the hour every 201 capture uses. */
 export const DEFAULT_HOUR = 10;
+
+/**
+ * How far the world hour must move before the frame is redrawn for it.
+ *
+ * **A world hour that advances every frame makes every frame dirty**, and `render-gate.ts` compares `hour`
+ * as part of what it means for the picture to have changed. Left alone, running the clock would delete
+ * render-on-demand ([201/4-01](../../../../docs/plans/201-dispatch-console/4-a-console-is-not-a-game/readme.md))
+ * — a shipped feature with a battery figure behind it — in exchange for a sky nobody can see moving.
+ *
+ * **So the step is DERIVED from the finest thing the hour drives, not chosen.** The sky LUT's key quantizes
+ * `sunElevation` at ×200, so one quantum is 1/200. The elevation ratio is `sin(π·(h − dawn)/(dusk − dawn))`
+ * over the config's own 6→20 window (`engine-environment-driver.ts`), whose steepest slope is `π/14 ≈
+ * 0.2244` per game hour, at dawn and at dusk. One quantum therefore takes **0.005 / 0.2244 ≈ 0.0223 game
+ * hours** — about 80 game seconds, which at SA's own 24-minute day is a redraw every **1.3 real seconds**
+ * rather than every frame.
+ *
+ * **What this does NOT cover, stated rather than discovered later.** `sunElevation` is the fastest-moving
+ * input the console can compute without game data; the timecyc COLOURS are blended per hour and quantized
+ * at ×100 in the same key, and how steep a pair of adjacent timecyc rows gets is a property of the data,
+ * not of this formula. A dusk row pair steeper than 0.45 per hour would advance a colour quantum inside one
+ * step and show as a small jump. Nothing here checks that, and checking it needs a real timecyc — so it is
+ * an open edge rather than a solved one.
+ */
+/** The console's own day window (`engine-environment-driver.ts` → `night.litFade`: dawn 6, dusk 20). */
+const DAY_WINDOW_HOURS = 20 - 6;
+/** How finely the sky LUT's key quantizes `sunElevation` — one quantum is `1 / this`. */
+const SKY_LUT_ELEVATION_STEPS = 200;
+
+/**
+ * `quantum / maxRate`, written as the arithmetic rather than as the number it comes to (~0.0223).
+ *
+ * A rounded constant was tried first and the sweep test refused it at **1.0008 quanta** — a hair too coarse,
+ * which is a jump the eye would not catch but the derivation would be lying about. Expressed this way the
+ * value cannot drift from the two inputs it is made of.
+ */
+export const HOUR_REDRAW_STEP = DAY_WINDOW_HOURS / (SKY_LUT_ELEVATION_STEPS * Math.PI);
+
+/** The hour rounded to the step the frame is redrawn on — what the render gate should compare. */
+export function quantizeHour(hour: number): number {
+  return Math.round(wrapHour(hour) / HOUR_REDRAW_STEP) * HOUR_REDRAW_STEP;
+}

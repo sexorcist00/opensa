@@ -7,7 +7,29 @@ import { describe, expect, it } from 'vitest';
 
 import type { WorldClock, WorldTimeAnchor } from './world-clock';
 
-import { DEFAULT_HOUR, hourFromAnchor, resolveWorldHour, SA_HOURS_PER_SECOND, wrapHour } from './world-clock';
+import {
+  DEFAULT_HOUR,
+  HOUR_REDRAW_STEP,
+  hourFromAnchor,
+  quantizeHour,
+  resolveWorldHour,
+  SA_HOURS_PER_SECOND,
+  wrapHour,
+} from './world-clock';
+
+/** The console's own day window and the sky LUT's own quantum — the two the step is derived from. */
+const DAWN = 6;
+const DUSK = 20;
+const SKY_LUT_ELEVATION_STEPS = 200;
+
+/** What `engine-environment-driver.ts` feeds the LUT: the sun's elevation as a 0..1 ratio. */
+function elevationRatio(hour: number): number {
+  if (hour <= DAWN || hour >= DUSK) {
+    return 0;
+  }
+
+  return Math.sin(((hour - DAWN) / (DUSK - DAWN)) * Math.PI);
+}
 
 const anchor = (hour: number, receivedAtMs: number, hoursPerSecond = SA_HOURS_PER_SECOND): WorldTimeAnchor => ({
   hour,
@@ -61,9 +83,33 @@ describe('the world clock', () => {
       expect(drifted).not.toBeCloseTo(9, 3);
       expect(corrected).toBe(9);
     });
+    // The step exists to stop a running clock making every frame dirty. If it were too COARSE the sky would
+    // move in visible jumps, so this is the assertion that keeps the derivation honest rather than quoted:
+    // sweep the whole day and check no step ever skips a quantum of the key the sky is rebuilt on.
+    it('never skips a sky-LUT quantum, which is what would make the sky jump', () => {
+      let worst = 0;
+      for (let hour = 0; hour < 24; hour += HOUR_REDRAW_STEP) {
+        const moved = Math.abs(elevationRatio(hour + HOUR_REDRAW_STEP) - elevationRatio(hour));
+        worst = Math.max(worst, moved * SKY_LUT_ELEVATION_STEPS);
+      }
+
+      expect(worst).toBeLessThanOrEqual(1);
+    });
+
+    it('is not so fine that it redraws every frame, which is the thing it exists to prevent', () => {
+      // At SA's own day a step must be worth more than a frame: 0.0223 game hours is ~1.3 real seconds.
+      const realSecondsPerStep = HOUR_REDRAW_STEP / SA_HOURS_PER_SECOND;
+
+      expect(realSecondsPerStep).toBeGreaterThan(1);
+    });
   });
 
   describe('positive cases', () => {
+    it('rounds to the step the frame is redrawn on', () => {
+      expect(quantizeHour(0)).toBeCloseTo(0, 10);
+      expect(quantizeHour(HOUR_REDRAW_STEP * 3.4)).toBeCloseTo(HOUR_REDRAW_STEP * 3, 10);
+    });
+
     it('runs SA’s own day: twenty-four hours in twenty-four minutes', () => {
       const afterOneMinute = hourFromAnchor(anchor(0, 0), 60_000);
 
