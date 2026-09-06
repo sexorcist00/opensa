@@ -409,6 +409,11 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     setBindings(next): void {
       keyboard.setBindings(next);
     },
+    setGraphics(): void {
+      // Nothing to draw less of: plan mode has no WebGPU frame, so both of the rung's levers address passes
+      // that do not exist here. The CHOICE is the caller's and is stored there, so switching back to the
+      // live map opens on the rung the operator picked rather than on the default.
+    },
     setHour(): void {
       // Nothing to light.
     },

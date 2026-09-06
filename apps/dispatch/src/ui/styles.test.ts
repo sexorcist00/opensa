@@ -90,10 +90,26 @@ describe('dispatch styles', () => {
     });
 
     it('lets no bar that spans the grid push its column wider than the screen', () => {
-      // These three are full-width flex rows. Bounded tracks only help if the row itself gives way.
+      // These four are full-width flex rows. Bounded tracks only help if the row itself gives way, and
+      // `minWidth: 0` is the property that makes it give way — NOT `overflow`, which only decides what
+      // happens to the part that did not fit. This assertion used to require `overflow: 'hidden'` on all
+      // four and so read as if clipping were the guard; it is not, and on the compact bar clipping was
+      // actively harmful (the skin picker and the hour slider were measured off the edge at 360 CSS px on
+      // 2026-09-05, unreachable because there was nothing to scroll). What must hold is that the horizontal
+      // overflow is CONTAINED — hidden or scrollable, never `visible`, which would widen the grid.
       for (const bar of ['statusBar', 'timeline', 'topBar', 'topBarCompact'] as const) {
-        expect(styles[bar].minWidth).toBe(0);
-        expect(styles[bar].overflow).toBe('hidden');
+        const style: { minWidth?: number | string; overflow?: string; overflowX?: string } = styles[bar];
+
+        expect(style.minWidth).toBe(0);
+        expect(style.overflow ?? style.overflowX).toMatch(/^(hidden|auto|scroll)$/);
+      }
+    });
+
+    it('never lets a bar scroll VERTICALLY — a row one line tall with a scrollbar is a defect', () => {
+      for (const bar of ['statusBar', 'timeline', 'topBar', 'topBarCompact'] as const) {
+        const style: { overflow?: string; overflowY?: string } = styles[bar];
+
+        expect(style.overflowY ?? style.overflow ?? 'hidden').toMatch(/^(hidden|clip)$/);
       }
     });
 

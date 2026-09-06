@@ -820,6 +820,31 @@ want of a model — that would read as a unit going off duty.
 The names it looks for, and what a wrong one does, are in
 [contracts/dispatch-map](../contracts/dispatch-map.md) §2.
 
+## Graphics settings
+
+**The operator chooses how much the frame draws, and is told what each choice costs the picture.** `GFX` in
+the top bar, beside the skin picker, with three rungs:
+
+| rung | what it does | what it buys |
+| --- | --- | --- |
+| **Full** | bloom, prefilter at full resolution | the most light; the least steady frame |
+| **Balanced** | bloom, prefilter at half resolution | what the console ships with |
+| **Smooth** | no bloom chain at all | **44.6 % of consecutive frame pairs stutter → 7.9 %** ([the row](../benchmarks/opensa-engine/2026-09-05-mobile-frame-pacing.json)) |
+
+**All three apply live** — both levers rebuild the bloom targets and nothing else, so there is no reload, no
+confirm and no dialog. The choice is stored per browser and a `?graphics=` in the URL overrides it, so a
+shared link reproduces what its sender was looking at.
+
+**Why a named ladder is allowed here when a silent one is not.** [201's decisions](../plans/201-dispatch-console/readme.md)
+forbid a quality ladder the console applies by itself — two operators seeing different worlds with neither
+told. This is the opposite on every count: the rungs are named, the operator picks, the menu says what each
+one does to the picture, and the report states which one ran. **Every rung has a measured number behind it**;
+nothing goes in this menu before its arm has been flown.
+
+**What is deliberately not offered.** Resolution, sample count and anti-aliasing (the standing call,
+2026-09-04: frame time may not be bought with any of them) — those stay measurement arms. They also could
+not apply live: the pipelines are compiled against them, so they are page loads by construction.
+
 ## Known gaps
 
 Each now names the step that owns it, so none of them is an open-ended note.

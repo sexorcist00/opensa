@@ -1015,7 +1015,19 @@ export const styles = {
     gap: SPACE.sm,
     gridColumn: '1 / -1',
     minWidth: 0,
-    overflow: 'hidden',
+    /**
+     * SCROLLS rather than clips, and the difference is whether a control exists.
+     *
+     * This was `overflow: hidden`, which keeps the bar from widening the grid — the `1fr` failure
+     * `docs/restrictions/cross-platform-surface.md` opens with — but pays for it by making everything past
+     * the edge INVISIBLE. Measured at 360 CSS px on 2026-09-05 with
+     * `scripts/debug/console-surface-check.ts`: the skin picker sat at 398..492 and the hour slider had
+     * collapsed to 0 px wide, both of them clipped away with nothing to scroll to, which is the exact
+     * 2026-08-25 report *"impossible to control on the phone"*. `overflowX: auto` keeps the grid safe
+     * (`minWidth: 0` is what does that) and hands the tail back to the operator.
+     */
+    overflowX: 'auto',
+    overflowY: 'hidden',
     padding: '0 8px',
   },
   /**

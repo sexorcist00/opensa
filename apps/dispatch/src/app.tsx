@@ -39,6 +39,7 @@ import { TopBar } from './ui/top-bar';
 import { UnitsPanel, unitsTally } from './ui/units-panel';
 import { useCoarsePointer, useCompactLayout, useShortViewport } from './ui/use-compact';
 import { dispatchParams } from './world/boot';
+import { type GraphicsPreset, initialPreset, savePreset } from './world/graphics';
 
 /**
  * Where the two windows open before the operator has moved them.
@@ -96,6 +97,20 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
     setTheme(next);
     saveTheme(next);
   }, []);
+  /**
+   * The graphics rung (201/9-05). Held here for the same reason the skin is: the control reads it back, and
+   * the CHOICE has to outlive the handle — plan mode has no bloom chain to change, so switching to the flat
+   * map and back must not quietly return the operator to the default.
+   */
+  const [graphics, setGraphics] = useState<GraphicsPreset>(() => initialPreset(dispatchParams()));
+  const applyGraphics = useCallback(
+    (next: GraphicsPreset) => {
+      setGraphics(next);
+      savePreset(next);
+      handle?.setGraphics(next);
+    },
+    [handle],
+  );
   /**
    * An embedded console (`?embed=1`) is the MAP and its own controls, and nothing else: the host has its own
    * queue, roster and clock, and a second set of them inside an iframe is two boards disagreeing on one
@@ -252,9 +267,11 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
     <TopBar
       autoDispatch={autoDispatch}
       compact={compact}
+      graphics={graphics}
       hour={readout?.hour ?? 10}
       latest={ops.log[0]}
       onAutoDispatch={actions.setAutoDispatch}
+      onGraphics={applyGraphics}
       onHour={setHour}
       onProjection={setProjection}
       onTheme={applyTheme}

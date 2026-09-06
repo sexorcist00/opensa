@@ -261,6 +261,41 @@ a surface where the probe has never rendered a face.
 
 ---
 
+## 5a. The graphics ladder, and what it still owes (2026-09-05)
+
+The operator saw the night A/B, released bloom, and asked for it as a SETTING with presets — an
+*optimisation ↔ picture quality* axis. What shipped is the spine of that: three rungs, each with a measured
+number, all applying live.
+
+| rung | what it does | what it is worth |
+| --- | --- | --- |
+| Full | prefilter at full resolution | the pre-2026-09-05 look; its half-res replacement measured **−4.4 ms** |
+| Balanced | prefilter at half resolution | what the console has drawn since 2026-09-05 |
+| Smooth | no bloom chain at all | **44.6 % of frame pairs stutter → 7.9 %**, 5.6x |
+
+**The ladder is short and the user has asked for more of it.** Before adding a rung, read what CAN go in it,
+because the space is narrower than it looks:
+
+- **Refused outright**: resolution, sample count, scene format. The standing call (2026-09-04) is that frame
+  time may not be bought with resolution, sampling or anti-aliasing, and `?scale=`, `?msaa=` and `?scene=`
+  are measurement arms.
+- **Cannot be live even if wanted**: anything the PIPELINES are compiled against — the formats and the
+  sample count. A rung carrying one of those is a page load, and the menu has to say so rather than appear
+  to apply instantly.
+- **Live, and the only reason the ladder works today**: fields that change target GEOMETRY. `ensureTargets`'
+ key names them now (`bloomPrefilterScale`, `bloomMinLevelPx`); it named the size alone until this step, so
+  a budget field could move and nothing would rebuild — the inert shape again, now guarded by a test that
+  was verified to fail on the old key.
+- **Unmeasured, therefore not a rung yet**: everything else. The chain's own rule is that nothing is tuned
+  before its arm is run, and a preset menu is the worst place to break it — a rung that changes nothing
+  reads to the operator as "this setting does not matter on my phone".
+
+**So the next rung is a measurement task before it is a UI task**, and the instrument for judging it exists
+now: `paceChangeRate` says what a rung buys in steadiness, which is the axis the operator actually asked
+about.
+
+---
+
 ## 5b. The branches are read, and only one thing came off them (2026-09-05)
 
 Six branches sat on `origin` and the question *"is anything lost?"* was asked of them. **Five were stale

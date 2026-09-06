@@ -3275,7 +3275,17 @@ export class Engine {
     const scale = Math.min(1, Math.max(0.5, this.renderScale));
     const width = Math.max(2, Math.round(canvasWidth * scale));
     const height = Math.max(2, Math.round(canvasHeight * scale));
-    const key = `${width}x${height}`;
+    // The key has to name everything the targets are BUILT FROM, not just their size. It was `WxH` alone
+    // until 201/9-05's graphics settings, which meant a budget field could change and nothing would be
+    // rebuilt — the operator moves a control, the report dutifully states the new budget, and the frame goes
+    // on drawing into targets made from the old one. That is the same shape as the run key that made
+    // instancing ship inert: a key that asks a narrower question than the thing it guards depends on, and it
+    // fails by silently doing nothing.
+    //
+    // Only the two fields that change target GEOMETRY are here. The formats and the sample count are NOT
+    // live and must not be added: the pipelines are compiled against them at {@link init}, so changing one
+    // needs a page load, which is why they are measurement arms rather than settings.
+    const key = `${width}x${height}/${this.budget.bloomPrefilterScale}/${this.budget.bloomMinLevelPx}`;
     if (this.targetKey === key) {
       return;
     }

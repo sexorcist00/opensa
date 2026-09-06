@@ -65,6 +65,7 @@ import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
 import { createErrorLog } from './error-log';
 import { FrameClock } from './frame-clock';
+import { type GraphicsPreset, initialPreset, settingsFor } from './graphics';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { openModelSource } from './model-source';
 import { armDrawsContent, armTouchesSurface, overlayArm } from './overlay-arm';
@@ -143,6 +144,11 @@ export interface DispatchHandle {
   searchPlaces(query: string): readonly SearchedPlace[];
   /** Swap in a rebound key map, live — the sheet rebinds while the console is running. */
   setBindings(bindings: KeyBindings): void;
+  /**
+   * The graphics rung (201/9-05). LIVE — both its levers rebuild the bloom targets and nothing else, so
+   * there is no reload and no confirm step; the operator judges it while looking at the map.
+   */
+  setGraphics(preset: GraphicsPreset): void;
   setHour(hour: number): void;
   /** Perspective or the plan view (201/7-01). The pose in the readout says which is live. */
   setProjection(projection: MapProjection): void;
@@ -520,9 +526,25 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const world = opened === null ? demoWorld(engine) : await streamedWorld(engine, params, opened);
   const environment = buildEnvironment(engine, opened?.timecyc ?? null, params);
   let hour = numberParam(params, 'hour', 10);
+  // The rung the console opens on, and the intensity timecyc would otherwise decide alone.
+  let graphics = settingsFor(initialPreset(params));
+  /**
+   * Put the operator's rung back on top of the environment.
+   *
+   * It has to run after EVERY `environment.apply`, not once at boot: `apply(hour)` rewrites the whole
+   * environment from timecyc, `bloomIntensity` included, so a rung chosen at 10:00 would come back on at
+   * 22:00 with the operator's choice silently undone and nothing anywhere saying so.
+   */
+  const applyGraphics = (): void => {
+    if (!graphics.bloom) {
+      engine.environment.bloomIntensity = 0;
+    }
+    engine.budget = { ...engine.budget, bloomPrefilterScale: graphics.bloomScale };
+  };
   const applyHour = (next: number): void => {
     hour = next;
     environment.apply(next);
+    applyGraphics();
     pushFogOut(engine, params);
   };
   applyHour(hour);
@@ -1140,6 +1162,13 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     searchPlaces: (query) => world.districts.search(query),
     setBindings(next: KeyBindings): void {
       keyboard.setBindings(next);
+    },
+    setGraphics(preset: GraphicsPreset): void {
+      graphics = settingsFor(preset);
+      // Re-apply the hour rather than only the rung: turning bloom back ON needs the intensity timecyc
+      // authored for this hour, and this module is not the place that knows what that is. Storing the
+      // CHOICE is the caller's, so it survives plan mode, where this method has nothing to do.
+      applyHour(hour);
     },
     setHour: applyHour,
     setProjection(projection: MapProjection): void {

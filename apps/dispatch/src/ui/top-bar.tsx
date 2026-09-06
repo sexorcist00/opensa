@@ -12,17 +12,21 @@
 import type { CSSProperties, ReactElement } from 'react';
 
 import type { MapProjection } from '../map/map-camera';
+import type { GraphicsPreset } from '../world/graphics';
 import type { ThemeId } from './theme';
 
+import { GraphicsMenu } from './graphics-menu';
 import { ACCENT, COLORS, styles, TOUCH_TARGET } from './styles';
 import { THEMES } from './theme';
 
 export function TopBar({
   autoDispatch,
   compact = false,
+  graphics,
   hour,
   latest,
   onAutoDispatch,
+  onGraphics,
   onHour,
   onProjection,
   onTheme,
@@ -33,9 +37,12 @@ export function TopBar({
   autoDispatch: boolean;
   /** Phone layout: shorten the title, drop the region badge and the log ticker, narrow the time slider. */
   compact?: boolean;
+  /** The graphics rung in force, or `null` when a link pins a combination no rung names (201/9-05). */
+  graphics: GraphicsPreset | null;
   hour: number;
   latest: string | undefined;
   onAutoDispatch: (enabled: boolean) => void;
+  onGraphics: (preset: GraphicsPreset) => void;
   onHour: (hour: number) => void;
   onProjection: (projection: MapProjection) => void;
   onTheme: (theme: ThemeId) => void;
@@ -58,7 +65,12 @@ export function TopBar({
           min={0}
           onChange={(event) => onHour(Number(event.target.value))}
           step={0.25}
-          style={{ ...(touch ? styles.rangeTouch : {}), minWidth: 0, width: compact ? 84 : 150 }}
+          // `minWidth: 0` here let the dial collapse to NOTHING when the bar ran short of room — measured at
+          // 0x44 px inside a 360 CSS px viewport on 2026-09-05, a control that is present, focusable and
+          // impossible to use. It was protecting the grid from being widened; the bar's own `minWidth: 0`
+          // does that, and the bar scrolls now rather than clipping, so the dial keeps its width and the
+          // overflow goes where the operator can reach it (`scripts/debug/console-surface-check.ts`).
+          style={{ ...(touch ? styles.rangeTouch : {}), flexShrink: 0, width: compact ? 84 : 150 }}
           type="range"
           value={hour}
         />
@@ -103,6 +115,10 @@ export function TopBar({
       {/* A native `<select>` rather than a menu of swatches: it is one target, it is in the tab order for
           free, and on a phone it opens the OS picker — which is a better list than anything drawn here.
           Switching writes one attribute on the app root; nothing in this tree re-renders because of it. */}
+      <span style={{ marginLeft: compact ? 8 : 12 }}>
+        <GraphicsMenu compact={compact} onPreset={onGraphics} preset={graphics} touch={touch} />
+      </span>
+
       <label
         style={{
           alignItems: 'center',
@@ -112,9 +128,17 @@ export function TopBar({
         }}
         title="The console's skin"
       >
-        <span aria-hidden style={{ color: COLORS.muted, letterSpacing: 0.6 }}>
-          SKIN
-        </span>
+        {/* Decoration, and the first thing to go when the bar is short of room: the accessible name is the
+            visually-hidden span below and the value is in the control itself, so dropping this costs a
+            sighted operator a hint and a screen reader nothing. At 360 CSS px the bar overflows without it
+            and `overflow: hidden` CLIPS the tail rather than pushing it — the control stops existing
+            (`docs/restrictions/cross-platform-surface.md`, measured by
+            `scripts/debug/console-surface-check.ts`). */}
+        {!compact && (
+          <span aria-hidden style={{ color: COLORS.muted, letterSpacing: 0.6 }}>
+            SKIN
+          </span>
+        )}
         <span style={{ clip: 'rect(0 0 0 0)', height: 1, overflow: 'hidden', position: 'absolute', width: 1 }}>
           Theme
         </span>
