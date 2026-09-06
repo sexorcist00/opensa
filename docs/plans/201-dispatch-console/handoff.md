@@ -12,10 +12,11 @@ points at.
 ## 0. Where the next session starts
 
 **BEFORE ANY OF IT: you do not implement anything until you have questioned the user through the Ask Menu.**
-That is a standing project rule as of 2026-09-06 (`CLAUDE.md`, first of the workflow rules) and it has its
-own skill, [`grill-me`](../../../.claude/skills/grill-me/SKILL.md), which carries the checklist. Research
-first so the questions are few and informed — a question you could have answered by reading wastes the
-user's time as surely as an unasked one costs a session — then ask about what only they know.
+That is a standing project rule as of 2026-09-06 (`CLAUDE.md`, first of the workflow rules), and the skill
+that runs it is [`grilling`](../../../.claude/skills/grilling/SKILL.md) (`grill-me` is only its trigger).
+It works the plan as a design tree in ROUNDS — ask the whole settled frontier, wait, recompute — and
+**finding facts is your job, never the user's**: anything the plan chain, the code or the tools can answer is
+looked up, and only DECISIONS reach them.
 
 **Read these three first, in this order, and nothing here will surprise you:**
 

@@ -131,11 +131,26 @@ Never edit generated code manually.
   — the `AskUserQuestion` tool — AND ONLY THROUGH IT** (the user's call, 2026-09-06). Not a question buried
   in a paragraph of a reply, not a rhetorical _"I'll assume X"_, not a plan that quietly picks: a question
   in prose is one the user can read past without noticing they decided something, and the Ask Menu is what
-  makes a decision a decision. **Invoke the [`grill-me`](.claude/skills/grill-me/SKILL.md) skill and follow
-  it** — it carries the checklist (scope, who owns the value at runtime, derived-or-chosen, what it trades
-  against, how it is verified, what the operator sees, both surfaces, what it makes unrepeatable). The skill
-  lives in this repository because it exists in no catalog: searched 2026-09-06, neither the account's skills
-  nor the plugin marketplace has one, so it is ours and it is versioned with the code it governs.
+  makes a decision a decision. **Invoke the [`grilling`](.claude/skills/grilling/SKILL.md) skill and follow it**
+  — `grill-me` is only its trigger and carries `disable-model-invocation`, so the body is the one to run.
+  Both are vendored VERBATIM from [`mattpocock/skills`](https://github.com/mattpocock/skills) (MIT); see
+  [`SOURCE.md`](.claude/skills/grilling/SOURCE.md), and do not edit them so they can be re-copied when
+  upstream moves.
+  **How it works, because it is not a list of questions.** The plan is a DESIGN TREE and it is worked in
+  ROUNDS: ask every question whose prerequisites are already settled — the _frontier_ — together, wait, then
+  recompute. A question that depends on another still open belongs to a LATER round. **The Ask Menu takes
+  four at a time, so a wide frontier is several Menu calls inside ONE round, never several rounds.** It ends
+  when the frontier is empty, and _nothing is acted on until the user confirms the shared understanding_.
+  **Finding FACTS is the agent's job and never the user's** — anything the filesystem, the tools or the plan
+  chain can answer is looked up rather than asked; only DECISIONS go to the user. That is the skill's own
+  wording for the "research first" rule above, and it is the half that keeps grilling from becoming an
+  interrogation about things nobody should have to answer.
+  **The one deliberate deviation**: the skill prescribes a prose round (`❓` / `➡️`); this project requires
+  the Ask Menu instead, for the skill's own reason — a question the user can read past is a decision they
+  did not make.
+  **The checklist to grill against**, which is this repository's and not the skill's: scope; who owns the
+  value at runtime; derived-or-chosen; what it trades against; how it is verified; what the operator sees;
+  both surfaces; what it makes unrepeatable.
   **This is not a delay tactic and not a way to hand decisions back.** Do the research FIRST — the plan
   chain, the restrictions, the code — so the questions are few and informed: _a question you could have
   answered by reading wastes the user's time as surely as an unasked one costs a session._ Ask about what
