@@ -160,5 +160,64 @@
     "THIS_IS_THE_ANSWER": "The phone's `game-src/original` is a SA-MP INSTALL, not a clean stock copy — its `gta.dat` carries an `IPL SAMP\\samp.ipl` line. That is the class of difference behind every count in treeDisagreesWithDocBaselines reading HIGH against a documented 'stock' baseline.",
     "whatItDoesNotYetExplain": "The SA-MP line itself is UNRESOLVED, so it contributes zero rows — it proves the copy is not stock, it does not arithmetically account for the +138 inst rows over the doc. And modloader added 0, so that is not the source either. WHICH files carry the extra rows is still unlisted.",
     "whyItMatters": "Twofold. (1) A doc baseline labelled 'stock' is not a partner for any run on this device, which is now established rather than suspected. (2) 202 is a dispatch product FOR a SA-MP server, so the copy this repository's only game-data machine holds is the product's actual target rather than an accident."
+  },
+  "carmodsCheck": {
+    "what": "Does this tree's `carmods.dat` name a model no IDE row defines? The real game crashes at boot on one (0x007F0BF7).",
+    "dir": "game-src/original",
+    "result": "ok — every carmods.dat token has an IDE row",
+    "whyItMatters": "docs/restrictions/assets-and-data.md marks the DECLARED half of this class SILENT: the installer catches inheritance, nothing catches a declared part whose dummy is absent, and ModelVariations spawns traffic tuned so the crash needs nobody to visit a mod shop. Clean on the SA-MP install the phone holds.",
+    "toolWasAlreadyCorrect": "Requires an explicit game dir and refuses without one."
+  },
+  "toolsNotRunAndWhy": {
+    "pak-placement-parity": "Skipped deliberately. The phone's pak is built over ONE district (los-santos-centre), so 'uncovered' would be enormous by construction rather than by defect — the script's own header warns that a near-total miss is what a mismatched pair reports. It needs a whole-map pak to mean anything."
+  },
+  "twoDfxCensus": {
+    "what": "Which 2dfx entry types the authored models carry, by entries, models and payload size.",
+    "scope": "openGameArchive('original') — one game archive, not the whole tree.",
+    "modelsScanned": 14876,
+    "unreadable": 0,
+    "byType": {
+      "0 light": {
+        "entries": 2242,
+        "models": 317,
+        "payload": 80
+      },
+      "1 particle": {
+        "entries": 78,
+        "models": 49,
+        "payload": 24
+      },
+      "3 ped attractor": {
+        "entries": 909,
+        "models": 266,
+        "payload": 56
+      },
+      "6 enter/exit": {
+        "entries": 72,
+        "models": 65,
+        "payload": 44
+      },
+      "7 roadsign": {
+        "entries": 480,
+        "models": 203,
+        "payload": 88
+      },
+      "8 trigger point": {
+        "entries": 33,
+        "models": 7,
+        "payload": 4
+      },
+      "9 cover point": {
+        "entries": 14181,
+        "models": 1132,
+        "payload": 12
+      },
+      "10 escalator": {
+        "entries": 5,
+        "models": 4,
+        "payload": 40
+      }
+    },
+    "disagreesWithPlan100": "Plan 100 records roadsign as `WORLD, 489 of 489`, and the restriction built on it says 131 of 489 sit outside the cell of the instance carrying them. This tree reads 480. **The direction is OPPOSITE to every other disagreement today**, which all read HIGH — so 'this copy is bigger' does not explain it, and the SA-MP finding is a CLASS of difference rather than a full account. Plan 100 does not state its scan scope, so identical scopes are not established either."
   }
 }
