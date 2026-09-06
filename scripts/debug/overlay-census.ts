@@ -246,18 +246,31 @@ function radarFrame(ops: Operations, world: MinimapWorld, at: GtaGround): Minima
 function spreadProjector(width: number, height: number): ScreenProjector {
   let n = 0;
 
+  /** One placement, shared by both entry points so the two can never disagree about where a mark went. */
+  const place = (out: { depth: number; x: number; y: number }): boolean => {
+    const index = n++;
+    const angle = index * 2.399_963; // the golden angle — an even, non-repeating fill
+    const radius = Math.sqrt(index / 200) * Math.min(width, height) * 0.48;
+
+    out.depth = 200 + index;
+    out.x = width / 2 + Math.cos(angle) * radius;
+    out.y = height / 2 + Math.sin(angle) * radius;
+
+    return true;
+  };
+
+  // BOTH entry points, and the second is why this census was broken for a while: the overlay's per-unit
+  // path stopped allocating (201/9-08) and moved to `projectInto`, the stub still only had `project`, and
+  // nothing noticed because nothing ran this. A tool with no caller rots exactly this quietly.
   return {
     project: (): { depth: number; x: number; y: number } => {
-      const index = n++;
-      const angle = index * 2.399_963; // the golden angle — an even, non-repeating fill
-      const radius = Math.sqrt(index / 200) * Math.min(width, height) * 0.48;
+      const out = { depth: 0, x: 0, y: 0 };
+      place(out);
 
-      return {
-        depth: 200 + index,
-        x: width / 2 + Math.cos(angle) * radius,
-        y: height / 2 + Math.sin(angle) * radius,
-      };
+      return out;
     },
+    projectInto: (_x: number, _y: number, _z: number, out: { depth: number; x: number; y: number }): boolean =>
+      place(out),
   } as unknown as ScreenProjector;
 }
 

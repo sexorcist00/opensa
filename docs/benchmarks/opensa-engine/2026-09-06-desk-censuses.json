@@ -1,0 +1,86 @@
+{
+  "note": "TWO DESK CENSUSES, RUN FOR THE FIRST TIME. Both tools were registered in `docs/debug/README.md` and cited NOWHERE else — nobody had ever called them. The user asked, 2026-09-06, whether the repo carries instruments it is not using; these were the answer, and running them cost minutes where the questions they settle had been costing device rounds. NEITHER IS A TIMING: both drive the SHIPPED code over fakes and count what it ASKS FOR. Milliseconds belong to a device run (201/2-03).",
+  "date": "2026-09-06",
+  "howRun": "npx tsx scripts/debug/residency-census.ts --json … ; npx tsx scripts/debug/overlay-census.ts --json …",
+  "residency": {
+    "what": "Synthetic 41×41 grid of 250 u cells, HD 450 / LOD 2200, viewport 1600 px tall, LOD error 0.6415 u against a 2 px budget. Counts what the shipped StreamingDriver requests on its first update — not milliseconds, not bytes.",
+    "rows": [
+      {
+        "keptShare": 0.094,
+        "pose": "block · tilted",
+        "ringCells": 276,
+        "ringHd": 12,
+        "viewCells": 26,
+        "viewHd": 14
+      },
+      {
+        "keptShare": 0.304,
+        "pose": "district · tilted",
+        "ringCells": 276,
+        "ringHd": 12,
+        "viewCells": 84,
+        "viewHd": 0
+      },
+      {
+        "keptShare": 0.732,
+        "pose": "city · tilted",
+        "ringCells": 276,
+        "ringHd": 12,
+        "viewCells": 202,
+        "viewHd": 0
+      },
+      {
+        "keptShare": 0.058,
+        "pose": "block · plan",
+        "ringCells": 276,
+        "ringHd": 12,
+        "viewCells": 16,
+        "viewHd": 16
+      },
+      {
+        "keptShare": 0.217,
+        "pose": "district · plan",
+        "ringCells": 276,
+        "ringHd": 12,
+        "viewCells": 60,
+        "viewHd": 0
+      },
+      {
+        "keptShare": 0.638,
+        "pose": "city · plan",
+        "ringCells": 276,
+        "ringHd": 12,
+        "viewCells": 176,
+        "viewHd": 0
+      }
+    ],
+    "reading": "THE RING POLICY ASKS FOR 276 CELLS AT EVERY POSE — the view policy asks for 16 to 202 depending on where the camera is. At BLOCK zoom, which is where a dispatcher works, that is 26 against 276: the ring fetches roughly TEN TIMES what the view needs, and its keptShare of 0.094 is the share of those 276 the frame could actually see. At city zoom the two converge (0.732), which is the honest limit of the finding — the policy only pays where the camera is close.",
+    "whatItDoesNotSay": "Bytes, milliseconds or time-to-picture. A cell's cost depends on what is in it and this grid is synthetic and uniform on purpose: a policy that fetches half as many cells fetches half as many cells whatever they contain. Whether the saving is worth taking is a device question."
+  },
+  "overlay": {
+    "what": "A DESK COUNT, not a timing: the layers are driven with a stub 2D context that records calls. Board 150 units + 40 calls, 160 district boxes, 10 sketches of 8 points, radar 132 CSS px.",
+    "readings": {
+      "labelsDesk": {
+        "calls": 4042,
+        "ceiling": 1371,
+        "dropped": 80,
+        "placed": 110
+      },
+      "labelsPhone": {
+        "calls": 3552,
+        "ceiling": 152,
+        "dropped": 115,
+        "placed": 75
+      },
+      "radarRepaintCalls": 914,
+      "radarSkipCalls": 0,
+      "radarSkipped": true,
+      "sketchCalls": 422,
+      "sketchCallsPerShape": 42
+    },
+    "reading": "THE LABEL CAP IS NOT WHAT LIMITS LABELS — OVERLAP IS, on both surfaces. 190 marks are offered (150 units + 40 calls). On a desk 110 are placed and 80 dropped against a ceiling of 1 371, so the cap is nowhere near binding. On a phone 75 are placed and 115 dropped against a ceiling of 152 — still not binding, since 75 < 152. **Six names in ten do not reach a phone**, and raising the cap would change none of it.",
+    "radar": "The radar's dirty check WORKS, and this is the count that says so: 914 recorded calls on a repaint against 0 when it skips. Chain 4's worry — an inset that repaints every frame would defeat render-on-demand before it was built — does not happen.",
+    "sketches": "42 canvas calls per shape, at 8 points a shape."
+  },
+  "andOneOfThemWasBROKEN": "`overlay-census.ts` did not run at all: it threw `projector.projectInto is not a function`. The overlay's per-unit path stopped allocating in 201/9-08 and moved to `projectInto`; the census's stub projector still only had `project`, and nothing noticed because nothing ran it. That is the concrete cost of a registered tool with no caller — it rots silently, and the day it is finally needed it is a repair job rather than an answer. Fixed in the same change, with both entry points sharing one placement so they cannot drift again."
+}
