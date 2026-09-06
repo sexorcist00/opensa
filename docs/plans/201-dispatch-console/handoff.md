@@ -452,11 +452,25 @@ rgba8888 raster with EIGHT mip levels inside `gta3.img`. A real counterexample, 
 The script's own header is a third: it claims `Stock: 26 004 textures, 0 of either` against today's 26 126
 and 3.
 
-**None of the three was corrected in the docs, deliberately.** This tree reads HIGH against every baseline
-(+122 textures here), so a raster added to this copy explains all three as easily as a wrong doc does, and
-nothing separates them yet. **Establishing WHAT differs about this phone's `game-src/original` settles all of
-them at once, and it is the cheapest next thing in this area.** The tunnel dropped twice in that session;
-`npm run panel:tunnel` re-issues an address the session must be given by hand.
+**None of the three was corrected in the docs, deliberately** — and the reason is now known rather than
+suspected. `ipl-row-census` answered it the same evening: **the phone's `game-src/original` is a SA-MP
+INSTALL, not a clean stock copy.** Its `gta.dat` carries an `IPL SAMP\samp.ipl` line (unresolved, so it
+contributes no rows — it PROVES the copy is not stock rather than accounting for the extra), and modloader
+adds 0. **So a doc baseline labelled "stock" is not a partner for any run on this device**, which is why
+none of the disagreeing numbers was written into the docs as a correction.
+
+That matters twice: it retires the whole class of "the count is off" findings above, and it is not an
+accident worth fixing — [202](../202-pcad-dispatch/readme.md) is a dispatch product FOR a SA-MP server, so
+this copy is the product's actual target. **What is still unlisted is WHICH files carry the extra rows**
+(+138 `inst` rows against the doc's 9 268); the census reports the totals and the budget, not the diff.
+
+The rest of that census, for anyone budgeting map content: **9 406 rows / 32 767 int16 ceiling, 31 of 40
+IPL slots carrying inst rows, `within the stock budget`**, 52 IPL files counted.
+
+The tunnel dropped twice in that session; `npm run panel:tunnel` re-issues an address the session must be
+given by hand. **And the panel serves the code it started with** — the dependency-check fix landed in
+`65885fd2` and the device still reported the old wording after pulling it, exactly as the `debug` job did
+at the start of the day. Restart the panel after pulling anything under `tools-debug/phone-console/`.
 
 **And two DESK censuses were run for the first time on 2026-09-06 after sitting unused**
 ([the row](../../benchmarks/opensa-engine/2026-09-06-desk-censuses.json)): the ring residency policy asks for

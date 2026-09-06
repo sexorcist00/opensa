@@ -141,5 +141,24 @@
       "sunset01_lawn.txd: standardet1_LA 256x96 dxt1 mips=9"
     ],
     "whyNotFiledAsADocDefect": "Not corrected in the docs, because the cause is not established and this tree reads HIGH against every baseline (+122 textures here). A raster added to this copy explains all three as easily as a wrong doc does, and nothing separates them yet. Establishing WHAT differs about this game copy settles all of them at once — it is the cheapest next thing in this area."
+  },
+  "iplRowCensus": {
+    "what": "What a game costs against SA's permanent-placement ceilings: every text-IPL `inst` row and every gta.dat slot carrying one, including what modloader adds.",
+    "dir": "game-src/original (the phone's real install, a symlink to /storage/emulated/0/Download/New Folder)",
+    "iplFilesCounted": 52,
+    "carryingInstRows": 31,
+    "permanentTextInstRows": 9406,
+    "int16Ceiling": 32767,
+    "fromGtaDat": 9406,
+    "addedByModloader": 0,
+    "slotsCarryingInst": 31,
+    "slotCeiling": 40,
+    "verdict": "within the stock budget",
+    "unresolvedGtaDatIplLines": [
+      "SAMP\\\\samp.ipl"
+    ],
+    "THIS_IS_THE_ANSWER": "The phone's `game-src/original` is a SA-MP INSTALL, not a clean stock copy — its `gta.dat` carries an `IPL SAMP\\samp.ipl` line. That is the class of difference behind every count in treeDisagreesWithDocBaselines reading HIGH against a documented 'stock' baseline.",
+    "whatItDoesNotYetExplain": "The SA-MP line itself is UNRESOLVED, so it contributes zero rows — it proves the copy is not stock, it does not arithmetically account for the +138 inst rows over the doc. And modloader added 0, so that is not the source either. WHICH files carry the extra rows is still unlisted.",
+    "whyItMatters": "Twofold. (1) A doc baseline labelled 'stock' is not a partner for any run on this device, which is now established rather than suspected. (2) 202 is a dispatch product FOR a SA-MP server, so the copy this repository's only game-data machine holds is the product's actual target rather than an accident."
   }
 }
