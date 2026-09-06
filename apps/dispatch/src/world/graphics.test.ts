@@ -82,8 +82,16 @@ describe('graphics presets', () => {
       expect(initialPreset(undefined, storage)).toBe('smooth');
     });
 
-    it('ships on the rung the console has drawn since 2026-09-05', () => {
-      expect(settingsFor(DEFAULT_PRESET)).toEqual({ bloom: true, bloomScale: 0.5 });
+    // The operator's night verdict, 2026-09-05: no difference to the eye with the chain gone, and much
+    // smoother without it. A test rather than a constant nobody re-reads, because moving this back is a
+    // decision that has to be taken deliberately rather than by an edit that looks like a tidy-up.
+    it('ships with the bloom chain OFF, by the field verdict that released it', () => {
+      expect(settingsFor(DEFAULT_PRESET)).toEqual({ bloom: false, bloomScale: 0.5 });
+    });
+
+    it('keeps the released look one tap away rather than deleting it', () => {
+      expect(settingsFor('balanced')).toEqual({ bloom: true, bloomScale: 0.5 });
+      expect(settingsFor('full')).toEqual({ bloom: true, bloomScale: 1 });
     });
 
     it('round-trips every rung through the settings it stands for', () => {

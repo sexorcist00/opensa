@@ -3,14 +3,62 @@
   "app": "f91a688",
   "appNote": "the archive was rebuilt for this run and the stamp is clean, with no `+`: the tree was committed before the build. This is the first row taken on an app that reports pacing at all.",
   "build": "07:40 05-09-2026",
-  "pak": { "out": "./build/phone-cars", "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre", "reused": true },
+  "pak": {
+    "out": "./build/phone-cars",
+    "recipe": "MODELS=1 BAKE=1 TEXTURES=astc DISTRICT=los-santos-centre",
+    "reused": true
+  },
   "device": "MGA-LX3 / ARM Bifrost @ DPR 2, ?surface=720x640 pinned on both arms",
   "pose": "[1500,-1500] h900 pitch -1.15 yaw pi perspective",
   "board": "EMPTY (units=0&calls=0)",
   "route": {
     "warmup": "the rect's four corners, then the settle pose, before the first reading",
-    "legs": [[1380,-1620],[1620,-1380],[1380,-1380],[1620,-1620],[1380,-1500],[1620,-1500],[1500,-1620],[1500,-1380],[1380,-1620],[1620,-1380]],
-    "settle": [1500,-1500]
+    "legs": [
+      [
+        1380,
+        -1620
+      ],
+      [
+        1620,
+        -1380
+      ],
+      [
+        1380,
+        -1380
+      ],
+      [
+        1620,
+        -1620
+      ],
+      [
+        1380,
+        -1500
+      ],
+      [
+        1620,
+        -1500
+      ],
+      [
+        1500,
+        -1620
+      ],
+      [
+        1500,
+        -1380
+      ],
+      [
+        1380,
+        -1620
+      ],
+      [
+        1620,
+        -1380
+      ]
+    ],
+    "settle": [
+      1500,
+      -1500
+    ]
   },
   "howDerived": "per arm: the DELTA of the report's cumulative `frames` and `paceChanges` between a post-warmup reading and a post-route reading, so no boot frame is in any window and the rate is the window's own rather than the page's. paceChangeRate in the report is cumulative and is not what is quoted here.",
   "arms": [
@@ -37,7 +85,8 @@
     "headline": "44.6 % -> 7.9 % of consecutive frame pairs change pace. The bloom chain is not a marginal 2.4 ms item under a smoothness criterion; it is the difference between a console that stutters on nearly every other frame pair and one that almost never does.",
     "whyThisIsNotTheMeanRestated": "It is the same underlying frames, but the two numbers rank the change completely differently. The mean difference (2.43 ms in the earlier re-flight, 3.2 here) is at or under the instrument's ~2.5 ms floor and a row is not allowed to claim it. The stutter difference is 5.6x and needs no floor argument at all, because it is a count of events rather than a difference of averages.",
     "corroboration": "p95 34 against 18 on the same windows, and the live readout showed 60 fps on the nobloom arm where field sat at 49-50. The pacing number, the tail and the readout all move together.",
-    "whatItDoesNotSay": "Nothing about whether the map LOOKS acceptable without bloom. That is the operator's verdict and it has not been taken for removal — only for the half-resolution prefilter, at night, in 9-05. This row prices the option; it does not exercise it."
+    "whatItDoesNotSay": "ANSWERED THE SAME EVENING, and this field no longer stands. It read: 'Nothing about whether the map LOOKS acceptable without bloom. That is the operator's verdict and it has not been taken for removal.' It has now. Shown `night` against `nightnobloom` at hour 0 on the device — the two differing by the ablation alone — the operator's verdict was: no difference to the eye at all, and Full to Smooth makes the picture MUCH smoother. The hour is what makes it count: bloom can only lose a lit emitter where there is one lit, which is why the earlier prefilter verdict was taken at 22 and why a daylight A/B on this settles nothing. The console's default rung is `smooth` from that verdict; `full` and `balanced` stay in the menu, so the look is one tap away rather than gone, and the GAME keeps bloom since the verdict was taken at map zoom.",
+    "whatTheOperatorNoticedUNPROMPTED": "The smoothness, not the frame rate. The sentence was about the picture being smoother between two rungs, which is the axis this row exists to measure and the first time an operator has named it on their own. Worth recording because the mean says the same change is 2.4-3.2 ms — under the instrument's floor, a number no row may claim — and the operator saw it immediately."
   },
   "caveats": {
     "tabFreezes": "the console tab was frozen by Android several times during the field arm (it is backgrounded whenever anything else takes the screen). One freeze of 14.9 s landed in the field window and destroyed `paceWorstRatio` for it — 741 against nobloom's 7.2 — while adding 2 counts to 1 456, so `stutterRate` is unaffected and `paceWorstRatio` is NOT quoted for the field arm. A run where the phone is left alone would fix this.",

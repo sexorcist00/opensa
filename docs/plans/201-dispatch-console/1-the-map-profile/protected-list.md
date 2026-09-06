@@ -16,7 +16,7 @@ whole reason the list exists.
 | --- | --- | --- | --- | --- |
 | **Cars and peds drawn and animated** | `createVehicleModel` / `createVehicle`, `RigidEntity`, `IfpSampler` (`packages/engine/src/index.ts`); the pak's vehicle and ped dictionaries | units stay symbols forever; the pak profile drops the dictionaries because the console never asked for them | **silent** — [1/01](readme.md#01--the-inventory) measured a surface that draws no model, so its bytes table shows zero reads for exactly the entries [5/04](../5-symbology-and-picking-as-product/readme.md) will need | fewer models in the build, lower LOD, later streaming — never "the path is not there" |
 | **Vegetation sway** | baked per-vertex amplitudes (074/06 row 10) + `Environment.windStrength` (`engine.ts`, frame slot 60) | `windStrength: 0` — a still world that renders identically in a screenshot | **silent** in every automated check; only a field verdict sees it | amplitude scaled down on a phone, sway on fewer species — never the amplitudes stripped from the bake, which cannot be put back at runtime |
-| **The day/night cycle and timecyc** | `createEngineEnvironmentDriver` over the shared config→`Environment` path; the console's hour (`?hour=`, the slider, `applyHour` in `apps/dispatch/src/world/boot.ts`) | one baked hour, because the map "only ever shows daytime" | **caught** the moment anyone moves the hour, which chain 8 does by construction | fewer probe/relight updates per hour step ([env-probe cadence](../../../performance/deferred-optimizations/env-probe-cadence.md)) — never a fixed hour |
+| **The day/night cycle and timecyc** | `createEngineEnvironmentDriver` over the shared config→`Environment` path; the console's hour (`?hour=`, the slider, `applyHour` in `apps/dispatch/src/world/boot.ts`) | one baked hour, because the map "only ever shows daytime" | **caught** the moment anyone moves the hour, which chain 8 does by construction | fewer probe/relight updates per hour step ([env-probe cadence](../../../performance/applied/env-probe-cadence.md)) — never a fixed hour |
 > **One release, 2026-09-05, and it is the shape a release has to take.** The lit world's *emitters* were
 > what kept the bloom prefilter at full resolution (the 2026-08-12 attribution: *"at night that is every
 > street lamp and every headlight, and dimmer emissives are a protected-list item"*). 201/9-05 halved it on
@@ -25,9 +25,24 @@ whole reason the list exists.
 > one field, and **the operator looked at it and chose**. An item here is released by a field verdict and by
 > nothing else; the game keeps the full-res prefilter, since the verdict was taken at map zoom and the
 > refusal was written for a street camera.
+>
+> **And the SECOND release, the same day, which goes further than the first.** The operator was shown the
+> whole chain removed — `night` against `nightnobloom`, at hour 0 on the device, the two differing by
+> `?ablate=bloom` alone — and the verdict was: *"no difference to my eye at all, and Full → Smooth makes the
+> picture MUCH smoother"*. So the emitters that this row protected are, on this console at map zoom, not
+> worth what they cost: the measurement beside the verdict is **44.6 % of consecutive frame pairs stutter
+> against 7.9 %**, 5.6x
+> ([the row](../../../benchmarks/opensa-engine/2026-09-05-mobile-frame-pacing.json)). **It was taken at
+> NIGHT, which is the only place it counts** — the same reason the first release was, since bloom can only
+> lose a lit emitter where there is one lit.
+>
+> **What that releases and what it does not.** The console's DEFAULT rung becomes `smooth`, and the look the
+> refusal protected stays one tap away — `Full` and `Balanced` are still in the menu, so this is a default
+> moving rather than a capability going. The GAME is untouched, for the same reason as before: the verdict
+> was taken at map zoom on a dispatch console, and the refusal was written for a street camera.
 
 | **The weather mood and the lit world** | the timecyc mood the driver reads (`weather` param), the same lighting path the game uses | flat ambient, "it is a map, it does not need weather" | **silent** — it is a LOOK, and no test in this repo can see a look | a cheaper sky or fewer weather transitions — never an unlit world |
-| **Vehicle reflections** | `Environment.reflectionStrength` + `EnvProbe` (a `null` probe skips it entirely — `engine.ts`) | probe off on mobile "because it is a map" | **silent** — the fallback path renders, just duller | [cadence](../../../performance/deferred-optimizations/env-probe-cadence.md), smaller probe, fewer probed materials — never off |
+| **Vehicle reflections** | `Environment.reflectionStrength` + `EnvProbe` (a `null` probe skips it entirely — `engine.ts`) | probe off on mobile "because it is a map" | **silent** — the fallback path renders, just duller | [cadence](../../../performance/applied/env-probe-cadence.md), smaller probe, fewer probed materials — never off |
 | **One engine across PC and mobile** | the single build; `docs/restrictions/architecture.md` already carries the rule | a mobile-only branch in the renderer that quietly diverges from what the desktop draws | **caught** — it is a restriction with a lint/boundary story behind it | a BUDGET difference (resolution, cadence, ring sizes) — never a second code path |
 
 ## What is NOT protected, and why that is a decision rather than an omission

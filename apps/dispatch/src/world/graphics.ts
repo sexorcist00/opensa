@@ -12,8 +12,8 @@
  * | rung | what changes | measured |
  * | --- | --- | --- |
  * | `full` | prefilter at full resolution | the pre-2026-09-05 default. Its half-res replacement measured **−4.4 ms** and the operator chose it at night ([9-05](../../../../docs/plans/201-dispatch-console/9-the-mobile-frame/readme.md)) |
- * | `balanced` | prefilter at half resolution | what shipped 2026-09-05 and what the console has drawn since |
- * | `smooth` | no bloom chain at all | **44.6 % of frame pairs stutter → 7.9 %**, 5.6x ([the row](../../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-frame-pacing.json)) |
+ * | `balanced` | prefilter at half resolution | what shipped on 2026-09-05 morning, and the default until that evening |
+ * | `smooth` | no bloom chain at all | **44.6 % of frame pairs stutter → 7.9 %**, 5.6x ([the row](../../../../docs/benchmarks/opensa-engine/2026-09-05-mobile-frame-pacing.json)). **THE DEFAULT since 2026-09-05**, by the operator's night verdict: no difference to the eye, much smoother |
  *
  * **What is deliberately NOT here.** Resolution, sample count and scene format are the standing refusal
  * (the user's call, 2026-09-04): frame time may not be bought with resolution, sampling or anti-aliasing,
@@ -21,8 +21,6 @@
  * wanted — the pipelines are compiled against them at init — where these two rebuild the targets and
  * nothing else, which is why the whole ladder applies without a page load.
  */
-import type { RenderBudget } from '@opensa/engine';
-
 import type { JsonStorage } from '../map/storage';
 
 import { readJson, STORAGE_KEYS, writeJson } from '../map/storage';
@@ -40,8 +38,17 @@ export interface GraphicsSettings {
   readonly bloomScale: 0.5 | 1;
 }
 
-/** The rung the console ships on, and what an unreadable stored value falls back to. */
-export const DEFAULT_PRESET: GraphicsPreset = 'balanced';
+/**
+ * The rung the console ships on, and what an unreadable stored value falls back to.
+ *
+ * **`smooth`, by the operator's verdict of 2026-09-05** — the second of two that day, and the one that went
+ * further than the first. Shown the whole chain removed at NIGHT (`night` against `nightnobloom`, differing
+ * by the ablation alone), the answer was that there is no difference to the eye at all and that the picture
+ * is much smoother without it. Beside that verdict sits the measurement: **44.6 % of consecutive frame pairs
+ * stutter against 7.9 %**. The look it gives up is one tap away in `full` and `balanced`, so this is a
+ * default moving rather than a capability going ([the protected list](../../../../docs/plans/201-dispatch-console/1-the-map-profile/protected-list.md)).
+ */
+export const DEFAULT_PRESET: GraphicsPreset = 'smooth';
 
 const SETTINGS: Readonly<Record<GraphicsPreset, GraphicsSettings>> = {
   balanced: { bloom: true, bloomScale: 0.5 },
@@ -51,9 +58,9 @@ const SETTINGS: Readonly<Record<GraphicsPreset, GraphicsSettings>> = {
 
 /** What each rung is called and what it BUYS, in the operator's words rather than the renderer's. */
 export const PRESET_LABELS: Readonly<Record<GraphicsPreset, { detail: string; name: string }>> = {
-  balanced: { detail: 'Bloom at half resolution — what the console ships with', name: 'Balanced' },
+  balanced: { detail: 'Bloom at half resolution — the default until 2026-09-05', name: 'Balanced' },
   full: { detail: 'Bloom at full resolution — the most light, the least steady', name: 'Full' },
-  smooth: { detail: 'No bloom — steadiest frame, street lights stop glowing', name: 'Smooth' },
+  smooth: { detail: 'No bloom — steadiest frame, and what the console ships with', name: 'Smooth' },
 };
 
 /**
@@ -102,9 +109,4 @@ export function savePreset(preset: GraphicsPreset, storage?: JsonStorage): void 
 
 export function settingsFor(preset: GraphicsPreset): GraphicsSettings {
   return SETTINGS[preset];
-}
-
-/** Read the settings a URL pins, falling back to the budget the console booted with. */
-export function settingsFromBudget(budget: RenderBudget, bloomOn: boolean): GraphicsSettings {
-  return { bloom: bloomOn, bloomScale: budget.bloomPrefilterScale };
 }

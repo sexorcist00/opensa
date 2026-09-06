@@ -828,12 +828,19 @@ the top bar, beside the skin picker, with three rungs:
 | rung | what it does | what it buys |
 | --- | --- | --- |
 | **Full** | bloom, prefilter at full resolution | the most light; the least steady frame |
-| **Balanced** | bloom, prefilter at half resolution | what the console ships with |
-| **Smooth** | no bloom chain at all | **44.6 % of consecutive frame pairs stutter → 7.9 %** ([the row](../benchmarks/opensa-engine/2026-09-05-mobile-frame-pacing.json)) |
+| **Balanced** | bloom, prefilter at half resolution | the default until 2026-09-05 evening |
+| **Smooth** | no bloom chain at all | **44.6 % of consecutive frame pairs stutter → 7.9 %** ([the row](../benchmarks/opensa-engine/2026-09-05-mobile-frame-pacing.json)). **The default**, by the operator's night verdict |
 
 **All three apply live** — both levers rebuild the bloom targets and nothing else, so there is no reload, no
 confirm and no dialog. The choice is stored per browser and a `?graphics=` in the URL overrides it, so a
 shared link reproduces what its sender was looking at.
+
+**The default is `Smooth`, and it got there the only way a look decision may.** Shown the whole chain
+removed at night — `night` against `nightnobloom`, differing by the ablation alone — the operator's verdict
+was that there is **no difference to the eye at all**, and that the picture is **much smoother** without it.
+A protected-list item is released by a field verdict and by nothing else
+([the list](../plans/201-dispatch-console/1-the-map-profile/protected-list.md)), and the look it gives up is
+one tap away rather than gone.
 
 **Why a named ladder is allowed here when a silent one is not.** [201's decisions](../plans/201-dispatch-console/readme.md)
 forbid a quality ladder the console applies by itself — two operators seeing different worlds with neither
