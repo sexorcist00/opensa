@@ -21,7 +21,7 @@
  * and the dead `leveldes.ide` — see `docs/gta-sa-original/unloaded-map-data.md`. What this scan hunts is
  * the eighth.
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 interface Claim {
@@ -98,13 +98,21 @@ function collect(files: readonly string[], label: (path: string) => string): voi
 
 collect(idFiles(join(`game-src/${game}`, 'data')), () => 'STOCK');
 // One level of grouping (a layer) or none (a flat tree) — walk whatever holds the mod folders.
-for (const group of readdirSync(modsRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
+// A machine with no `mods-src` still has the STOCK answer, which the pass above has already collected —
+// so an absent mods tree is a named line rather than an `ENOENT` that throws the whole census away. The
+// phone is exactly that machine: it holds the game files and no mod sources (2026-09-06).
+const hasMods = existsSync(modsRoot);
+if (!hasMods) {
+  console.log(`${modsRoot}: not on this machine — stock only\n`);
+}
+const groups = hasMods ? readdirSync(modsRoot, { withFileTypes: true }) : [];
+for (const group of groups.filter((entry) => entry.isDirectory())) {
   const groupPath = join(modsRoot, group.name);
   const children = readdirSync(groupPath, { withFileTypes: true }).filter((entry) => entry.isDirectory());
-  const mods = ['common', 'opensa', 'sa'].includes(group.name.toLowerCase())
+  const modDirs = ['common', 'opensa', 'sa'].includes(group.name.toLowerCase())
     ? children.map((mod) => join(groupPath, mod.name))
     : [groupPath];
-  for (const mod of mods) {
+  for (const mod of modDirs) {
     collect(idFiles(mod), (path) => `${relative(modsRoot, mod)} :: ${relative(mod, path)}`);
   }
 }
