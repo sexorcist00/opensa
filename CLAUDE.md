@@ -163,6 +163,15 @@ Never edit generated code manually.
   **A question that genuinely cannot be asked becomes an EXPLICIT assumption** — stated in the reply and in
   the code comment, where the next reader can find and challenge it. A silent assumption is a defect.
 
+- **SIX MORE SKILLS COME FROM THAT SAME REPO, AND EACH ONE HAS A PLACE WHERE THIS PROJECT OVERRULES IT.**
+  `codebase-design`, `diagnosing-bugs`, `handoff`, `research`, `tdd`, `writing-for-agents` are vendored
+  verbatim at the same commit (the user's selection, 2026-09-06). Their descriptions load themselves; the
+  deviations do NOT, and they are in [`.claude/skills/SOURCE.md`](.claude/skills/SOURCE.md) together with
+  what was declined and why. **Read that file before running one of the six** — the expensive one is
+  `handoff`, which tells you to save the document to the OS temp directory: here it goes to the active
+  plan's folder, because a container's temp folder does not survive the session and the repo is the only
+  memory agents share. `writing-for-agents` is the one to read before editing THIS file.
+
 - **SEVERAL AI AGENTS WORK ON THIS PROJECT, AND THEY SWAP. The repo is the only shared memory they have —
   so START EVERY SESSION BY READING THE CHAIN BELOW, IN THIS ORDER, BEFORE PLANNING OR WRITING ANYTHING.**
   An agent that skips it does not merely lack context: it re-decides a settled question, re-lands work that
