@@ -18,9 +18,29 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
 import { parseDff } from '@opensa/renderware/parsers/binary/dff';
 import { buildVehicleModel } from '@opensa/renderware/vehicle/build-vehicle-model';
 import { VehicleTextures } from '@opensa/renderware/vehicle/textures';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const IMG = process.argv[2] ?? 'build/original/opensa/models/gta3.img';
+import { gameArg, gameDir } from '../lib/game';
+
+/**
+ * The archive: an explicit path, else the BUILT tree, else the stock one this variant ships.
+ *
+ * **The fallback is the point.** The default named a built `opensa` tree alone, and the only machine holding
+ * game files never produces one — so the census died on an unguarded `readFileSync` instead of reading the
+ * stock archive sitting beside it (2026-09-06, the phone). Same resolution `alpha-class-census` already used,
+ * including the refusal that names the flag to pass.
+ */
+const IMG =
+  process.argv[2] ??
+  [join('build', gameArg(), 'opensa', 'models', 'gta3.img'), gameDir(gameArg(), 'models', 'gta3.img')].find((path) =>
+    existsSync(path),
+  );
+if (IMG === undefined) {
+  throw new Error(
+    `no gta3.img found for game '${gameArg()}' — pass one: npx tsx scripts/debug/lamp-census.ts <path.img>`,
+  );
+}
 const ZERO = 1e-6;
 
 interface Fixture {
