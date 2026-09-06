@@ -1,0 +1,34 @@
+{
+  "note": "TWO OPTIMISATION LEVERS PRICED WITHOUT FLYING ANYTHING. Both count WORK rather than time, which is the only kind of number this device can still answer: under a vsync lock `dtMean` is a MISS RATE and a GPU lever below the floor is invisible by construction (201 handoff 3.1b/3.2). Neither figure is a timing.",
+  "date": "2026-09-06",
+  "residencyCensus": {
+    "what": "What the shipped StreamingDriver ASKS FOR per pose — ring policy against view policy — over a fake engine and worker on a synthetic grid.",
+    "howRun": "npx tsx scripts/debug/residency-census.ts (desk; no pak, no GPU, no device)",
+    "reproduced": "Re-run on the desk today and it returned all six poses IDENTICAL to the 2026-09-06 desk-censuses row. The census is deterministic, so those numbers are not a one-off.",
+    "theLever": "The ring policy asks for 276 cells at EVERY pose. The view policy asks 16-202 depending on where the camera is.",
+    "biggestAtBlockZoom": "block · plan is 16 against 276 — keptShare 0.058, ~17x. block · tilted is 26 against 276 (0.094). Block zoom is where a dispatcher actually works.",
+    "smallestAtCityZoom": "city · tilted converges at 0.732 — the policy only pays where the camera is close.",
+    "THE_CATCH": "The view policy is NOT strictly cheaper. It asks for MORE HD near the camera: 16 HD against the ring's 12 at block · plan, and 14 against 12 at block · tilted. It redistributes rather than only removing, so the saving is in the total set and the HD request grows.",
+    "status": "Whether to take it is a DEVICE question and a decision for the user. That it exists is measured."
+  },
+  "textureBudget": {
+    "what": "What a pak costs the GPU (the decoded pyramid via the runtime's own ostexLayerBytes) against what it costs on disk, priced in every format.",
+    "howRun": "phone_run debug SCRIPT=texture-budget ARGS=build/phone-cars/pak",
+    "pak": "build/phone-cars/pak, built 07:40 05-09-2026, MODELS=1, ASTC",
+    "cellEntries": 8,
+    "arrays": 20,
+    "layers": 619,
+    "texelsAtMip0": "18.8 M",
+    "onDiskDeflatedMB": 15.7,
+    "residentAllArraysAtOnceMB": 25.4,
+    "sameContentAs": {
+      "BC1 / ETC2 RGB8 / ASTC 8x8": 12.0,
+      "ASTC 4x4 / ETC2 RGBA8 / BC3": 24.0,
+      "RGBA8 (a no-BC device today)": 95.9
+    },
+    "layersByLongestEdge": {"256": 272, "128": 171, "64": 132, "32": 38, "16": 2, "4": 4},
+    "crossChecksAgainstTheField": "The model says 25.4 MB; the 2026-08-12 ASTC field capture measured the texture category at 25.81 MB. Agreement to 0.4 MB, so this calculation can be used to decide without flying.",
+    "verdict": "ON THIS DISTRICT, TEXTURES ARE NOT THE CONSTRAINT. 25.4 MB against a 300-500 MB residency ceiling, inside a total measured residency of ~76 MB. The ASTC 8x8 lever (halving to 12.0 MB) buys headroom nobody is short of, and pays for it in quality.",
+    "whatItDoesNotAnswer": "The pak is EIGHT cells. The script's own note says the GPU figure is every array resident at once — the ceiling a FULL-MAP decision is made on — and a whole-map pak is what would test it. Nothing here scales the 25.4 MB to the full map; that needs the pak, not arithmetic."
+  }
+}
