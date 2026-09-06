@@ -207,6 +207,31 @@ describe('phone console doctor', () => {
   });
 
   describe('positive cases', () => {
+    it('passes when the only absent packages are other platforms optional builds', async () => {
+      // 2026-09-06, minutes after the content check shipped: the phone reported `172 package(s) differ`,
+      // every one an `@esbuild/<os>-<cpu>` build for a machine it is not. A lockfile lists the whole platform
+      // matrix and npm installs one of it, so comparing them is a false alarm that — unlike the mtime one
+      // this replaced — would never clear.
+      const checks = await runChecks(
+        probe({
+          readJson: async (path) =>
+            path === 'package-lock.json'
+              ? {
+                  packages: {
+                    'node_modules/@esbuild/aix-ppc64': { optional: true, version: '0.27.7' },
+                    'node_modules/tsx': { version: '4.0.0' },
+                  },
+                }
+              : path === 'node_modules/.package-lock.json'
+                ? { packages: { 'node_modules/tsx': { version: '4.0.0' } } }
+                : { build: { at: '2026-08-23', textures: 'astc' } },
+        }),
+        TARGET,
+      );
+
+      expect(find(checks, 'deps').state).toBe('ok');
+    });
+
     it('passes a lockfile git rewrote without changing a version', async () => {
       // 2026-09-06: a revert restored `package-lock.json` byte for byte, which made it NEWER than the
       // installed tree, and the mtime check failed the device claiming "a pull added dependencies" — then

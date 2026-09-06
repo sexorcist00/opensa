@@ -375,6 +375,14 @@ function since(ms) {
  * `null` when there is no installed tree to compare against — that is "not installed", a different verdict.
  * Only `node_modules/` keys are compared: the lockfile's root entry describes the workspace itself and npm's
  * hidden lockfile does not carry it, so including it would report drift on every machine forever.
+ *
+ * **`optional` entries are skipped, and that is not a loophole.** A lockfile lists every platform build of a
+ * package — `@esbuild/aix-ppc64`, `@esbuild/android-arm`, `darwin-x64` and so on — each `optional` with its
+ * own `os`/`cpu`, and npm installs only the one this machine needs. Comparing them reported **172 packages
+ * differ** on the phone the first time this check ran, none of which will ever be installed there: a false
+ * alarm that, unlike the mtime one it replaced, would never clear. Deciding WHICH platform build is owed is
+ * npm's job and re-deriving it here would be a second copy of that rule, wrong the day a package changes its
+ * matrix. What the check is for — a REQUIRED dependency a pull added and the tree has not got — is unaffected.
  */
 function lockDrift(wanted, installed) {
   if (installed === null || installed === undefined) {
@@ -385,5 +393,6 @@ function lockDrift(wanted, installed) {
 
   return Object.keys(want)
     .filter((key) => key.startsWith('node_modules/') && want[key]?.version !== undefined)
+    .filter((key) => want[key].optional !== true)
     .filter((key) => want[key].version !== have[key]?.version);
 }
