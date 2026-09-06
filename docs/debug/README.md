@@ -6,6 +6,27 @@ how to run it). Throwaway experiments run as `scripts/debug/.tmp-*.ts` (inside t
 path aliases resolve) and are deleted after; the moment one earns its keep, it is renamed, linted and
 documented here in the same change.
 
+## Running these on the phone
+
+**62 of the 100 scripts below read GAME DATA, and the phone is the only machine that has any.** Until
+2026-09-06 none of them was reachable from an agent session: the phone answers on a panel that runs a fixed
+job list rather than a command, and that is a security boundary — it sits one bearer token from the open
+internet, and a job taking a command off the wire would be a shell on somebody's phone.
+
+The `debug` job reaches all 100 without widening it. The script NAME is a knob matched against
+`^[a-z0-9-]+$` and then checked against the real directory by
+[`debug-run.mjs`](../../tools-debug/phone-console/debug-run.mjs), which spawns the child with an argument
+ARRAY and no shell — a semicolon in a name or an argument is a character, never a separator. Nothing off the
+wire is concatenated into a command line.
+
+```
+phone_run debug   SCRIPT=ide-flag-histogram
+phone_run debug   SCRIPT=alpha-class-census   ARGS=--json out.json
+```
+
+**The panel must be restarted before a new job appears** — it serves the table it started with
+([the restriction](../restrictions/architecture.md)).
+
 ## The triage method
 
 Field bugs are traced to data BEFORE any code is touched (plans 084/085 proved the order):

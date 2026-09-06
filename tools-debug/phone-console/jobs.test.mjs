@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildJob, JobRunner, mapOnlyOut } from './jobs.mjs';
+import { buildJob, JobRunner, JOBS, mapOnlyOut } from './jobs.mjs';
 
 /** A runner over this repository, collecting what it printed. */
 function runner() {
@@ -31,9 +31,34 @@ const STAYS = {
 
 describe('phone console jobs', () => {
   describe('negative cases', () => {
+    // The job list is a SECURITY boundary, not a menu. This panel answers on a tunnel that is one bearer
+    // token away from the open internet, and every job's args are fixed in source for that reason: a job
+    // taking a command off the wire would be a shell on somebody's phone. The assertion below pins the whole
+    // list precisely so that adding one is a deliberate act with a diff, and this is the note saying why it
+    // must stay that way.
+    it('will not let a debug run name anything but a bare script', () => {
+      // `debug-run.mjs` checks the name against the real directory as well; this is the half that stops a
+      // traversal ever reaching it, and it is the reason the args below stay fixed.
+      for (const nasty of ['../../etc/passwd', 'a;b', 'a b', './x', '..']) {
+        expect(buildJob('debug', { SCRIPT: nasty }).env.SCRIPT).toBeUndefined();
+      }
+      expect(buildJob('debug', { SCRIPT: 'residency-census' }).env.SCRIPT).toBe('residency-census');
+    });
+
+    it('takes no argument off the wire into any command it runs', () => {
+      for (const id of Object.keys(JOBS)) {
+        const job = buildJob(id, { DISTRICT: '; rm -rf ~', OUT: '$(whoami)' });
+
+        // The INJECTED markers, not the substrings: `webapp` legitimately carries `rm -rf` in its own
+        // fixed args, and asserting on that would fail an honest job while catching nothing.
+        expect(job.args.join(' ')).not.toContain('; rm -rf ~');
+        expect(job.args.join(' ')).not.toContain('$(whoami)');
+      }
+    });
+
     it('refuses a job it does not have, and names the ones it does', () => {
       expect(() => buildJob('rm-rf')).toThrow(
-        /unknown job 'rm-rf' — known: districts, main, map, map3d, open, phone, pull, rebase, setup, share, sirv, webapp/,
+        /unknown job 'rm-rf' — known: debug, districts, main, map, map3d, open, phone, pull, rebase, setup, share, sirv, webapp/,
       );
     });
 

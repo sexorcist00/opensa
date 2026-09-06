@@ -53,6 +53,28 @@ export const MAP_ONLY = { BAKE: '0', MODELS: '0' };
 
 /** What the panel can run. `long` jobs hold the terminal (they serve), so the page shows a stop button. */
 export const JOBS = {
+  /**
+   * Run ONE of the repository's registered debug scripts, on the machine that has the game.
+   *
+   * **62 of the 100 scripts in `scripts/debug/` read game data**, and this phone is the only machine that
+   * has any — so until 2026-09-06 the majority of the repo's diagnostic power could not be reached from a
+   * session at all. The user granted the widening; this is the shape that takes it without turning the
+   * tunnel into a shell.
+   *
+   * **The boundary is unchanged and that is the point.** The args below are FIXED. What varies is a knob,
+   * matched against `^[a-z0-9-]+$` here and checked against the real directory by `debug-run.mjs`, which
+   * then spawns the child with an argument ARRAY and no shell — so a semicolon in a name or an argument is
+   * a character, never a separator. Nothing off the wire is ever concatenated into a command line.
+   *
+   * `long` because a census over a whole IMG archive is minutes, not seconds.
+   */
+  debug: {
+    args: ['tools-debug/phone-console/debug-run.mjs'],
+    command: 'node',
+    knobs: { ARGS: /^[\w\s.\-/=,]*$/u, SCRIPT: /^[a-z0-9-]+$/u },
+    label: 'run a registered debug script against the real game',
+    long: true,
+  },
   districts: {
     args: ['node_modules/tsx/dist/cli.mjs', 'scripts/district.ts'],
     command: 'node',
