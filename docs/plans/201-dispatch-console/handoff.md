@@ -396,8 +396,11 @@ job list, which is a security boundary (it answers on a tunnel one bearer token 
 and checked against the real directory; the child is spawned with an argument array and no shell. Nothing
 off the wire is concatenated into a command line, so the boundary did not move.
 
-**SEVEN OF THE 62 HAVE NOW BEEN RUN (2026-09-06). FOUR NEEDED FIXING BEFORE THEY WOULD RUN AT ALL**, and
-the first three of those died before printing anything.** Not on the
+**THIRTEEN OF THE 62 HAVE NOW BEEN RUN (2026-09-06). FOUR NEEDED FIXING BEFORE THEY WOULD RUN AT ALL** —
+`dat-order-check`, `mod-id-collisions`, `lamp-census`, `uv-anim-measure` — and eight were confirmed already
+correct. **Every data verdict came back CLEAN**: 0 late definitions, 0 out-of-range LOD links, 0 unaligned
+DXT, `carmods-check` ok, IPL rows within the stock budget. **The tools found their own infrastructure and
+their own documentation, not defects in the data.** Not on the
 game data — on a DIRECTORY the phone does not have and never will: `dat-order-check` defaults to
 `build/original/sa`, a desk build this device never produces, and `mod-id-collisions` walks
 `mods-src/original/mods`, which it does not carry. Both threw an unguarded `ENOENT`. The first died before
