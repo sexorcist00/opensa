@@ -396,7 +396,8 @@ job list, which is a security boundary (it answers on a tunnel one bearer token 
 and checked against the real directory; the child is spawned with an argument array and no shell. Nothing
 off the wire is concatenated into a command line, so the boundary did not move.
 
-**THREE OF THE 62 HAVE NOW BEEN RUN (2026-09-06), AND TWO OF THEM DIED BEFORE PRINTING ANYTHING.** Not on the
+**SEVEN OF THE 62 HAVE NOW BEEN RUN (2026-09-06). FOUR NEEDED FIXING BEFORE THEY WOULD RUN AT ALL**, and
+the first three of those died before printing anything.** Not on the
 game data — on a DIRECTORY the phone does not have and never will: `dat-order-check` defaults to
 `build/original/sa`, a desk build this device never produces, and `mod-id-collisions` walks
 `mods-src/original/mods`, which it does not carry. Both threw an unguarded `ENOENT`. The first died before
@@ -419,9 +420,29 @@ is EIGHT rather than the documented seven (the extra is `id 1`, `csplay` against
 reads 9 406 rows where the doc records 9 268 — same verdict, different count, so two different copies of
 `game-src/original` rather than a before/after. And plan 039 cites `scripts/ide-flag-histogram.ts`, a path
 with **ZERO commits in this repository's history**, so its 14 323-def table may not be subtracted from today's
-run. **Next up and not yet run:** `alpha-class-census` (the alpha class of every texture, which decides the
-pass it is drawn in) — note its archive default is `build/<game>/sa/models/gta3.img`, so expect the class
-above.
+run. **The rest of the seven, and the pattern they make.** `lamp-census` (fixed, then 26 models with no standard
+lamp material, 0 carrying `ivflights`), `lod-link-check` (**6 108 links, 0 out of range** — its seven
+`farther than 20 u` are stock `BillBd*` billboards, and the README already calls 20 u the FLOOR of what it
+guarantees), `txd-dimension-census` (**2 760 dictionaries, 26 126 textures, ZERO unaligned DXT** — the class
+that silently kills a whole dictionary is clean) and `alpha-class-census` (**395 of 26 126 left in the blend
+pass**; NOT headroom — `candidate` is the rule that ALREADY ships and the shipped classification is the UNION
+of the two).
+
+**READ THIS BEFORE COMPARING ANYTHING TO A DOC.** Every tool's verdict matched its doc and every COUNT
+disagreed: `dat-order-check` 9 406 against 9 268, `lod-link-check` 6 108 against 6 103, and
+`txd-dimension-census` **3 NPOT against a restriction stating stock has 0**. The two comparable to themselves
+both read HIGH, so this phone's `game-src/original` carries slightly MORE than the copy every baseline was
+taken on. What differs is NOT established, and establishing it is the cheapest next thing here — until then a
+doc baseline is not a before/after partner for a run on this device.
+
+**Three tools were already correct** and are the model to copy: `alpha-class-census` (archive through
+`.find(existsSync)`, refusal naming `--img`), `lod-link-check` (guards `data/gta.dat`, exits 1 with a usage
+line) and `two-dfx-census`. **Three suspects remain untested** — a built-tree default and no `existsSync` at
+all: `dump-texel-avg`, `uv-anim-measure`, `dump-osm-meta`.
+
+**One run is owed:** `txd-dimension-census --npot`, to NAME the three. It died when the phone's tunnel
+dropped before printing, and the tunnel dropped twice in that session — `npm run panel:tunnel` re-issues an
+address the session must be given by hand.
 
 **And two DESK censuses were run for the first time on 2026-09-06 after sitting unused**
 ([the row](../../benchmarks/opensa-engine/2026-09-06-desk-censuses.json)): the ring residency policy asks for
