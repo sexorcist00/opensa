@@ -471,7 +471,10 @@ The rest of that census, for anyone budgeting map content: **9 406 rows / 32 767
 IPL slots carrying inst rows, `within the stock budget`**, 52 IPL files counted.
 
 The tunnel dropped twice in that session; `npm run panel:tunnel` re-issues an address the session must be
-given by hand. **And the panel serves the code it started with** — the dependency-check fix landed in
+given by hand. **The panel's own dependency check was fixed twice and is GREEN on the device** — it compared
+mtimes and asserted a cause, then compared content and called 172 other-platform `optional` builds drift; it
+skips those now, and `phone_state` reads `ready`. Each round needed a panel restart to be seen, which is the
+next sentence. **And the panel serves the code it started with** — the dependency-check fix landed in
 `65885fd2` and the device still reported the old wording after pulling it, exactly as the `debug` job did
 at the start of the day. Restart the panel after pulling anything under `tools-debug/phone-console/`.
 
