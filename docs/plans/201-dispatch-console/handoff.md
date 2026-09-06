@@ -11,6 +11,12 @@ points at.
 
 ## 0. Where the next session starts
 
+**BEFORE ANY OF IT: you do not implement anything until you have questioned the user through the Ask Menu.**
+That is a standing project rule as of 2026-09-06 (`CLAUDE.md`, first of the workflow rules) and it has its
+own skill, [`grill-me`](../../../.claude/skills/grill-me/SKILL.md), which carries the checklist. Research
+first so the questions are few and informed — a question you could have answered by reading wastes the
+user's time as surely as an unasked one costs a session — then ask about what only they know.
+
 **Read these three first, in this order, and nothing here will surprise you:**
 
 1. **§3.1b** — `dtMean` on this device is a MISS RATE, not a cost. The frame is pinned to the display

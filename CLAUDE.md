@@ -127,6 +127,27 @@ Never edit generated code manually.
 
 ## Standing Workflow Rules
 
+- **NOTHING IS IMPLEMENTED BEFORE THE USER HAS BEEN QUESTIONED, AND EVERY QUESTION GOES THROUGH THE ASK MENU
+  — the `AskUserQuestion` tool — AND ONLY THROUGH IT** (the user's call, 2026-09-06). Not a question buried
+  in a paragraph of a reply, not a rhetorical _"I'll assume X"_, not a plan that quietly picks: a question
+  in prose is one the user can read past without noticing they decided something, and the Ask Menu is what
+  makes a decision a decision. **Invoke the [`grill-me`](.claude/skills/grill-me/SKILL.md) skill and follow
+  it** — it carries the checklist (scope, who owns the value at runtime, derived-or-chosen, what it trades
+  against, how it is verified, what the operator sees, both surfaces, what it makes unrepeatable). The skill
+  lives in this repository because it exists in no catalog: searched 2026-09-06, neither the account's skills
+  nor the plugin marketplace has one, so it is ours and it is versioned with the code it governs.
+  **This is not a delay tactic and not a way to hand decisions back.** Do the research FIRST — the plan
+  chain, the restrictions, the code — so the questions are few and informed: _a question you could have
+  answered by reading wastes the user's time as surely as an unasked one costs a session._ Ask about what
+  ONLY the user knows — intent, priority, the product, which trade they want, what "good" looks like.
+  **Why this rule exists is written in the record rather than asserted**: the expensive failures here were
+  never bad code, they were good code built on an unasked question — a change that shipped completely INERT
+  with every test green, an A/B that ran a full day with both halves identical, an agent sent after 13 ms
+  that do not exist, a branch carrying real work for four days beside a `main` that had already solved it
+  better. Each cost a session. Each was one question away.
+  **A question that genuinely cannot be asked becomes an EXPLICIT assumption** — stated in the reply and in
+  the code comment, where the next reader can find and challenge it. A silent assumption is a defect.
+
 - **SEVERAL AI AGENTS WORK ON THIS PROJECT, AND THEY SWAP. The repo is the only shared memory they have —
   so START EVERY SESSION BY READING THE CHAIN BELOW, IN THIS ORDER, BEFORE PLANNING OR WRITING ANYTHING.**
   An agent that skips it does not merely lack context: it re-decides a settled question, re-lands work that
@@ -150,8 +171,8 @@ Never edit generated code manually.
 
 - **SUPERPOWERS IS DECLARED IN `.claude/settings.json`, AND THIS FILE OUTRANKS IT.** The plugin
   (`obra/superpowers`, 14 skills, ~688 always-on tokens) ships a `SessionStart` hook that injects its
-  `using-superpowers` skill as an `<EXTREMELY_IMPORTANT>` block demanding a skill be invoked *before any
-  response* — before the reading order above, and before a clarifying question. **Read the chain first
+  `using-superpowers` skill as an `<EXTREMELY_IMPORTANT>` block demanding a skill be invoked _before any
+  response_ — before the reading order above, and before a clarifying question. **Read the chain first
   anyway**: the hook is a plugin's opinion, this file is the project's, and where they disagree
   **CLAUDE.md wins on plans, documentation and branches**:
   - a plan goes to `docs/plans/NNN-*/readme.md` (the `2xx` block) or `tools/<tool>/docs/plans/` — NEVER to
@@ -166,8 +187,13 @@ Never edit generated code manually.
   - `using-git-worktrees` is a desktop assumption. The development machine is a phone
     ([termux.md](docs/development/termux.md)) and `main` is the only branch that survives — a worktree is
     allowed, but it does not change where the work lands or who deletes the remote branch
+  - **`brainstorming` does NOT replace [`grill-me`](.claude/skills/grill-me/SKILL.md), and where they
+    overlap the project's own skill wins.** Both ask the user things before work starts; only one of them is
+    required, names the Ask Menu as the only channel, and carries this repository's checklist. Run
+    `grill-me` first and always; `brainstorming` afterwards is a way to open up a direction, never the thing
+    that satisfies the rule
   - the skills that carry no project rule are welcome unchanged: `systematic-debugging`,
-    `test-driven-development`, `brainstorming`, `requesting-code-review` / `receiving-code-review`,
+    `test-driven-development`, `requesting-code-review` / `receiving-code-review`,
     `dispatching-parallel-agents`, `verification-before-completion`, `executing-plans`,
     `subagent-driven-development`, `writing-skills`
   - **it is NOT available out of the box.** A fresh web container has no marketplace and no plugin, and
