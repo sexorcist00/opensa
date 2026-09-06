@@ -13,7 +13,7 @@ import { openArchive } from '@opensa/renderware/archive/img-archive';
  * The observed gaps carry ±one sampling tick: at 120 Hz an authored 0.225 s reads as 0.2167–0.2333.
  * Run: `npx tsx scripts/debug/uv-anim-measure.ts [modelName] [--pak build/original/opensa] [--hz 120]`.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 interface Fixture {
   uvAnimations?: { duration: number; keyframes: { time: number; uv: number[] }[]; name: string }[];
@@ -25,7 +25,20 @@ const flag = (name: string, fallback: string): string => {
 
   return at === -1 ? fallback : args[at + 1];
 };
-const pak = flag('pak', 'build/original/opensa');
+/**
+ * The pak whose `models/gta3.img` this reads, from `--pak`, else the built tree, else the stock archive.
+ *
+ * **The fallback is the point.** It named a built `opensa` tree alone, and the only machine holding game
+ * files never produces one — so an unguarded `readFileSync` threw `ENOENT` where the stock archive was
+ * sitting beside it (2026-09-06, the phone; fourth tool of this class in one session). Same resolution
+ * `alpha-class-census` and `lamp-census` use, including a refusal that NAMES the flag to pass.
+ */
+const pak =
+  flag('pak', '') || ['build/original/opensa', 'game-src/original'].find((dir) => existsSync(`${dir}/models/gta3.img`));
+if (pak === undefined) {
+  console.error('no models/gta3.img found — pass one: npx tsx scripts/debug/uv-anim-measure.ts [model] --pak <dir>');
+  process.exit(1);
+}
 const hz = Number(flag('hz', '120'));
 const model =
   args.find((arg, index) => !arg.startsWith('--') && !args[index - 1]?.startsWith('--')) ?? 'ferriswheel_lights';

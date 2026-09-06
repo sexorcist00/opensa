@@ -219,5 +219,26 @@
       }
     },
     "disagreesWithPlan100": "Plan 100 records roadsign as `WORLD, 489 of 489`, and the restriction built on it says 131 of 489 sit outside the cell of the instance carrying them. This tree reads 480. **The direction is OPPOSITE to every other disagreement today**, which all read HIGH — so 'this copy is bigger' does not explain it, and the SA-MP finding is a CLASS of difference rather than a full account. Plan 100 does not state its scan scope, so identical scopes are not established either."
+  },
+  "theClassClosed": {
+    "what": "A debug tool whose default names a tree this machine does not have, read UNGUARDED, so it dies with a stack trace instead of a sentence.",
+    "confirmedBroken": [
+      "dat-order-check",
+      "mod-id-collisions",
+      "lamp-census",
+      "uv-anim-measure"
+    ],
+    "alreadyCorrect": [
+      "alpha-class-census",
+      "lod-link-check",
+      "two-dfx-census",
+      "carmods-check",
+      "dump-osm-meta",
+      "dump-texel-avg",
+      "ipl-row-census",
+      "txd-dimension-census"
+    ],
+    "theFixShape": "An explicit path, else the BUILT tree, else the stock one this variant ships, and a refusal that NAMES what to pass. `alpha-class-census` already had it; the three fixes copy it.",
+    "myHeuristicWasWrong": "The suspects were picked by `grep -c existsSync == 0` plus a built-tree default. Of the three that predicted, ONE was broken (`uv-anim-measure`) and TWO were fine: `dump-osm-meta` and `dump-texel-avg` validate their required argument BEFORE touching the archive, so they never reach the missing path. Two false positives in three — the heuristic locates candidates, it does not diagnose, and each one still has to be RUN. Recorded because the next agent will otherwise trust the same grep."
   }
 }
