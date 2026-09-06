@@ -396,11 +396,32 @@ job list, which is a security boundary (it answers on a tunnel one bearer token 
 and checked against the real directory; the child is spawned with an argument array and no shell. Nothing
 off the wire is concatenated into a command line, so the boundary did not move.
 
-**None of the 62 has been run.** That is the cheapest unexplored ground in this repository — the tools exist,
-they are registered, and the machine that can answer them is in the user's hand. Three worth taking first:
-`ide-flag-histogram` (which authored IDE bits are even present to honour), `dat-order-check` (does any `inst`
-row place a model whose IDE `gta.dat` lists later — a correctness question about the shipped data), and
-`alpha-class-census` (the alpha class of every texture, which decides the pass it is drawn in).
+**THREE OF THE 62 HAVE NOW BEEN RUN (2026-09-06), AND TWO OF THEM DIED BEFORE PRINTING ANYTHING.** Not on the
+game data — on a DIRECTORY the phone does not have and never will: `dat-order-check` defaults to
+`build/original/sa`, a desk build this device never produces, and `mod-id-collisions` walks
+`mods-src/original/mods`, which it does not carry. Both threw an unguarded `ENOENT`. The first died before
+reaching its SECOND default, `game-src/original`, which was present and had the answer; the second threw away
+a stock census it had already computed. **Fixed and verified on the device** (`8529c1c6`): an absent tree is a
+named skip, and the exit is non-zero only when nothing was checkable.
+
+**Assume the same shape in the rest.** ~25 scripts name a BUILT tree (`build/original/sa`, `.../opensa`) —
+some only in a usage comment, five already fall back through `existsSync`, and the remainder have not been
+run. The class is not "a built tree" but *any directory this machine lacks, read unguarded*, so check the
+default before spending a run on it.
+
+**What the three said**, filed in
+[the row](../../benchmarks/opensa-engine/2026-09-06-phone-game-data-tools.json): `dat-order-check` **9 406
+rows, 0 late**; `ide-flag-histogram` **14 276 rows, 20 bits present, 6 implemented** — the 14 unread bits are
+NOT an unhonoured-data finding, plan 039 judged each one; `mod-id-collisions` **14 842 ids, 8 disagreements**.
+
+**Two doc baselines no longer describe this tree, and one instrument does not exist.** The collision baseline
+is EIGHT rather than the documented seven (the extra is `id 1`, `csplay` against `truth`); `dat-order-check`
+reads 9 406 rows where the doc records 9 268 — same verdict, different count, so two different copies of
+`game-src/original` rather than a before/after. And plan 039 cites `scripts/ide-flag-histogram.ts`, a path
+with **ZERO commits in this repository's history**, so its 14 323-def table may not be subtracted from today's
+run. **Next up and not yet run:** `alpha-class-census` (the alpha class of every texture, which decides the
+pass it is drawn in) — note its archive default is `build/<game>/sa/models/gta3.img`, so expect the class
+above.
 
 **And two DESK censuses were run for the first time on 2026-09-06 after sitting unused**
 ([the row](../../benchmarks/opensa-engine/2026-09-06-desk-censuses.json)): the ring residency policy asks for

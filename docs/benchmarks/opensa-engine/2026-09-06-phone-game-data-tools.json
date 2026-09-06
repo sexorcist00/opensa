@@ -1,0 +1,40 @@
+{
+  "note": "THE FIRST RUNS OF THE GAME-DATA TOOLS ON THE MACHINE THAT HAS GAME DATA. 62 of the 100 scripts in `scripts/debug/` read game data and the phone is the only machine holding any; they became reachable on 2026-09-06 (`phone_run debug`) and none had ever been run. NOT TIMINGS: every figure here is a COUNT of what a tool read out of the authored data. Two of the first three tools died before printing anything — on a DIRECTORY the phone does not have, read unguarded — which is the finding this row exists for.",
+  "date": "2026-09-06",
+  "device": "MGA-LX3 / Termux, node v24.18.0, the 2/03 phone",
+  "howRun": "phone_run debug SCRIPT=<name> [ARGS=…], app 8529c1c6",
+  "tree": "game-src/original on the phone — NOT verified to be the copy earlier baselines were taken on (see datOrderCheck.rowsDisagreeWithDoc)",
+  "datOrderCheck": {
+    "what": "Does any text `inst` row place a model whose IDE `gta.dat` lists later? Stock must be 0.",
+    "dir": "game-src/original",
+    "rows": 9406,
+    "lateRows": 0,
+    "lateIds": 0,
+    "rowsDisagreeWithDoc": "docs/debug/README.md recorded 9 268 rows for this same path. Same verdict, different COUNT — so the two runs read different copies of `game-src/original` rather than forming a before/after.",
+    "toolDefect": "Died with an unhandled ENOENT on its FIRST default (`build/original/sa`), which the phone never builds, before reaching `game-src/original`, which was present and had the answer. Fixed in 8529c1c6."
+  },
+  "ideFlagHistogram": {
+    "what": "Histogram of IDE object-flag bits across every `.ide` under `data/maps`, with example models per bit.",
+    "rows": 14276,
+    "bitsPresent": 20,
+    "bitsImplemented": 6,
+    "implemented": ["0x4 DRAW_LAST", "0x8 ADDITIVE", "0x40 NO_ZBUFFER_WRITE", "0x2000 IS_TREE", "0x4000 IS_PALM", "0x200000 DISABLE_BACKFACE_CULLING"],
+    "counts": {
+      "0x1": 775, "0x2": 29, "0x4": 2346, "0x8": 81, "0x20": 31, "0x40": 208,
+      "0x80": 5098, "0x200": 2, "0x400": 8, "0x800": 56, "0x1000": 69,
+      "0x2000": 102, "0x4000": 10, "0x8000": 70, "0x10000": 9, "0x20000": 9,
+      "0x40000": 1, "0x100000": 9, "0x200000": 1542, "0x400000": 6
+    },
+    "notAGap": "The 14 unread bits are NOT an unhonoured-data finding: plan 039 judged each one — 0x80 is moot (the unlit map never casts, plan 038), 0x1 has no render effect, and the 9/10/11/12/15/16/17/20/22 group is gameplay, skipped by design.",
+    "notAnAB": "Plan 039's table cites `scripts/ide-flag-histogram.ts`, a path with ZERO commits in this repository's history. Today's tool is `scripts/debug/ide-flag-histogram.ts`, created whole 2026-07-28, and it walks the `data/maps` FOLDER rather than `gta.dat`'s load list. So this row may not be subtracted from 039's 14 323 defs / bit 0 at 1 937 — two programs, and possibly two trees."
+  },
+  "modIdCollisions": {
+    "what": "Which model ids two sources claim with DIFFERENT model names, across stock and every mod.",
+    "idsClaimed": 14842,
+    "modClaims": 0,
+    "disagreements": 8,
+    "ids": [1, 16700, 16701, 16702, 16705, 16706, 16707, 16708],
+    "baselineDisagreesWithDoc": "docs/debug/README.md records the clean baseline as SEVEN (16700–16708). The eighth is `id 1` — `csplay` against `truth` — outside that range, a cutscene/ped id rather than a LOD rock. Whether `gta.dat` loads either claimant is NOT established, so it is filed as a baseline entry, not a defect.",
+    "toolDefect": "Died with an unhandled ENOENT scandir on `mods-src/original/mods`, which the phone does not carry, throwing away a stock census it had ALREADY computed. Fixed in 8529c1c6; the run above is the verification."
+  }
+}

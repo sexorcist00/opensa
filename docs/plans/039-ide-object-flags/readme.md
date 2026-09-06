@@ -16,6 +16,21 @@
 | 9/10/11/12/15/16/17/20/22 | glass/garage/dam/flyer/explosive/props/tags/statue | — | gameplay, skipped by design |
 | 1/4/5/18 | 0x2/0x10/0x20/0x40000 | 33/2/31/1 | negligible usage, semantics fuzzy — revisit only if a concrete bug points at them |
 
+**The instrument this table was measured with is not in the repository** (found 2026-09-06, the first time
+the histogram was run from a session). This plan cites `scripts/ide-flag-histogram.ts`; that path has **never
+existed in this repository's history** — 0 commits touch it. What exists is
+[`scripts/debug/ide-flag-histogram.ts`](../../debug/README.md), created whole on 2026-07-28, and it walks
+**every `.ide` under `data/maps`** rather than "every IDE `gta.dat` loads" as the sentence above says — a
+different set, since `gta.dat` loads neither `countn2.ide` nor `leveldes.ide`
+([unloaded-map-data.md](../../gta-sa-original/unloaded-map-data.md)).
+
+So **the 2026-09-06 run is NOT a before/after partner for the numbers above** — a comparison produced by two
+different programs is not an A/B (the rule 201/1-06 was written for). It read `rows=14276` on the phone's
+`game-src/original` against this table's 14 323 defs, with bit 0 at 775 against 1 937 and bit 21 at 1 542
+against 1 586. Those differences are attributable to the instrument, to the tree, or to both, and nothing in
+the repository separates them today. **The VERDICTS above are unaffected** — which bits are implemented,
+which are gameplay and which are moot is a semantic judgement, not a count.
+
 Flags live in `parsers/text/ide-flags.ts` (`IdeFlag`/`hasIdeFlag`), applied in `build-region.ts`
 (`defTreatment`/`applyTreatment`). Wind sway moved out to `src/game/mods/wind.mod.ts` via the
 `decoratePart` hook — see plan 040 for the mod architecture, the wind shader and the model list.
