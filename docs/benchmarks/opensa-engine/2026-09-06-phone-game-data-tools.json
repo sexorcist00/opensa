@@ -131,8 +131,15 @@
     "textures": 26126,
     "dxtNotBlockAligned": 0,
     "npotButAligned": 3,
-    "fatalClassIsClean": "0 unaligned DXT — the class that silently kills a whole dictionary is clean on this tree.",
-    "contradictsARestriction": "docs/restrictions/README.md states, of this exact class, `stock has 0 NPOT`. This tree has THREE. Consistent with the divergence recorded in treeDisagreesWithDocBaselines (this copy reads HIGH against every doc baseline), but NOT established as its cause. The three are not named here: the `--npot` listing run died when the phone's tunnel dropped before it printed.",
-    "crossCheck": "26 126 textures matches alpha-class-census's total exactly, from a different entry point."
+    "fatalClassIsClean": "0 unaligned DXT — the class that silently kills a whole dictionary is clean, and that verdict matches the doc.",
+    "contradictsARestriction": "THREE counts in gta3.img disagree with three documented numbers, all in the same direction. (1) The script's own header says `Stock: 26 004 textures, 0 of either`; this tree reads 26 126 and 3. (2) docs/restrictions/README.md states `stock has 0 NPOT` for this class. (3) docs/gta-sa-original/uncompressed-rasters.md states `Every uncompressed raster in the game is single-level`, measured over gta3.img + gta_int.img — and `icons4.txd: diskmetal32` is an UNCOMPRESSED rgba8888 raster with EIGHT mip levels, inside gta3.img, which is inside that measurement's scope. So it is a real counterexample rather than an out-of-scope one.",
+    "crossCheck": "26 126 textures matches alpha-class-census's total exactly, from a different entry point.",
+    "scope": "models/gta3.img ONLY — not the whole tree. The 2 760 dictionaries are inside that archive.",
+    "npotNamed": [
+      "icons4.txd: diskmetal32 132x128 rgba8888 mips=8",
+      "icons4.txd: salogo64 392x392 rgba8888 mips=9",
+      "sunset01_lawn.txd: standardet1_LA 256x96 dxt1 mips=9"
+    ],
+    "whyNotFiledAsADocDefect": "Not corrected in the docs, because the cause is not established and this tree reads HIGH against every baseline (+122 textures here). A raster added to this copy explains all three as easily as a wrong doc does, and nothing separates them yet. Establishing WHAT differs about this game copy settles all of them at once — it is the cheapest next thing in this area."
   }
 }

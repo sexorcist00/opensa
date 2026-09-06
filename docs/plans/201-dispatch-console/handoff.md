@@ -440,9 +440,23 @@ doc baseline is not a before/after partner for a run on this device.
 line) and `two-dfx-census`. **Three suspects remain untested** — a built-tree default and no `existsSync` at
 all: `dump-texel-avg`, `uv-anim-measure`, `dump-osm-meta`.
 
-**One run is owed:** `txd-dimension-census --npot`, to NAME the three. It died when the phone's tunnel
-dropped before printing, and the tunnel dropped twice in that session — `npm run panel:tunnel` re-issues an
-address the session must be given by hand.
+**The three NPOT are named** (the `--npot` run finished; only the tunnel died before its log could be read):
+`icons4.txd: diskmetal32 132x128 rgba8888 mips=8`, `icons4.txd: salogo64 392x392 rgba8888 mips=9`,
+`sunset01_lawn.txd: standardet1_LA 256x96 dxt1 mips=9`. Two are not DXT at all; the third is DXT1 but
+block-aligned (96 = 4x24), so it loads. **The census reads `models/gta3.img` ALONE**, not the whole tree.
+
+**And that archive is inside the scope of a second documented claim, which it also contradicts.**
+[uncompressed-rasters.md](../../gta-sa-original/uncompressed-rasters.md) says *every uncompressed raster in
+the game is single-level*, measured over `gta3.img` + `gta_int.img` — and `diskmetal32` is an uncompressed
+rgba8888 raster with EIGHT mip levels inside `gta3.img`. A real counterexample, not an out-of-scope one.
+The script's own header is a third: it claims `Stock: 26 004 textures, 0 of either` against today's 26 126
+and 3.
+
+**None of the three was corrected in the docs, deliberately.** This tree reads HIGH against every baseline
+(+122 textures here), so a raster added to this copy explains all three as easily as a wrong doc does, and
+nothing separates them yet. **Establishing WHAT differs about this phone's `game-src/original` settles all of
+them at once, and it is the cheapest next thing in this area.** The tunnel dropped twice in that session;
+`npm run panel:tunnel` re-issues an address the session must be given by hand.
 
 **And two DESK censuses were run for the first time on 2026-09-06 after sitting unused**
 ([the row](../../benchmarks/opensa-engine/2026-09-06-desk-censuses.json)): the ring residency policy asks for
