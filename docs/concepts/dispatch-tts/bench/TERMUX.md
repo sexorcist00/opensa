@@ -86,6 +86,46 @@ return the bandwidth the radio removed**. The restoration that does that (VoiceF
 needs PyTorch and therefore a machine that is not this one. On the phone this is a
 tidy-up, not a restoration.
 
+## The console
+
+A dispatch console you drive from the shell and listen to in the phone's own browser.
+
+```bash
+python console.py                 # then open http://localhost:8765
+python console.py --once "открыт огонь по офицеру"
+```
+
+Type what an operator would type. The page shows what the pipeline decided — glossary
+hit or miss, the English that would be spoken, the urgency and **why**, the speakable
+form, whether capitals fired, and whether the repeat filter suppressed it.
+
+**A glossary miss stays silent.** There is no translator here, and in production a
+phrase with no English has no voice either (decision 11). Watching a miss go out as
+text with no sound is the point of the tool, not a gap in it.
+
+Type in **Latin letters** and the console treats it as an audition: it speaks the line
+as typed, so a voice can be judged without pretending it came off a radio.
+
+### Voices
+
+The selector lists what is installed on **this** machine and says why the rest are not.
+
+| Backend | Gives a file | On a phone |
+| --- | --- | --- |
+| **Bank** | yes, pre-baked | **the only one that is a product**: instant and free |
+| **Phone voice (browser)** | no | Web Speech API over Android's own engine — zero install, offline, real voices, and no file, so the radio channel cannot be applied |
+| **espeak-ng** | yes | `pkg install espeak-ng`. Robotic, but a real wav, so the measured channel bakes onto it |
+| **Piper** | yes | usually needs `proot-distro`: native builds are glibc, Android is bionic |
+| **Kokoro-82M** | yes | same wheel problem via onnxruntime; works inside proot |
+| **External service** | yes | `--tts-url http://host:8000/v1/audio/speech` — where a GPU box or a cloud plugs in later |
+
+Bake your measured radio channel onto everything the file backends render:
+
+```bash
+python chain_fit.py tape.wav --out chain.json
+python console.py --chain chain.json
+```
+
 ## Long runs
 
 Android suspends processes. Hold anything long with:
