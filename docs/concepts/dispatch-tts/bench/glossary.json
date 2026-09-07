@@ -1,0 +1,23 @@
+{
+  "note": "A seed, not the dictionary. The real one grows from a server's own traffic, moderated - decision 14. Entries here are the phrases any shift says, written by hand so the English is a person's choice rather than a model's.",
+  "entries": [
+    { "ru": "принял", "en": "Ten four.", "level": "routine", "match": "exact" },
+    { "ru": "принял, буду через две минуты", "en": "Ten four, en route, two minutes out.", "level": "routine", "match": "exact" },
+    { "ru": "выезжаю", "en": "En route.", "level": "routine", "match": "exact" },
+    { "ru": "на месте", "en": "On scene.", "level": "routine", "match": "exact" },
+    { "ru": "повторите", "en": "Say again.", "level": "routine", "match": "exact" },
+    { "ru": "вас понял", "en": "Copy that.", "level": "routine", "match": "exact" },
+    { "ru": "свободен", "en": "Available.", "level": "routine", "match": "exact" },
+    { "ru": "занят", "en": "Unavailable.", "level": "routine", "match": "exact" },
+    { "ru": "код 4", "en": "Code four.", "level": "routine", "match": "exact" },
+    { "ru": "всем постам, код 4, обстановка под контролем", "en": "All units, code four, situation under control.", "level": "routine", "match": "exact" },
+    { "ru": "запросите подкрепление", "en": "Requesting backup.", "level": "urgent", "match": "exact" },
+    { "ru": "подозреваемый вооружён", "en": "Suspect is armed.", "level": "urgent", "match": "exact" },
+    { "ru": "начинаю преследование", "en": "In pursuit.", "level": "urgent", "match": "exact" },
+    { "ru": "нужна скорая", "en": "Requesting an ambulance.", "level": "urgent", "match": "exact" },
+    { "ru": "открыт огонь", "en": "Shots fired!", "level": "emergency", "match": "exact" },
+    { "ru": "открыт огонь по офицеру", "en": "Shots fired at an officer!", "level": "emergency", "match": "exact" },
+    { "ru": "офицер ранен", "en": "Officer down!", "level": "emergency", "match": "exact" },
+    { "ru": "всем свободным", "en": "All available units!", "level": "emergency", "match": "exact" }
+  ]
+}
