@@ -4,11 +4,12 @@
 English, and the voice should sound like a real police radio. Research first, and the two exits are
 [`docs/plans/`](../../plans/README.md) and [`docs/postmortem/`](../../postmortem/README.md).
 
-**Recommendation, stated up front so it can be argued with: build the pipeline against a vendor-neutral
-interface and pick the voice by ear rather than from a table, because the three things this product needs —
-our own community's voices, a shout that is actually a shout, and a per-character bill that does not scale
-with how chatty a shift is — are not all strongest in the same model.** The dictionary is the part that pays
-for itself immediately and it is the part with no model risk at all.
+**Recommendation, rewritten 2026-09-07 after the first listening round rejected everything in it: the
+free CPU tier is not a candidate for this product, and the axis it failed on is aliveness rather than
+quality.** Build the pipeline against a vendor-neutral interface — that part stands — but stop treating
+"which stock voice" as the open question. The open question is **whether a voice is conditioned on a real
+human recording at all**, because that is the lever the verdict points at. The dictionary is still the part
+that pays for itself immediately and carries no model risk.
 
 ---
 
@@ -157,6 +158,33 @@ Kokoro runs on the CPU the Node backend already occupies and cannot express urge
 urgency and clones a consenting player, and is 20–30× too slow without a GPU. That is not a tie to be broken
 by preference — it is a hosting decision (§6's second rung) that a listening verdict cannot make on its own.
 
+## 5b. The first field verdict, 2026-09-07
+
+**Everything in §5 was played to the user and rejected.** The words were *"nothing appealed to me — the
+voices sound artificial rather than alive"*. That is a field verdict, and by this project's own rules it
+outranks every number above it.
+
+**What it kills:** stock-voice Kokoro as the product's voice. Not as a fallback, not as the free tier for
+weak servers — the whole point of the feature is that the radio sounds like a radio somebody is talking on,
+and a voice that reads as synthetic fails that on the first transmission of the first shift. The 1076 ms and
+the zero marginal cost are real and now irrelevant, which is exactly what a field verdict is for.
+
+**What it does NOT settle, and this is the honest part.** The one configuration that the concept's own §6
+ladder puts first was never played: **Chatterbox conditioned on a real human reference.** What was played
+was Chatterbox on its built-in default voice — the model's weakest setting and the one that discards its
+whole reason for being on the list. Zero-shot cloning takes timbre *and* delivery from the reference, so
+"conditioned on a real dispatcher" and "stock synthetic voice" are not two points on one quality scale; they
+are different mechanisms, and only the second one was judged.
+
+So the verdict removes a tier and sharpens the question rather than closing it:
+
+| Was judged | Verdict |
+| --- | --- |
+| Kokoro, five stock voices | rejected — artificial |
+| Chatterbox, built-in default voice | rejected — artificial |
+| **Chatterbox on a real human reference** | **not yet heard** |
+| Hosted top tier (ElevenLabs v3, `gpt-4o-mini-tts` with an instruction) | not yet heard — no API key in the session |
+
 ## 6. Training our own model
 
 Asked by the user on 2026-09-06: can we train something of our own, to pay less and sound better?
@@ -238,6 +266,8 @@ console's playback and this document — the same posture as
 To `docs/plans/` — or, since the work lives in the other repository, to a plan there:
 
 1. **A voice is chosen by ear**, from the bench, by the person who will run the shift. Not from §4's table.
+   **First round done 2026-09-07 and nothing passed** (§5b) — so this now reads: a voice conditioned on a
+   real human reference, or a hosted voice, is chosen by ear. The stock-voice question is closed.
 2. **The dictionary's hit rate is measured** on a real evening of `radio_broadcast` traffic. Under ~30 % the
    latency story in decision 8 is weaker than it looks and the cost table in §7 is wrong.
 3. **The shout is demonstrated.** Either a model that can shout is in the pipeline, or decision 13 is
