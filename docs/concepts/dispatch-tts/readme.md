@@ -139,6 +139,43 @@ arrives structured. We begin where they end.
 **And on the axis this project failed its first listening round on, they do not answer.** Stock voices, no
 cloning, no reference — which is the exact configuration the user rejected as artificial.
 
+### What their categories gave us, and what stayed behind
+
+Taken 2026-09-07, after the user asked for their rules and categories.
+
+**Their scoring splits in two and only one half is ours.** The negative half — rejecting
+out-of-character chatter, greetings, pranks, tests, hang-ups — exists because they read a
+raw chat log and must guess whether an incident happened at all. Nothing here needs it: a
+transmission arrives as an authenticated event on a radio channel, sent by an operator who
+pressed the key and typed.
+
+**The positive half transfers, because it is not about whether the call is real — it is
+about how urgent it is**, which is exactly our `level`. `bench/classify.py` carries our own
+version: Russian signal groups (the operator types Russian), a stand-down group, an
+explainable verdict, and no model at all — which matters under a deployment that may have
+neither GPU nor API key. It is the prior an LLM has to beat rather than a replacement for one.
+
+Three rules in it that the first run got wrong and the tests pinned:
+
+- **A weapon PRESENT is urgent; a weapon USED is an emergency.** Collapsing them made every
+  mention of a gun the top level, which is how a level stops being heard. Caught by checking
+  the classifier against the levels documented in the phrase spec.
+- **A stand-down cools an urgent call and never an emergency.** A "code 4" in the same breath
+  as shots fired is a correction that arrives separately, not a reason to read a shooting calmly.
+- **A model may move the level in either direction except down from an emergency.** A rule fired
+  on a weapon or a shooting, and a model quietly disagreeing is the one failure with a body
+  attached.
+
+Their sharpest observation is kept: unit traffic bypasses scoring but still needs a priority,
+because "requesting backup" and "send another unit" are the same shape and not the same call.
+
+**Their gazetteer we do not take, and cannot need.** They keep 242 streets and 85 districts by
+hand for one map. Ours are generated at build time from the world the pak was built from —
+`tools/opensa-pack/src/districts.ts` resolves `data/info.zon` against `text/american.gxt` into
+a shipped table — so the names are right on a total conversion too, where a hand-kept list for
+Los Santos would be wrong in every row. What the translator needs from it is narrower than a
+gazetteer anyway: a do-not-translate list, so `Sultan` stays `Sultan`.
+
 ### The defect that is in both chains
 
 Their chain band-passes, *then* drives into `tanh`, *then* bit-crushes: every harmonic the distortion creates

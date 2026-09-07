@@ -9,6 +9,7 @@ positive cases after. Standard library only, so it runs anywhere the tools do:
 import unittest
 
 from glossary import Entry, Glossary, bank_key, match_key
+from classify import RepeatFilter, classify, reconcile
 from normalise import is_shout, level_for, normalise_for_speech, strip_shout
 
 
@@ -118,3 +119,62 @@ class GlossaryPositiveCases(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClassifyNegativeCases(unittest.TestCase):
+    def test_a_plain_acknowledgement_is_routine(self):
+        self.assertEqual(classify("Принял, буду через две минуты.").level, "routine")
+
+    def test_a_weapon_present_is_not_an_emergency(self):
+        # Urgent, not emergency: a level that fires on every mention of a gun is one
+        # an operator stops hearing.
+        self.assertEqual(classify("Подозреваемый вооружён.").level, "urgent")
+
+    def test_a_stand_down_cannot_cool_an_emergency(self):
+        self.assertEqual(classify("Открыт огонь, отбой").level, "emergency")
+
+    def test_a_model_may_not_talk_an_emergency_down(self):
+        rules = classify("Стрельба на Гроув-стрит.")
+        self.assertEqual(reconcile(rules, "routine"), "emergency")
+
+    def test_a_missing_model_verdict_leaves_the_rules_standing(self):
+        rules = classify("Преследование, серый Sultan.")
+        self.assertEqual(reconcile(rules, None), "urgent")
+
+    def test_a_repeat_inside_the_window_is_not_spoken_twice(self):
+        f = RepeatFilter(window_seconds=20.0)
+        self.assertTrue(f.should_speak("r1", "Принял", now=100.0))
+        self.assertFalse(f.should_speak("r1", "  принял  ", now=105.0))
+
+
+class ClassifyPositiveCases(unittest.TestCase):
+    def test_the_six_bench_lines_get_the_levels_the_spec_documents(self):
+        expected = {
+            "1-Адам-12, ответьте на угол Гроув-стрит и Мэйн, драка.": "urgent",
+            "ОТКРЫТ ОГОНЬ ПО ОФИЦЕРУ, ВСЕ СВОБОДНЫЕ НА ИДЛВУД!": "emergency",
+            "Принял, буду через две минуты.": "routine",
+            "Диспетчер, запросите подкрепление, подозреваемый вооружён.": "urgent",
+            "Всем постам, код 4, обстановка под контролем.": "routine",
+            "Преследование, серый Sultan, движется на север по Мулхолланд.": "urgent",
+        }
+        for line, level in expected.items():
+            self.assertEqual(classify(line).level, level, msg=line)
+
+    def test_shooting_is_an_emergency(self):
+        self.assertEqual(classify("Стрельба у банка на Мэйн.").level, "emergency")
+
+    def test_the_verdict_says_why(self):
+        self.assertIn("pursuit", classify("Начинаю преследование.").reason)
+
+    def test_a_stand_down_cools_an_urgent_call(self):
+        self.assertEqual(classify("Драка на Гроув-стрит, отбой, под контролем.").level, "routine")
+
+    def test_the_same_words_on_another_channel_are_spoken(self):
+        f = RepeatFilter(window_seconds=20.0)
+        self.assertTrue(f.should_speak("r1", "Принял", now=100.0))
+        self.assertTrue(f.should_speak("r3", "Принял", now=101.0))
+
+    def test_a_repeat_after_the_window_is_spoken_again(self):
+        f = RepeatFilter(window_seconds=20.0)
+        self.assertTrue(f.should_speak("r1", "Принял", now=100.0))
+        self.assertTrue(f.should_speak("r1", "Принял", now=140.0))
