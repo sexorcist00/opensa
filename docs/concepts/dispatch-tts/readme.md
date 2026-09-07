@@ -185,6 +185,20 @@ So the verdict removes a tier and sharpens the question rather than closing it:
 | **Chatterbox on a real human reference** | **not yet heard** |
 | Hosted top tier (ElevenLabs v3, `gpt-4o-mini-tts` with an instruction) | not yet heard — no API key in the session |
 
+### Round 2, run the same night: a clone beside the human it came from
+
+The gap above was closed rather than left as a note. Chatterbox was conditioned on **17.7 s and 20.1 s of
+real recorded speech in exactly the right register** — a NASA launch commentator on the countdown and a
+launch-comm announcer, taken from the Internet Archive's NASA collection. They are **public domain as US
+government work**, which is why they could answer the question tonight without anyone's consent being in
+doubt; production references remain our own players, per decision 12.
+
+Five transmissions, same radio chain, same CPU: **17–43 s per clip**, unchanged from §5's finding — cloning
+costs no more than the default voice, and both are equally unusable without a GPU.
+
+Both rounds are on the bench page for a side-by-side listen, with each cloned row led by the reference it
+came from, because a clone can only be judged next to its original.
+
 ## 6. Training our own model
 
 Asked by the user on 2026-09-06: can we train something of our own, to pay less and sound better?

@@ -169,6 +169,10 @@ is the shortlist, and these are the primary pages behind it.
 - <https://github.com/SWivid/F5-TTS/discussions/997> — the F5-TTS licensing thread. **CC-BY-NC, and it is
   inherited by anything fine-tuned on the base model** — the trap this concept's licence table exists to
   avoid. `mrfakename/OpenF5-TTS-Base` is the Apache-2.0 reimplementation.
+- <https://archive.org/details/NasaAudioHighlightReels> — NASA's audio highlight reels on the Internet
+  Archive: launch-comm soundbites and commentator countdowns, **public domain as US government work**. Used
+  2026-09-07 as a zero-shot cloning reference in exactly the dispatcher register, so the "does a real human
+  reference fix the artificial quality" question could be answered without borrowing anyone's voice.
 - <https://github.com/semidark/kikiri-tts> — a documented recipe for fine-tuning Kokoro (patched StyleTTS2
   training code, dataset prep, voicepack extraction). Read before anyone concludes that training our own is
   out of reach.
