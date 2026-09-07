@@ -253,7 +253,7 @@ Stated once, because it is a real consequence and the choice is the user's:
 
 ### The channel is measured now, and the constants are gone
 
-`bench/chain-fit.py` reads a recording and emits the profile our chain is built from — a third-octave
+`bench/chain_fit.py` reads a recording and emits the profile our chain is built from — a third-octave
 target curve, the tape's noise floor, its crest factor, and the roger beep if the channel sends one.
 `bench.radio_chain_from_profile` builds a linear-phase FIR from it, drives the compressor until the crest
 factor matches, and adds noise at the measured floor.

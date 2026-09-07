@@ -5,7 +5,7 @@ a -46 dBFS noise floor. A recording of the real channel makes them measurable, w
 is this project's rule about recovering a formula instead of fitting a constant.
 
 Usage:
-    python chain-fit.py tape.wav [more.wav ...] --out chain.json
+    python chain_fit.py tape.wav [more.wav ...] --out chain.json
 
 Every figure it prints is measured from the file. It reports a confidence note where
 a measurement can be wrong for a reason a reader would not guess.

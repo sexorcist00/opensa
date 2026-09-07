@@ -102,7 +102,7 @@ def radio_chain(audio: np.ndarray, sample_rate: int, *, beep: bool) -> np.ndarra
     Order matters and it is the thing a first attempt gets wrong. A radio compresses at
     the microphone and band-limits at the channel, so the FILTER IS LAST: distortion
     products land outside 300-3400 Hz and the channel removes them. Filtering first and
-    compressing after leaves those harmonics in the output - measurably (chain-fit.py
+    compressing after leaves those harmonics in the output - measurably (chain_fit.py
     read a 12 kHz edge off a chain that was supposed to stop at 3400) and audibly, as a
     fizz around consonants that no radio has.
     """
@@ -141,7 +141,7 @@ def radio_chain(audio: np.ndarray, sample_rate: int, *, beep: bool) -> np.ndarra
 def radio_chain_from_profile(audio: np.ndarray, sample_rate: int, profile: dict, *, beep: bool) -> np.ndarray:
     """Put a transmission through a channel MEASURED from a real recording.
 
-    `profile` is the `chain` block chain-fit.py writes: a third-octave target curve plus
+    `profile` is the `chain` block chain_fit.py writes: a third-octave target curve plus
     the tape's noise floor and crest factor. The curve is turned into a linear-phase FIR,
     which is why this can match a channel that no Butterworth describes - a real radio's
     response is not a textbook filter and does not have to be treated as one.

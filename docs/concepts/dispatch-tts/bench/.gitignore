@@ -4,3 +4,4 @@
 *.wav
 out/
 .venv/
+__pycache__/
