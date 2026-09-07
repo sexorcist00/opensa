@@ -286,6 +286,58 @@ speech has a loudest bin too. What separates a tone from a vowel is *concentrati
 energy within a few percent of one frequency — and the threshold has to be relative, since ±120 Hz around a
 500 Hz formant is a whole vowel and around 1800 Hz is not.
 
+## 5e. The requirement restated, 2026-09-07 — and one part of it is not achievable
+
+The user restated the target: *give me recordings of dispatch traffic with the radio effect on them, and
+give me back a model that speaks exactly like the recording — intonation, stress, all of it, at high
+quality; support several voices; and preferably no retraining.*
+
+**"No retraining" is the easy half and it simplifies everything.** Zero-shot cloning means a voice is one
+wav file in a folder: no dataset, no GPU training run, no LoRA. `dataset.py` and
+[TRAINING.md](TRAINING.md) stay in the tree as the rung to climb if zero-shot is judged not good enough,
+but they leave the critical path.
+
+**"Exactly the intonation and stress" is not achievable by any zero-shot system, and the reason is
+structural rather than a quality ceiling.** A cloning model is given a reference and a *new* sentence. It
+transfers timbre and general speaking style; the prosody of the new sentence it must generate, because the
+words are not in the reference. There is nothing to copy the stress of "Idlewood" from if nobody ever said
+"Idlewood" on the tape.
+
+Two mechanisms exist and they are different, so the plan states which one it is buying:
+
+| Mechanism | What it copies exactly | What it needs | Fits this product |
+| --- | --- | --- | --- |
+| **Zero-shot TTS** (text in) | timbre, register, emotional level | a reference clip + the text | **yes** — the dispatcher types, nobody performs |
+| **Zero-shot VC** ([seed-vc](https://github.com/Plachtaa/seed-vc), with a prosody-preservation control) | **the prosody exactly**, word for word | somebody actually saying the line | only where a performance exists — held in reserve |
+
+So the honest promise is: **the same voice, the same register, the same urgency level, and controllable
+pace** — with word-level stress steered by the normaliser's markup rather than by the model.
+
+### This changes the mainline model
+
+**[IndexTTS2](https://index-tts.github.io/index-tts2.github.io/) (Apache 2.0)** fits the restated
+requirement better than Chatterbox, and it is not close:
+
+| | Chatterbox | IndexTTS2 |
+| --- | --- | --- |
+| Licence | MIT | Apache 2.0 |
+| Timbre and emotion | one clip, entangled | **separate references** — timbre from one recording, emotion/prosody from another |
+| Urgency control | one `exaggeration` knob | **eight emotion dimensions, 0–1** — and calm/afraid/angry map onto routine/urgent/emergency directly |
+| Pace | not controllable | **duration control, published at ±30 ms** |
+| Published metrics | a vendor-run preference study | WER 2.1 %, speaker similarity 0.87 on LibriSpeech |
+
+The disentangled reference is the part that matters here: **the dispatch tape can be the emotion reference
+while the timbre comes from the same or another speaker**, which is as close to "speaks like the recording"
+as a zero-shot system gets.
+
+Nothing else in the design moves. Restoration still comes first (§5c), the channel is still measured and
+re-applied (§5d), the dictionary still bypasses the model entirely, and several voices is still a folder of
+wav files — which is the "keep it simple" half of the request, satisfied by construction.
+
+**Not yet heard.** IndexTTS2 has not been run in this session: it is autoregressive and this container has
+no GPU, and Chatterbox already measured at 0.15× realtime on this CPU. It goes into the listening round the
+moment there is a GPU, and until then this section is a reading of published claims rather than a verdict.
+
 ## 6. Training our own model
 
 Asked by the user on 2026-09-06: can we train something of our own, to pay less and sound better?
