@@ -25,6 +25,7 @@ from urllib.parse import unquote, urlparse
 import re
 import tempfile
 
+import translate as translator
 import voices as voice_backends
 from classify import RepeatFilter, classify, reconcile
 from glossary import Glossary, bank_key, match_key
@@ -38,7 +39,8 @@ MODEL_VERSION = "seed"
 
 
 def decide(text: str, glossary: Glossary, repeats: RepeatFilter,
-           channel: str = "r1", bank: Path = DEFAULT_BANK) -> dict:
+           channel: str = "r1", bank: Path = DEFAULT_BANK,
+           llm: tuple[str, str] | None = None) -> dict:
     """One transmission through the whole text half of the pipeline.
 
     Text with no Cyrillic in it is treated as an AUDITION: the console speaks it as
@@ -57,6 +59,22 @@ def decide(text: str, glossary: Glossary, repeats: RepeatFilter,
 
     spoken_en = normalise_for_speech(entry.en) if entry else None
     level = entry.level if entry else reconcile(verdict, None)
+    source = "bank" if entry else None
+    invented: list[str] = []
+    llm_error = None
+
+    # A miss goes to the model when there is one. Without it the miss stays silent,
+    # which is production's own behaviour rather than a gap in the tool.
+    if entry is None and llm and text.strip():
+        model, url = llm
+        result = translator.translate(strip_shout(text), model, url)
+        if result.error:
+            llm_error = result.error
+        elif result.english:
+            invented = translator.looks_invented(text, result.english)
+            spoken_en = normalise_for_speech(result.english)
+            level = reconcile(verdict, result.level)
+            source = f"model: {model}"
 
     clip = None
     if entry:
@@ -78,6 +96,9 @@ def decide(text: str, glossary: Glossary, repeats: RepeatFilter,
         "clip": clip,
         "repeat": not repeats.should_speak(channel, text),
         "key": match_key(text),
+        "source": source,
+        "invented": invented,
+        "llm_error": llm_error,
     }
 
 
@@ -116,6 +137,7 @@ audio{width:100%}
 <div class="row">
   <select id="ch"><option>r1</option><option>r2</option><option>r3</option><option>r4</option></select>
   <select id="voice"></select>
+  <select id="llm"><option value="">без модели — промах молчит</option></select>
   <button class="go" id="go">Передать</button>
 </div>
 <p class="sub" id="vnote"></p>
@@ -139,7 +161,8 @@ async function send(){
   if(!text)return;
   const r=await fetch('/api/dispatch',{method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({text,channel:document.getElementById('ch').value,
-      voice:document.getElementById('voice').value})});
+      voice:document.getElementById('voice').value,
+      llm:document.getElementById('llm').value})});
   const d=await r.json();
   const c=`var(${LEVEL[d.level]||'--routine'})`;
   let browserNote=null;
@@ -149,8 +172,10 @@ async function send(){
       ${d.repeat?'<span class="chip" style="color:var(--dim)">повтор — не озвучен</span>':''}
       ${d.shouted?'<span class="chip" style="color:var(--emergency)">капс</span>':''}</div>
     <div><span class="k">почему</span><div class="mono">${d.reason}</div></div>
-    ${d.hit?`<div><span class="k">в эфир</span><div class="en">${d.spoken}</div></div>`
-           :`<div class="miss">Нет в словаре — текст уходит, голоса нет.</div>`}
+    ${d.spoken&&!d.audition?`<div><span class="k">в эфир · ${d.source||''}</span><div class="en">${d.spoken}</div></div>`
+      :(d.audition?'':`<div class="miss">Нет в словаре${d.llm_error?' и модель недоступна':''} — текст уходит, голоса нет.</div>`)}
+    ${(d.invented||[]).length?`<div class="miss">растяжка: ${d.invented.join('; ')} — проверьте, не дописала ли модель</div>`:''}
+    ${d.llm_error?`<div class="miss">${d.llm_error}</div>`:''}
     ${d.audition?'<div class="k">прослушка: произносится как набрано</div>':''}
     ${d.error?`<div class="miss">${d.error}</div>`:''}
     ${browserNote?`<div class="miss">${browserNote}</div>`:''}
@@ -162,6 +187,10 @@ async function send(){
 }
 document.getElementById('go').onclick=send;
 document.getElementById('t').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send()});
+fetch('/api/models').then(r=>r.json()).then(rows=>{
+  const sel=document.getElementById('llm');
+  sel.innerHTML+=rows.map(m=>`<option value="${m.name}">${m.name}${m.russian?'':'  (русский не заявлен)'}</option>`).join('');
+});
 fetch('/api/voices').then(r=>r.json()).then(rows=>{
   BACKENDS=rows;
   const sel=document.getElementById('voice');
@@ -185,6 +214,8 @@ class Handler(BaseHTTPRequestHandler):
     models_dir: Path
     tts_url: str | None
     chain: dict | None
+    ollama_url: str
+    llm_model: str | None
 
     def log_message(self, *args) -> None:  # quiet; the console is the output
         pass
@@ -204,6 +235,10 @@ class Handler(BaseHTTPRequestHandler):
             rows = [{"key": b.key, "label": b.label, "kind": b.kind,
                      "available": b.available, "note": b.note, "install": b.install}
                     for b in voice_backends.detect(self.models_dir, self.tts_url)]
+            self._send(200, json.dumps(rows, ensure_ascii=False).encode(), "application/json")
+        elif path == "/api/models":
+            names = translator.available(self.ollama_url)
+            rows = [{"name": n, "russian": translator.suits_russian(n)} for n in names]
             self._send(200, json.dumps(rows, ensure_ascii=False).encode(), "application/json")
         elif path == "/api/seeds":
             rows = [e.ru for e in self.glossary._by_key.values()][:18]
@@ -225,8 +260,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         length = int(self.headers.get("Content-Length", 0))
         payload = json.loads(self.rfile.read(length) or b"{}")
+        model = payload.get("llm") or self.llm_model
         result = decide(payload.get("text", ""), self.glossary, self.repeats,
-                        payload.get("channel", "r1"), self.bank)
+                        payload.get("channel", "r1"), self.bank,
+                        (model, self.ollama_url) if model else None)
 
         backend = payload.get("voice", "bank")
         result["backend"] = backend
@@ -267,6 +304,9 @@ def main() -> None:
     parser.add_argument("--models-dir", type=Path, default=Path("."),
                         help="where kokoro-v1.0.onnx and voices-v1.0.bin live")
     parser.add_argument("--tts-url", help="an OpenAI-compatible /v1/audio/speech endpoint")
+    parser.add_argument("--ollama-url", default=translator.DEFAULT_URL)
+    parser.add_argument("--llm", dest="llm_model",
+                        help="the Ollama model that translates a glossary miss")
     parser.add_argument("--chain", type=Path,
                         help="chain.json from chain_fit.py - bakes your measured radio "
                              "channel onto every rendered clip")
@@ -284,6 +324,8 @@ def main() -> None:
     Handler.bank = args.bank
     Handler.models_dir = args.models_dir
     Handler.tts_url = args.tts_url
+    Handler.ollama_url = args.ollama_url
+    Handler.llm_model = args.llm_model
     Handler.chain = (json.loads(args.chain.read_text(encoding="utf-8"))["chain"]
                      if args.chain and args.chain.exists() else None)
 
@@ -291,6 +333,15 @@ def main() -> None:
     print(f"{len(glossary)} entries, {baked} baked clips in {args.bank}/")
     for b in voice_backends.detect(args.models_dir, args.tts_url):
         print(f"  {'available' if b.available else '  --     '}  {b.key:8s} {b.label}")
+    models = translator.available(args.ollama_url)
+    if models:
+        print(f"  ollama at {args.ollama_url}: " + ", ".join(models))
+        weak = [m for m in models if not translator.suits_russian(m)]
+        if weak and (not args.llm_model or not translator.suits_russian(args.llm_model)):
+            print("    note: Russian is not among the languages Llama 3.1 officially "
+                  "supports; gemma and qwen carry it")
+    else:
+        print(f"  ollama not reachable at {args.ollama_url} - a glossary miss stays silent")
     if Handler.chain:
         print(f"  measured channel from {args.chain} will be baked onto rendered clips")
     print(f"open  http://localhost:{args.port}")

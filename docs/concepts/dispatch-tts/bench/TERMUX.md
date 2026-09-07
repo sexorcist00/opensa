@@ -106,6 +106,29 @@ text with no sound is the point of the tool, not a gap in it.
 Type in **Latin letters** and the console treats it as an audition: it speaks the line
 as typed, so a voice can be judged without pretending it came off a radio.
 
+### The translator
+
+Without one, a glossary miss is silent - which is production's behaviour, not a gap.
+With a local model, the miss gets English and any file backend can speak it.
+
+```bash
+pkg install ollama            # or run it on another box on the LAN
+ollama serve &
+ollama pull gemma3:4b
+python console.py --llm gemma3:4b
+```
+
+The console lists whatever Ollama is serving and flags the models that do **not**
+claim Russian. Meta does not list Russian among Llama 3.1's officially supported
+languages; Gemma and Qwen both carry it, so prefer those for this pair.
+
+The register is a rule and the prompt states it three times: **literal translation, no
+invented facts, names left alone**. There is no automatic guard for it - the audio is
+English and the screen is Russian, so a wrong street would pass unnoticed - so the
+console runs a coarse tripwire instead and shows it: an answer far longer than its
+source, or digits that were not in the Russian. It cannot catch a plausible wrong name,
+and pretending otherwise would be worse than saying so.
+
 ### Voices
 
 The selector lists what is installed on **this** machine and says why the rest are not.
