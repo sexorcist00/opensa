@@ -48,7 +48,7 @@ Through the Ask Menu, per `CLAUDE.md`'s standing rule. These are decisions, not 
 | 9 | No vendor is chosen in advance — candidates are compared by ear |
 | 10 | The radio effect is baked into the file on the backend |
 | 11 | On any failure: silence plus text. Never a substitute phrase |
-| 12 | Reference voices come from our own players, with their consent |
+| 12 | ~~Reference voices come from our own players, with their consent~~ — **reopened 2026-09-07: the references are real dispatch recordings.** See §5c for what that costs |
 | 13 | Urgency is decided by the model reading the text, with ALL CAPS as the operator's explicit shout signal |
 | 14 | The dictionary is a file base in the repository plus moderated auto-suggestions from live traffic |
 | 15 | Spend is capped by one server-wide daily budget |
@@ -198,6 +198,93 @@ costs no more than the default voice, and both are equally unusable without a GP
 
 Both rounds are on the bench page for a side-by-side listen, with each cloned row led by the reference it
 came from, because a clone can only be judged next to its original.
+
+## 5c. Real dispatch recordings as the reference, decided 2026-09-07
+
+Round 2 was judged **much better**, and the user's next move is to condition on **recordings of actual
+dispatch traffic** — which reopens decision 12 and brings a baked-in radio channel with it. Both halves were
+put through the Ask Menu and both are the user's call, reaffirmed.
+
+### What the recordings actually contain, and why that is three things
+
+The instinct is to treat the baked-in effect as damage. It is not — it is a **second dataset that we did not
+have**, and the mistake would be to keep it welded to the first:
+
+| What the tape carries | Where it belongs | Does it need to be clean |
+| --- | --- | --- |
+| **Timbre** — who is speaking | the cloning reference | **yes, critically** |
+| **The channel** — band edges, compression, noise floor, squelch tail, roger beep | the parameters of our radio chain | **no — the dirtier the better, it is the measurement** |
+| **Manner** — pacing, pauses, brevity, how numbers are said | the normaliser's prompt | no audio needed, only a transcript |
+| **Phrasing** — what is said every shift | dictionary entries | no audio needed, only a transcript |
+
+The user chose to take **all four**. That turns the recordings from a reference into the project's own
+reference corpus, and it retires the part of §5 that was weakest: the radio chain's constants
+(300–3400 Hz, `tanh` drive, −46 dBFS noise) are **mine, invented**. They become measured, which is this
+repository's standing rule about recovering a real formula instead of fitting a constant.
+
+### Cloning from a band-limited reference is the one thing we do not do
+
+Published work is direct about it: a reference encoder encodes the artefacts along with the speaker, and
+their presence **severely degrades** synthesis quality. Three further consequences show up on the second
+shift rather than the first: the effect becomes part of the voice's identity and cannot be switched off, it
+lands unevenly from utterance to utterance because the model invents its own noise, and our own chain then
+puts a second band-limit on top of the first.
+
+So the pipeline restores first: **[VoiceFixer](https://github.com/haoheliu/voicefixer)** (MIT — noise,
+reverberation, clipping *and low bandwidth*, up to 44.1 kHz) or
+**[Resemble Enhance](https://github.com/resemble-ai/resemble-enhance)** (MIT — denoiser plus a bandwidth-
+extending enhancer, from the same lab as Chatterbox). [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet)
+(MIT/Apache) is denoise-only and cannot return the missing octaves, so it does not answer this case.
+
+**The honest caveat, stated before anyone hears it**: restoration *invents* the top of the spectrum that the
+radio removed. The clone is of "what this person would sound like off the radio" — a well-founded guess, not
+a fact.
+
+### What reopening decision 12 costs
+
+Stated once, because it is a real consequence and the choice is the user's:
+
+- **Every hosted vendor is now closed.** ElevenLabs, Cartesia and the rest require the voice owner's consent
+  for cloning and suspend accounts over it. The product is therefore **self-hosted only** for voice, which
+  also settles §4's hosting question by removing one side of it.
+- **The legal exposure sits with whoever runs the server**, not with this repository. Recordings of real
+  dispatchers are recordings of identifiable people, and jurisdictions differ on what may be done with them.
+- **It does not change the map.** The console still only plays a file it is handed.
+
+### The channel is measured now, and the constants are gone
+
+`bench/chain-fit.py` reads a recording and emits the profile our chain is built from — a third-octave
+target curve, the tape's noise floor, its crest factor, and the roger beep if the channel sends one.
+`bench.radio_chain_from_profile` builds a linear-phase FIR from it, drives the compressor until the crest
+factor matches, and adds noise at the measured floor.
+
+**Measured end to end**: fit a profile from a tape, push a clean clip through it, measure the result and
+compare band by band — **mean 1.4 dB, max 7.3 dB over 13 scored bands** (bands below the tape's own noise
+floor are excluded, because down there the output is our hiss and the comparison measures nothing). Across
+the speech band, 318 Hz to 3.2 kHz, the error is 0.0–1.9 dB. The tool runs that check itself
+(`--verify clean.wav`), because a fitting tool that cannot check itself should not be pointed at real tapes.
+
+**It took four attempts, and the three failures are worth more than the result.** Each was caught only
+because the fitter was first run against a file whose answer was already known — our own chain output,
+built at 300–3400 Hz with a −46 dBFS floor and an 1800 Hz beep:
+
+| Attempt | What it read | What was actually wrong |
+| --- | --- | --- |
+| −20 dB threshold | **82–12000 Hz** | **A defect in the radio chain, not the fitter**: `bench.py` compressed *after* band-limiting, so `tanh` harmonics landed outside the channel and were never removed. A real radio band-limits last. Fixed — and it was audible as a fizz nobody had named |
+| −3 dB corner | 1828 and 3246 Hz for the same chain | A level threshold cannot separate the channel from the speaker: speech rolls off ~9 dB/octave on its own, so the reading mostly measured the voice |
+| steepest slope | **5648–8133 Hz** | On a synthetic file the steepest slope is at the *bottom* of the filter skirt, where it falls into the numerical floor — not at the corner |
+| third-octave curve | the curve, with no filter claimed | Right question. "Which filter was it" is unanswerable from speech; "what does the channel's response look like, so ours can match it" is both answerable and the thing we actually need |
+
+A fifth failure sat in the *applier* rather than the fitter, and it is the same mistake in mirror image: the
+first version applied the tape's curve as a filter, which multiplies the new speaker's own roll-off a second
+time — 7.4 dB mean error, 21 dB at 2 kHz. The filter has to carry **target minus source**, so the applier
+measures the input's own spectrum first. 7.4 dB → 2.7 dB → 1.4 dB once the noise-floor bands were excluded
+from the score.
+
+**Two beep detectors were wrong before one was right**, the same way: a peak alone proves nothing, because
+speech has a loudest bin too. What separates a tone from a vowel is *concentration* — most of the window's
+energy within a few percent of one frequency — and the threshold has to be relative, since ±120 Hz around a
+500 Hz formant is a whole vowel and around 1800 Hz is not.
 
 ## 6. Training our own model
 

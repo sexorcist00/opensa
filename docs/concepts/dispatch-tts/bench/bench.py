@@ -34,6 +34,10 @@ NOISE_FLOOR_DBFS = -46.0
 ROGER_BEEP_HZ = 1800.0
 ROGER_BEEP_MS = 90.0
 CLICK_MS = 18.0
+# Long enough to resolve a third-octave curve down to 100 Hz at 24 kHz.
+FIR_TAPS = 1023
+# A correction wider than this is boosting something that is not there.
+MAX_EQ_BOOST_DB = 24.0
 
 # Kokoro exposes speed and nothing else - no emotion, no shouting. Raising the
 # rate is the whole of what this backend can do with an urgency level, and saying
@@ -69,8 +73,39 @@ def _normalise(audio: np.ndarray, peak_dbfs: float = -1.0) -> np.ndarray:
     return audio * (_db_to_amp(peak_dbfs) / peak)
 
 
+def third_octave_bands(sample_rate: int) -> np.ndarray:
+    """Third-octave centres from 100 Hz to just under Nyquist."""
+    top = sample_rate / 2 * 0.92
+    centres = [100.0]
+    while centres[-1] * 2 ** (1 / 3) < top:
+        centres.append(centres[-1] * 2 ** (1 / 3))
+    return np.array(centres)
+
+
+def third_octave_levels(audio: np.ndarray, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
+    """Third-octave band levels in dB, anchored so the 500-1000 Hz octave reads 0."""
+    freqs, psd = signal.welch(audio, fs=sample_rate, nperseg=min(4096, len(audio)))
+    centres = third_octave_bands(sample_rate)
+    levels = []
+    for c in centres:
+        sel = (freqs >= c / 2 ** (1 / 6)) & (freqs < c * 2 ** (1 / 6))
+        levels.append(float(psd[sel].mean()) if sel.any() else 0.0)
+    levels_db = 10.0 * np.log10(np.array(levels) + 1e-20)
+    anchor = (centres >= 500) & (centres <= 1000)
+    reference = float(levels_db[anchor].mean()) if anchor.any() else float(levels_db.max())
+    return centres, levels_db - reference
+
+
 def radio_chain(audio: np.ndarray, sample_rate: int, *, beep: bool) -> np.ndarray:
-    """Band-limit, compress and tag one transmission the way a radio would."""
+    """Compress one transmission, then put the whole thing through the channel.
+
+    Order matters and it is the thing a first attempt gets wrong. A radio compresses at
+    the microphone and band-limits at the channel, so the FILTER IS LAST: distortion
+    products land outside 300-3400 Hz and the channel removes them. Filtering first and
+    compressing after leaves those harmonics in the output - measurably (chain-fit.py
+    read a 12 kHz edge off a chain that was supposed to stop at 3400) and audibly, as a
+    fizz around consonants that no radio has.
+    """
     nyquist = sample_rate / 2.0
     band = signal.butter(
         4,
@@ -78,26 +113,93 @@ def radio_chain(audio: np.ndarray, sample_rate: int, *, beep: bool) -> np.ndarra
         btype="bandpass",
         output="sos",
     )
-    voice = signal.sosfilt(band, audio)
 
-    # Soft-knee compression: drive into tanh, which is what a cheap limiter does.
-    voice = np.tanh(_normalise(voice, peak_dbfs=-3.0) * 3.2)
-
-    noise = np.random.default_rng(0).normal(0.0, _db_to_amp(NOISE_FLOOR_DBFS), voice.shape)
-    voice = voice + signal.sosfilt(band, noise)
-
+    # The transmitter's side: PTT click, the voice, the roger beep - all at line level.
     click_len = int(sample_rate * CLICK_MS / 1000.0)
     click = np.random.default_rng(1).normal(0.0, 0.35, click_len)
     click *= np.linspace(1.0, 0.0, click_len) ** 2
 
-    parts = [signal.sosfilt(band, click), voice]
+    parts = [click, _normalise(audio, peak_dbfs=-3.0)]
     if beep:
         beep_len = int(sample_rate * ROGER_BEEP_MS / 1000.0)
         t = np.arange(beep_len) / sample_rate
         envelope = np.minimum(1.0, np.minimum(t, (beep_len / sample_rate) - t) * 200.0)
         parts.append(np.sin(2.0 * np.pi * ROGER_BEEP_HZ * t) * 0.25 * envelope)
+    transmission = np.concatenate(parts)
 
-    return _normalise(np.concatenate(parts))
+    # Soft-knee compression, the way a cheap limiter behaves.
+    transmission = np.tanh(transmission * 3.2)
+
+    # Then the channel: band-limit everything, and add the channel's own floor inside it.
+    voice = signal.sosfilt(band, transmission)
+    noise = np.random.default_rng(0).normal(0.0, _db_to_amp(NOISE_FLOOR_DBFS), voice.shape)
+    voice = voice + signal.sosfilt(band, noise)
+
+    return _normalise(voice)
+
+
+def radio_chain_from_profile(audio: np.ndarray, sample_rate: int, profile: dict, *, beep: bool) -> np.ndarray:
+    """Put a transmission through a channel MEASURED from a real recording.
+
+    `profile` is the `chain` block chain-fit.py writes: a third-octave target curve plus
+    the tape's noise floor and crest factor. The curve is turned into a linear-phase FIR,
+    which is why this can match a channel that no Butterworth describes - a real radio's
+    response is not a textbook filter and does not have to be treated as one.
+
+    The constants in this file stay as the fallback for when no tape is available.
+    """
+    bands = np.array(profile["bands_hz"], dtype=float)
+    target = np.array(profile["levels_db"], dtype=float)
+    nyquist = sample_rate / 2.0
+
+    # The tape's curve is the product of its channel AND its speaker. Applying it as a
+    # filter to a different speaker multiplies that speaker's own roll-off in a second
+    # time - measurably, 7.4 dB of mean error and 21 dB at 2 kHz. What the filter must
+    # carry is the DIFFERENCE: where this input already sits, and where the tape sits.
+    source_bands, source = third_octave_levels(audio, sample_rate)
+    if len(source) != len(target):
+        source = np.interp(bands, source_bands, source)
+    correction = np.clip(target - source, -MAX_EQ_BOOST_DB, MAX_EQ_BOOST_DB)
+
+    inside = bands < nyquist * 0.98
+    freqs = np.concatenate([[0.0], bands[inside], [nyquist]])
+    gains = np.concatenate([[0.0], 10 ** (correction[inside] / 20.0), [0.0]])
+    taps = signal.firwin2(FIR_TAPS, freqs / nyquist, gains)
+
+    click_len = int(sample_rate * CLICK_MS / 1000.0)
+    click = np.random.default_rng(1).normal(0.0, 0.35, click_len)
+    click *= np.linspace(1.0, 0.0, click_len) ** 2
+
+    parts = [click, _normalise(audio, peak_dbfs=-3.0)]
+    beep_hz = profile.get("ROGER_BEEP_HZ") or ROGER_BEEP_HZ
+    if beep:
+        beep_len = int(sample_rate * ROGER_BEEP_MS / 1000.0)
+        t = np.arange(beep_len) / sample_rate
+        envelope = np.minimum(1.0, np.minimum(t, (beep_len / sample_rate) - t) * 200.0)
+        parts.append(np.sin(2.0 * np.pi * beep_hz * t) * 0.25 * envelope)
+    transmission = np.concatenate(parts)
+
+    # Drive until the crest factor matches the tape's, rather than at a guessed amount.
+    target_crest = profile.get("target_crest_factor_db")
+    drive = 3.2
+    if target_crest:
+        for _ in range(12):
+            candidate = np.tanh(transmission * drive)
+            peak = float(np.max(np.abs(candidate))) or 1e-9
+            rms = float(np.sqrt(np.mean(candidate ** 2))) or 1e-9
+            crest = 20 * np.log10(peak / rms)
+            if abs(crest - target_crest) < 0.3:
+                break
+            drive *= 1.35 if crest > target_crest else 1 / 1.35
+    transmission = np.tanh(transmission * drive)
+
+    voice = signal.lfilter(taps, [1.0], transmission)
+
+    floor = profile.get("NOISE_FLOOR_DBFS", NOISE_FLOOR_DBFS)
+    noise = np.random.default_rng(0).normal(0.0, _db_to_amp(floor), voice.shape)
+    voice = voice + signal.lfilter(taps, [1.0], noise)
+
+    return _normalise(voice)
 
 
 def load_phrases(path: Path) -> list[Phrase]:
