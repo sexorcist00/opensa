@@ -1,7 +1,7 @@
 # Contract — the dispatch map's own files
 
 What the dispatch console (`apps/dispatch`) looks for beside a built game, and what happens when a name is
-spelled wrong. Its neighbours in this folder are [mods.md](mods.md) and [vehicles.md](vehicles.md); this file
+spelled wrong. Its neighbours in this folder are [dispatch-radio-voice.md](dispatch-radio-voice.md), [mods.md](mods.md) and [vehicles.md](vehicles.md); this file
 is the console's half, and it exists for the same reason they do — a name that carries behaviour and cannot
 be grepped for is a name nobody can follow.
 

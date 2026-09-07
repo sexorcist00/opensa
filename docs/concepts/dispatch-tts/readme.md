@@ -409,6 +409,8 @@ not synthesise, translate, mix by position, or own any part of the radio.** Deci
 precisely so that no audio graph, no listener pose and no dependency on the camera enters the map component.
 The narrow shell↔map interface of 202 §4 gains one message and no coupling.
 
+The wire contract the three codebases build against is written down: [`docs/contracts/dispatch-radio-voice.md`](../../contracts/dispatch-radio-voice.md), which is what [202 phase 2](../../plans/202-pcad-dispatch/readme.md) asks this repository to own.
+
 **Everything else is PCAD's**, in the other repository: the dictionary, the models, the budget, the bank, and
 the added field on `radio_broadcast`. Nothing in this concept is actionable in this repository beyond the
 console's playback and this document — the same posture as
