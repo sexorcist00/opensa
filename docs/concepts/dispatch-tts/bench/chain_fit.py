@@ -18,10 +18,8 @@ import json
 from pathlib import Path
 
 import numpy as np
-import soundfile as sf
-from scipy import signal
 
-from bench import third_octave_levels
+from bench import psd, read_audio, third_octave_levels, write_audio
 
 FRAME_MS = 25.0
 # A frame counts as speech when it stands this far above the file's own quiet floor.
@@ -202,11 +200,11 @@ def roger_beep(audio: np.ndarray, sample_rate: int, voiced: np.ndarray, n: int) 
             seg = audio[max(0, b - window):b]
             if len(seg) < 256:
                 continue
-            freqs, psd = signal.welch(seg, fs=sample_rate, nperseg=min(256, len(seg)))
+            freqs, psd_values = psd(seg, sample_rate, 256)
             band = freqs > 400
             if not band.any():
                 continue
-            f, p = freqs[band], psd[band]
+            f, p = freqs[band], psd_values[band]
             peak_f = float(f[int(np.argmax(p))])
             near = np.abs(f - peak_f) <= peak_f * BEEP_CONCENTRATION_FRACTION
             concentration = float(p[near].sum() / (p.sum() + 1e-20))
@@ -236,8 +234,7 @@ def roger_beep(audio: np.ndarray, sample_rate: int, voiced: np.ndarray, n: int) 
 
 
 def measure(path: Path) -> dict:
-    audio, sample_rate = sf.read(path, dtype="float32")
-    audio = to_mono(audio)
+    audio, sample_rate = read_audio(path)
     voiced, rms, n = split_voiced(audio, sample_rate)
 
     return {
@@ -291,10 +288,9 @@ def verify(profile: dict, clean_path: Path, out_path: Path) -> dict:
     """
     from bench import radio_chain_from_profile
 
-    audio, sample_rate = sf.read(clean_path, dtype="float32")
-    audio = to_mono(audio)
+    audio, sample_rate = read_audio(clean_path)
     out = radio_chain_from_profile(audio, sample_rate, profile, beep=True)
-    sf.write(out_path, out, sample_rate)
+    write_audio(out_path, out, sample_rate)
 
     got = measure(out_path)["profile"]
     target = np.array(profile["levels_db"], dtype=float)

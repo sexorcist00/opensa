@@ -19,8 +19,14 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-import soundfile as sf
-from scipy import signal
+
+import dsp
+from bench import read_audio, write_audio
+
+try:
+    from scipy import signal
+except ImportError:
+    signal = None
 
 TARGET_RATE = 24000
 TARGET_LUFS_ISH_DBFS = -23.0
@@ -65,13 +71,13 @@ def restore_voicefixer(audio: np.ndarray, sample_rate: int) -> tuple[np.ndarray,
 
     tmp_in = Path(".restore-in.wav")
     tmp_out = Path(".restore-out.wav")
-    sf.write(tmp_in, audio, sample_rate)
+    write_audio(tmp_in, audio, sample_rate)
     # mode 0 is the general restoration path; the others target specific damage.
     _VF.restore(input=str(tmp_in), output=str(tmp_out), cuda=False, mode=0)
-    out, rate = sf.read(tmp_out, dtype="float32")
+    out, rate = read_audio(tmp_out)
     tmp_in.unlink(missing_ok=True)
     tmp_out.unlink(missing_ok=True)
-    return to_mono(out), rate
+    return out, rate
 
 
 def restore_denoise(audio: np.ndarray, sample_rate: int) -> tuple[np.ndarray, int]:
@@ -81,18 +87,17 @@ def restore_denoise(audio: np.ndarray, sample_rate: int) -> tuple[np.ndarray, in
     restoration model - a band-limited tape stays band-limited, and cloning from it
     still teaches the model the channel.
     """
-    f, t, spec = signal.stft(audio, fs=sample_rate, nperseg=1024)
+    spec = dsp.stft(audio, nperseg=1024)
     magnitude = np.abs(spec)
     # The noise floor per frequency: the quiet tenth of frames.
     floor = np.percentile(magnitude, 10, axis=1, keepdims=True)
     cleaned = np.maximum(magnitude - 1.5 * floor, 0.05 * magnitude)
-    _, out = signal.istft(cleaned * np.exp(1j * np.angle(spec)), fs=sample_rate, nperseg=1024)
-    return out.astype("float32"), sample_rate
+    out = dsp.istft(cleaned * np.exp(1j * np.angle(spec)), nperseg=1024)
+    return out.astype("float32")[: len(audio)], sample_rate
 
 
 def process(path: Path, out_dir: Path, backend: str) -> dict:
-    audio, sample_rate = sf.read(path, dtype="float32")
-    audio = to_mono(audio)
+    audio, sample_rate = read_audio(path)
     before = len(audio) / sample_rate
 
     if backend == "voicefixer":
@@ -101,12 +106,13 @@ def process(path: Path, out_dir: Path, backend: str) -> dict:
         audio, sample_rate = restore_denoise(audio, sample_rate)
 
     if sample_rate != TARGET_RATE:
-        audio = signal.resample_poly(audio, TARGET_RATE, sample_rate)
+        audio = (signal.resample_poly(audio, TARGET_RATE, sample_rate)
+                 if signal is not None else dsp.resample(audio, sample_rate, TARGET_RATE))
         sample_rate = TARGET_RATE
 
     audio = normalise(trim_silence(audio, sample_rate))
     out_path = out_dir / f"{path.stem}.wav"
-    sf.write(out_path, audio, sample_rate)
+    write_audio(out_path, audio, sample_rate)
 
     return {
         "file": path.name,

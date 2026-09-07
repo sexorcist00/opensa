@@ -22,8 +22,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import soundfile as sf
-from scipy import signal
+
+try:
+    import soundfile as sf
+except ImportError:  # the phone path writes wav through dsp instead
+    sf = None
+
+try:
+    from scipy import signal
+except ImportError:
+    signal = None
 
 # The radio chain. Values are the ones a real land-mobile radio imposes: the
 # channel is band-limited to the telephone band, heavily compressed, and every
@@ -72,6 +80,60 @@ def _normalise(audio: np.ndarray, peak_dbfs: float = -1.0) -> np.ndarray:
     peak = float(np.max(np.abs(audio))) or 1.0
     return audio * (_db_to_amp(peak_dbfs) / peak)
 
+# --- so the measuring half runs on a phone -----------------------------------
+# Termux ships numpy but scipy is a build adventure and soundfile wants libsndfile.
+# When they are present nothing changes and every earlier measurement stays valid;
+# when they are not, dsp.py provides numpy-only equivalents. Its Welch is identical
+# to scipy's to 0.000 dB (dsp.py --selftest); its band-pass is an FIR standing in
+# for a Butterworth, which differs by ~0.4 dB in band and is labelled as such.
+import dsp
+
+HAVE_SCIPY = dsp.HAVE_SCIPY
+
+try:
+    import soundfile as _sf
+except ImportError:
+    _sf = None
+
+
+def read_audio(path) -> tuple[np.ndarray, int]:
+    if _sf is not None:
+        audio, rate = _sf.read(str(path), dtype="float32")
+        return (audio.mean(axis=1) if audio.ndim > 1 else audio), rate
+    return dsp.read_wav(path)
+
+
+def write_audio(path, audio: np.ndarray, rate: int) -> None:
+    if _sf is not None:
+        _sf.write(str(path), audio, rate)
+    else:
+        dsp.write_wav(path, audio, rate)
+
+
+def psd(x: np.ndarray, fs: int, nperseg: int):
+    if HAVE_SCIPY:
+        return signal.welch(x, fs=fs, nperseg=min(nperseg, len(x)))
+    return dsp.welch(x, fs, nperseg)
+
+
+def band_limit(x: np.ndarray, fs: int, low: float, high: float) -> np.ndarray:
+    """The channel filter. Butterworth where scipy exists, an FIR where it does not."""
+    if HAVE_SCIPY:
+        nyquist = fs / 2.0
+        sos = signal.butter(
+            4, [low / nyquist, min(high, nyquist - 1.0) / nyquist], btype="bandpass", output="sos"
+        )
+        return signal.sosfilt(sos, x)
+    return dsp.bandpass(x, fs, low, high)
+
+
+def shape_to(x: np.ndarray, fs: int, points_hz: np.ndarray, gains: np.ndarray) -> np.ndarray:
+    """Apply a measured response curve as a linear-phase FIR."""
+    if HAVE_SCIPY:
+        taps = signal.firwin2(FIR_TAPS, points_hz / (fs / 2.0), gains)
+        return signal.lfilter(taps, [1.0], x)
+    return dsp.apply_fir(x, dsp.fir_from_response(points_hz, gains, FIR_TAPS, fs))
+
 
 def third_octave_bands(sample_rate: int) -> np.ndarray:
     """Third-octave centres from 100 Hz to just under Nyquist."""
@@ -84,12 +146,12 @@ def third_octave_bands(sample_rate: int) -> np.ndarray:
 
 def third_octave_levels(audio: np.ndarray, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
     """Third-octave band levels in dB, anchored so the 500-1000 Hz octave reads 0."""
-    freqs, psd = signal.welch(audio, fs=sample_rate, nperseg=min(4096, len(audio)))
+    freqs, psd_values = psd(audio, sample_rate, 4096)
     centres = third_octave_bands(sample_rate)
     levels = []
     for c in centres:
         sel = (freqs >= c / 2 ** (1 / 6)) & (freqs < c * 2 ** (1 / 6))
-        levels.append(float(psd[sel].mean()) if sel.any() else 0.0)
+        levels.append(float(psd_values[sel].mean()) if sel.any() else 0.0)
     levels_db = 10.0 * np.log10(np.array(levels) + 1e-20)
     anchor = (centres >= 500) & (centres <= 1000)
     reference = float(levels_db[anchor].mean()) if anchor.any() else float(levels_db.max())
@@ -106,14 +168,6 @@ def radio_chain(audio: np.ndarray, sample_rate: int, *, beep: bool) -> np.ndarra
     read a 12 kHz edge off a chain that was supposed to stop at 3400) and audibly, as a
     fizz around consonants that no radio has.
     """
-    nyquist = sample_rate / 2.0
-    band = signal.butter(
-        4,
-        [BAND_LOW_HZ / nyquist, min(BAND_HIGH_HZ, nyquist - 1.0) / nyquist],
-        btype="bandpass",
-        output="sos",
-    )
-
     # The transmitter's side: PTT click, the voice, the roger beep - all at line level.
     click_len = int(sample_rate * CLICK_MS / 1000.0)
     click = np.random.default_rng(1).normal(0.0, 0.35, click_len)
@@ -131,9 +185,9 @@ def radio_chain(audio: np.ndarray, sample_rate: int, *, beep: bool) -> np.ndarra
     transmission = np.tanh(transmission * 3.2)
 
     # Then the channel: band-limit everything, and add the channel's own floor inside it.
-    voice = signal.sosfilt(band, transmission)
+    voice = band_limit(transmission, sample_rate, BAND_LOW_HZ, BAND_HIGH_HZ)
     noise = np.random.default_rng(0).normal(0.0, _db_to_amp(NOISE_FLOOR_DBFS), voice.shape)
-    voice = voice + signal.sosfilt(band, noise)
+    voice = voice + band_limit(noise, sample_rate, BAND_LOW_HZ, BAND_HIGH_HZ)
 
     return _normalise(voice)
 
@@ -162,9 +216,8 @@ def radio_chain_from_profile(audio: np.ndarray, sample_rate: int, profile: dict,
     correction = np.clip(target - source, -MAX_EQ_BOOST_DB, MAX_EQ_BOOST_DB)
 
     inside = bands < nyquist * 0.98
-    freqs = np.concatenate([[0.0], bands[inside], [nyquist]])
+    points = np.concatenate([[0.0], bands[inside], [nyquist]])
     gains = np.concatenate([[0.0], 10 ** (correction[inside] / 20.0), [0.0]])
-    taps = signal.firwin2(FIR_TAPS, freqs / nyquist, gains)
 
     click_len = int(sample_rate * CLICK_MS / 1000.0)
     click = np.random.default_rng(1).normal(0.0, 0.35, click_len)
@@ -193,11 +246,11 @@ def radio_chain_from_profile(audio: np.ndarray, sample_rate: int, profile: dict,
             drive *= 1.35 if crest > target_crest else 1 / 1.35
     transmission = np.tanh(transmission * drive)
 
-    voice = signal.lfilter(taps, [1.0], transmission)
+    voice = shape_to(transmission, sample_rate, points, gains)
 
     floor = profile.get("NOISE_FLOOR_DBFS", NOISE_FLOOR_DBFS)
     noise = np.random.default_rng(0).normal(0.0, _db_to_amp(floor), voice.shape)
-    voice = voice + signal.lfilter(taps, [1.0], noise)
+    voice = voice + shape_to(noise, sample_rate, points, gains)
 
     return _normalise(voice)
 
