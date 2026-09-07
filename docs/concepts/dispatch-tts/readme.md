@@ -82,6 +82,84 @@ Four properties worth naming, because each is a decision above made concrete:
 - **The radio chain is not decoration.** The client already plays a canned bank recorded through real radio;
   a clean synthetic voice next to it announces itself as a different system.
 
+## 3b. Prior art — somebody built this for another server
+
+Found by the user 2026-09-07: **[GTAW-Dispatch-Relay](https://github.com/coopik/GTAW-Dispatch-Relay)**, an
+AI radio dispatcher for GTA World / FiveM. Read from its README, `config.yaml` and `modules/radiofx.py`;
+**not from the rest of its code**, which is the limit on how much weight these conclusions carry.
+
+**It carries no LICENSE file**, so by default all rights are reserved. Nothing of it may be copied into this
+project. Reading it is fine, and reproducing its *sound* from its published parameters — which is what was
+done for the listening page — is an independent implementation of standard DSP, not a derivative of its
+source.
+
+### Where it converged with us independently
+
+Convergence is the strongest signal available that a decision is right, so these are worth more than
+agreement usually is:
+
+- **The radio chain**: band-pass 300–3000 Hz, static, mild distortion, PTT key clicks. Against our invented
+  300–3400 Hz, `tanh`, noise, click. Two designs, no contact, the same numbers. **Note what that does NOT
+  mean**: theirs are invented too. Nobody measured a tape — which is the step `chain_fit.py` takes past both.
+- **Text normalisation before synthesis**, and phonetic callsigns (`1-Adam-12` ↔ `1A12`).
+- **The LLM as a secondary layer only**, with a deterministic path that always produces something.
+- **Caps flattened before synthesis.** Ours does this too, and the contract already said so — but their
+  reason is different and better-founded than ours: uppercase makes the model *re-act* the emotion and
+  destabilises the voice. We keep the caps as an urgency parameter and strip them from the text, which is
+  the same handling arrived at from the other side.
+
+### Three findings we did not have, and are taking
+
+| Their finding | Why it matters here |
+| --- | --- |
+| `stability 0.85` plus a fixed seed | Keeps delivery flat and repeatable. Their config records that the old 0.5 let the provider re-act every request, so one dispatcher sounded bored on one call and frantic on the next. That drift is a risk §5 named and had no answer for |
+| One `output_sample_rate` across every provider | Their note calls this the cure for a "chipmunk" voice — a resampling mismatch nobody thinks to look for |
+| **No silent fallback to another provider** | A failed key quietly swapping voices mid-shift is a defect that presents as a personality change. Fail loudly and keep one voice |
+
+Their ~400-model vehicle list is a fourth idea we need for a different reason — the translator may not
+translate `Sultan` — but ours must come from **the build's own tables**, not a hand-kept list, per this
+repository's rule about deriving from what the asset carries.
+
+### Why it is not the same product
+
+| | GTAW-Dispatch-Relay | This |
+| --- | --- | --- |
+| Source of text | the game's chat log on disk, screen OCR as fallback | the CAD's own socket — an authenticated event with a channel and a sender |
+| What it does with it | **writes the broadcast**: flagger → scoring "brain" → generator | **translates what the operator typed**; adding a fact is forbidden (decision 4) |
+| Who is talking | an AI standing in for a dispatcher | a human dispatcher given a voice |
+| Where synthesis runs | on each listener's PC | once on the backend, one file to every client (decision 7) |
+| Voices | stock (Edge / ElevenLabs / Google) | cloned from real recordings (decision 12, as reopened) |
+| Language | English only | Russian in, English out |
+
+**The consequence worth stating for whoever reads this next: half of their codebase is work we do not have
+to do.** The flagger, the scoring brain, the de-duplication, the OOC filtering, the OCR, the street
+gazetteer — all of it exists to *guess*, from chat text, what happened. Nothing here guesses: a transmission
+arrives structured. We begin where they end.
+
+**And on the axis this project failed its first listening round on, they do not answer.** Stock voices, no
+cloning, no reference — which is the exact configuration the user rejected as artificial.
+
+### The defect that is in both chains
+
+Their chain band-passes, *then* drives into `tanh`, *then* bit-crushes: every harmonic the distortion creates
+lands outside 300–3000 Hz and is never removed. **Ours had the same ordering** until the fitter caught it
+(§5d). Their key click is appended after everything and so never crosses the channel the voice crossed —
+which our beep detector reports as a 468 Hz tone that does not exist in their design.
+
+### Measured, both channels, one instrument
+
+| | relay | a real radio tape |
+| --- | --- | --- |
+| Crest factor | **14.8 dB** | 21.0 dB |
+| Noise floor | −46.8 dBFS | −54.0 dBFS |
+| At 3.2 kHz, relative to own midband | **18 dB louder** | — |
+
+Their radio keeps the top of the voice; a real one throws it away. Neither is a mistake — one buys
+intelligibility, the other is what a narrow channel does.
+
+**The listening verdict is not in.** The reproduction is on its own page for the user to judge; this section
+records what was measured and read, and nothing about how it sounds.
+
 ## 4. The model field, as of 2026-09
 
 Hosted, latency is time-to-first-byte as published by the vendor or by third-party benchmarks — not measured
