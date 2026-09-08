@@ -657,10 +657,19 @@ console is measured against.
 | The operator cluster (search, fit, follow, save, measure, share) | open | one `TOOLS` handle |
 | Turn, tilt, the three zoom levels | open | behind one key beside the compass |
 | North, zoom in, zoom out | open | open |
-| The calls and units lists | **windows over the map**, moved and sized by the operator (201/7-08) | a tabbed sheet capped at 44 % of the screen, and **collapsed by default when the viewport is short** — a phone in landscape is wide and 360 px tall, where the sheet at its cap left the map 98 px |
+| The calls and units lists | **windows over the map**, moved and sized by the operator (201/7-08) | a tabbed sheet **over** the map, capped at 44 % of it, and **collapsed by default when the viewport is short** — a phone in landscape is wide and 360 px tall, where an open list covers most of what there is to look at |
 
 Collapsed, the sheet still carries both counts, which are the two numbers a dispatcher watches; tapping the
 tab you are on closes the list, tapping the other switches to it.
+
+**The sheet floats over the map rather than sitting under it, since 2026-09-08** (the operator's report). It
+was a grid row, so its height came out of the map's track and every open and close RESIZED the map: the
+camera reframed, every render target was rebuilt, and the CSS box the symbology is drawn in moved — 425 px
+with the list open against 696 closed, at 360x800. That is the same swing that makes two captures
+unsubtractable, one tap away and made constantly. Now the map holds its whole height through the toggle
+(measured: 696 through open, closed and reopened) and an open list covers its lower part, which is exactly
+what the desk's windows do to it — one model at two densities rather than two layouts. The camera is not
+compensated for the cover (the user's call): an operator who wants the ground back closes the list.
 
 **The measurements this replaced** are in
 [201/3-01](../plans/201-dispatch-console/3-the-operator-surface-on-a-phone/readme.md): a layout 403 CSS px
@@ -816,6 +825,15 @@ converted without `--vehicles`, a total conversion that never had a car called `
 no model: the unit is drawn exactly as it was before models existed, the console says so once per name in the
 log, and the readout counts it (`cars 7/9 · 3 types · 12.5 MB`). A unit is never dropped from the map for
 want of a model — that would read as a unit going off duty.
+
+**Between 2026-09-05 and 2026-09-08 it did not degrade — it disappeared, and nothing said so.** Once a car
+became the unit's datum, a unit with a car coming stopped drawing its own chevron; the question *"is a car
+coming?"* was answered from the request bookkeeping alone, and where there is NO model source (`?demo=1`, a
+pak served without its game dir, and now `?models=0`) nothing is ever requested and nothing is ever recorded
+as unavailable — so the answer stayed *yes* forever and the unit got no car, no chevron and no beacon. Every
+patrolling unit in the shareable demo was invisible for three days, with the roster still reading 150 and
+`unitsAsSymbolOnly` still counting them. The rule reads the SOURCE now, and the
+[restriction](../restrictions/architecture.md) is filed under the general shape.
 
 The names it looks for, and what a wrong one does, are in
 [contracts/dispatch-map](../contracts/dispatch-map.md) §2.

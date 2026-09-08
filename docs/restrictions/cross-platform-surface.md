@@ -104,6 +104,36 @@ stylesheet rather than resolved once at mount, because a skin change is one attr
 never sees — a value resolved at mount would be the density of whatever skin was current when the console
 opened.
 
+## Chrome that takes its height from the MAP's own track moves the measurement, not just the layout
+
+**Added 2026-09-08**, from the operator's report that opening the calls/units list changed the size of the
+map window.
+
+**The rule.** A panel an operator opens and closes may not live in a grid or flex track that the MAP shares.
+On this surface the map's size is not a layout preference: the camera frames for the displayed box
+([architecture.md](architecture.md)), every render target is rebuilt when the drawing buffer moves, and the
+2D symbology is drawn in the CSS box's own coordinates — so a toggle that reflows the map reframes the
+picture and moves the thing every overlay number is a cost OF. Chrome that comes and goes floats over the
+map, which is what the desk already does with its windows ([201/7-08](../plans/201-dispatch-console/7-the-operator-map/readme.md)).
+
+**What it cost.** The phone sheet was a `auto` row in `appCompact`, so its height came out of the map's
+`minmax(0, 1fr)`: the map measured **425 px with the list open and 696 with it closed** at 360x800 — the
+same 360x320 ↔ 360x609 swing that `capture-box.ts` exists to catch in a capture, except this one is one tap
+away and an operator makes it constantly. Two windows of a measurement taken on either side of that tap are
+not comparable, and the row that mixes them is internally consistent.
+
+**SILENT, in the two ways this file always means it**: it typechecks, it lints and every test passed (this
+is geometry), and it looks deliberate — a list that pushes the map up reads as a layout choice rather than
+as a defect. **Caught since 2026-09-08** by `styles.test.ts`: the sheet is `position: absolute`, and the
+compact grid template has no `auto` track left for anything to claim. The general form is not caught — any
+future panel given a track of its own does the same thing, and the only tell is a capture whose box moved.
+
+**And the corollary, which cost two more defects the same day**: once chrome floats, whatever else is
+anchored to the map's bottom is behind it. The degraded banner was painting over the list rows — against its
+own rule to say what is missing *without covering it* — and the radar's lower 44 px sat behind the tab strip
+permanently. A floating drawer owns the foot of the map, so everything else there clears its collapsed strip
+or is layered deliberately above it.
+
 ## Caught, or silent?
 
 **PARTLY CAUGHT since 2026-08-25, and silent everywhere the guard does not reach.**

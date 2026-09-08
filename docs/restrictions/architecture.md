@@ -1039,6 +1039,28 @@ naming the trap where the links are defined. The general form has no guard: any 
 budget's default is dead, and only a reader comparing the two by hand will know. Its neighbour one section
 down is the same family — a surface that disagrees with the checkout while both report themselves current.
 
+## A fallback that YIELDS to work in flight must ask whether that work can arrive at all
+
+**The rule.** A placeholder rule of the shape *"do not draw the stand-in, something better is on its way"*
+is only correct while something can BE on its way. Where the loader is absent — not failing, absent — nothing
+is ever requested and nothing is ever recorded as unavailable, so the "on its way" answer becomes permanent
+and the stand-in is never drawn. **So the rule reads the SOURCE, not only the request bookkeeping.**
+
+**What it cost.** `UnitModels.willDraw` decides whether the symbology and the beacons drop a unit's mark,
+because a car on the map already draws it (the operator's call, 2026-09-05). It answered `true` for any unit
+that named a model and was not in `unresolved` — which is right for a model still loading and wrong for a
+console with no model source at all: `?demo=1` has no game dir, a pak served on its own has no archives, and
+`?models=0` removes the source deliberately. In all three, `request` returns at its first condition, so the
+name is never resolved AND never marked. **Every patrolling unit in the shareable demo was drawn by nothing
+— no car, no chevron, no beacon — from 2026-09-05 to 2026-09-08.**
+
+**SILENT, and it is the disappearance `labels.ts` already warned about in prose.** It typechecks, it lints,
+every test passed (the layer's own suite asserted the loading case, which is the one that works), the roster
+still says 150 and `unitsAsSymbolOnly` still counts them all. Nothing errors and no number moves; only an eye
+on the map can tell, and the demo is the surface nobody measures. **Caught since 2026-09-08** at that one
+seam by a test that was proven red first. The class is not: any future rule that defers to work in flight
+owes the same question, and nothing in this repository asks it for them.
+
 ## A long-lived process serves the TABLE IT STARTED WITH, never the one in the checkout
 
 **The rule.** A server that reads a module at boot and answers from it — a link list, a tool schema, a job

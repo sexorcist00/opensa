@@ -36,6 +36,7 @@ looked up, and only DECISIONS reach them.
 | **The 62 game-data tools have never been run** | they became reachable today and nobody has looked. `ide-flag-histogram` says which authored IDE bits exist to honour; `dat-order-check` is a correctness question about the shipped data | minutes each, on the phone |
 | **The remaining chain-9 rungs** | the graphics ladder is a bloom switch and a prefilter scale; the user asked for a real optimisation ↔ quality axis (§5a) | a measurement before it is a UI task |
 | **Audio** | never planned, nothing exists, and the user has asked twice (§5e) | a bank parser, then Web Audio |
+| **The four §6 instruments are BUILT and owed a flight** | since 2026-09-08 a capture records the battery and the charging state, the time the page spent backgrounded, and the extremes the CSS box reached; `?models=0` prices the fleet and `?box=` pins the box. None of it has been on a device yet, and two of them decide how earlier rows may be read (§6) | one circuit: `board`/`nomodels`, then `field`/`boxed` |
 
 **What is NOT open, so nobody spends a session re-deciding it:** the post chain (§3.1, 2.4 ms, closed),
 whether bloom ships (the operator released it at night — Smooth is the default), and the frame-rate budget
@@ -510,15 +511,44 @@ spatial panning → volume and mute.
 
 ## 6. Still unpaid, by everyone
 
-- **No row records battery, charging state or die temperature.** Every thermal argument in this chain is made
-  without them, including "the device had not moved" above — which rests on a re-flown baseline instead.
-- **No capture records how many browser tabs compete with it**, which is the null arm's one unclosed
-  candidate for its own spread.
+**Four of the six lines here were built on 2026-09-08 and are now owed a FLIGHT rather than code.** What
+each one records is in [query-parameters](../../development/query-parameters.md); what none of them has is a
+row taken with it on.
+
+- **Battery, charging state and die temperature — RECORDED since 2026-09-08, never yet captured.** The
+  report carries `power.charging`, `power.chargingChanged` and the level at both ends of the window
+  (`world/power.ts`), and the panel stamps the DIE TEMPERATURE onto the note from `termux-battery-status`,
+  since no browser exposes it. **Two things the next device session must check**: whether Termux:API is
+  installed at all — an absent binary is a named skip in the note (*"battery not read (termux-api absent)"*),
+  which is the sentence that says how to make the next row carry a temperature — and whether the phone was
+  on the charger for the rows already filed, which nothing can answer retroactively. Every thermal argument
+  in this chain still rests on a re-flown baseline; the first row with `charging` in it is the first one that
+  does not have to.
+- **How many browser tabs compete with a capture CANNOT be measured, and that line is closed as such.** No
+  web API names another tab and Termux on an unrooted phone cannot see another app's processes. What was
+  built instead is the half that can be: `visibility.hiddenMs` / `hiddenSpells` — the time this page spent
+  out of the FOREGROUND, which is the failure that actually cost this chain a measurement (Android suspends
+  a backgrounded tab; the 2026-08-31 run lost the one flight with the world resident to it, and nothing in
+  the capture said so).
 - **Upstream has never been merged.** `AlexSergey/opensa` cannot be fetched from the web container (no
-  credentials, `add_repo` refused), so the fork's divergence is unmeasured. Do it from a checkout that can.
-- **A `?models=0` arm.** The fleet's own cost was measured against a window where the models happened not to
-  load — a real arm would make that reproducible. (The related gap is closed: how much of the fleet's draw
-  count is the un-instanceable blend phase is a REPORTED number now, not an inference.)
-- **The CSS box is not held constant.** The browser chrome collapses between 360x320, 360x570 and 360x609;
-  the pinned buffer holds the scene still, but the overlay follows the box, so its pixel count moves between
-  windows that are otherwise identical.
+  credentials; `add_repo` refuses a cross-owner repository — re-tested 2026-09-08), so the fork's divergence
+  is unmeasured. Do it from a checkout that can. **Left owed deliberately on 2026-09-08** (the user's call).
+- **`?models=0` — BUILT 2026-09-08, and building it found a live defect first.** The arm removes the whole
+  fleet path (the user's call): no model reads, no uploads, no vehicle draws, so `board` − `nomodels` is what
+  150 cars cost in the frame AND in residency. The panel offers it as `nomodels`. **The defect**:
+  `UnitModels.willDraw` answered *"a car is coming"* for any unit that named a model and was not yet marked
+  unresolved — and with NO source (`?demo=1`, a pak served without its game dir, this arm) nothing is ever
+  requested and nothing is ever marked, so the answer was permanent and the unit got no chevron, no beacon
+  and no car. **Every patrolling unit in the shareable demo was invisible from 2026-09-05**, silently: the
+  roster still said 150. Fixed, with the red test that proved it.
+- **The CSS box — RECORDED and PINNABLE since 2026-09-08; the pin is owed a flight.** `surface.cssWidthMin/Max`
+  and `cssHeightMin/Max` are the extremes the window actually reached (off the resize observer, so a frame
+  pays nothing), and a window that mixed two boxes now carries a warning naming both. `?box=WxH` pins the box
+  itself, and the panel's `boxed` link is a **VERIFICATION arm rather than a member of the circuit**: 360x320
+  is the box every existing row was taken at, so `boxed` and `field` should read the SAME on a device whose
+  chrome is already there. **Fly that pair before any arm adopts the pin** — a knob that moved every filed
+  row without a verification is exactly what this chain keeps paying for.
+  **And the OPERATOR's half of the same seam is fixed**: the phone's calls/units sheet was a grid row, so
+  every open and close took height from the map and moved the box under a running measurement. It floats
+  over the map now (the user's report and call, 2026-09-08), measured to hold 696 px through the whole
+  toggle cycle where it used to swing 425/696.
