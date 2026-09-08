@@ -218,8 +218,21 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
         touch={touch}
         yaw={readout?.pose.yaw ?? MAP_YAW}
       />
-      {/* The two lists, over the world. Only on the desk: a phone has no room for a window that covers the
-          map it floats over, so there the same two panels are a sheet UNDER it (`Sheet`). */}
+      {/* The two lists, over the world. On a phone the same two panels are the SHEET below — a drawer over
+          the map rather than two draggable windows, which is the same model at the other density. */}
+      {compact && (
+        <Sheet
+          incidents={ops.incidents}
+          now={ops.now}
+          onLocateIncident={locateIncident}
+          onLocateUnit={locateUnit}
+          onSelect={actions.select}
+          selection={selection}
+          short={short}
+          touch={touch}
+          units={ops.units}
+        />
+      )}
       {!compact && (
         <>
           <PanelWindow
@@ -309,17 +322,6 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
       <div {...{ [DISPATCH_SCOPE]: '' }} data-theme={theme} style={styles.appCompact}>
         {top}
         {map}
-        <Sheet
-          incidents={ops.incidents}
-          now={ops.now}
-          onLocateIncident={locateIncident}
-          onLocateUnit={locateUnit}
-          onSelect={actions.select}
-          selection={selection}
-          short={short}
-          touch={touch}
-          units={ops.units}
-        />
         {timeline}
         <StatusBar compact readout={readout} />
       </div>

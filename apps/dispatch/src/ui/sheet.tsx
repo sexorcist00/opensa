@@ -1,14 +1,19 @@
 /**
- * The phone sheet: the two side panels, stacked under the map behind a tab strip.
+ * The phone sheet: the two side panels as a drawer OVER the map, behind a tab strip.
  *
  * A dispatcher on a phone is looking at ONE list at a time — the queue when calls are coming in, the roster
  * when deciding who rolls. Showing both at a third of the height each would make neither readable, so the tab
  * carries the count and the operator picks.
  *
  * **And sometimes neither.** The strip collapses to its own tabs, which keeps both counts on screen — the
- * two numbers a dispatcher actually watches — and gives the rest back to the map. It starts collapsed when
- * the viewport is too short to afford both (a phone in landscape, where the sheet at its cap left the map
- * 98 px).
+ * two numbers a dispatcher actually watches — and gives the rest of the map back to look at.
+ *
+ * **It floats over the map rather than sitting under it, since 2026-09-08** (the operator's report). As a
+ * grid row it took its height out of the map's track, so every open and close resized the map: the camera
+ * reframed, the render targets were rebuilt, and the CSS box the symbology is drawn in moved — one toggle
+ * moving both the picture and the measurement (`world/capture-box.ts`, `ui/styles.ts` → `sheet`). Now the
+ * map keeps its whole height and an open list covers its lower part, which is what the desk's floating
+ * windows have always done to it.
  */
 import { type ReactElement, useState } from 'react';
 
@@ -37,7 +42,9 @@ export function Sheet({
   onLocateUnit: (unit: Unit) => void;
   onSelect: (selection: Selection) => void;
   selection: Selection;
-  /** The viewport is too short to open on a list: start collapsed, with the counts still on screen. */
+  /** The viewport is too short to open on a list: start collapsed, with the counts still on screen. Since
+   *  the sheet floats it no longer starves the map, but at its cap in landscape it covers most of it — so
+   *  the rule holds for what an operator SEES rather than for what the map is given. */
   short?: boolean;
   /** The pointer is a finger: the tab strip takes a finger-sized target. */
   touch?: boolean;

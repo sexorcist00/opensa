@@ -291,9 +291,10 @@ export const styles = {
     fontSize: 12,
     gridTemplateColumns: 'minmax(0, 1fr)',
     // 48 rather than 40: the bar carries 44-px targets now, and a 40-px row makes every one of them
-    // overflow its own bar. The sheet is `auto` rather than a fixed 44% because a fixed share left ~200 px
-    // of black under two calls while the map — the thing the console is for — was starved to 350.
-    gridTemplateRows: '48px minmax(0, 1fr) auto 34px 22px',
+    // overflow its own bar. **The sheet has no row of its own since 2026-09-08** — it floats over the map
+    // (`styles.sheet`), because a row for it meant every open and close resized the map under the operator.
+    // The `auto` row that used to be here is why the map track is the only flexible one left.
+    gridTemplateRows: '48px minmax(0, 1fr) 34px 22px',
     height: '100%',
     width: '100%',
   },
@@ -388,6 +389,21 @@ export const styles = {
     right: 10,
     zIndex: 4,
   },
+  /** The same notice on a phone, lifted clear of the sheet's tab strip, which is always at the map's foot. */
+  degradedBannerCompact: {
+    background: SEMANTIC.warnBg,
+    border: `1px solid ${SEMANTIC.warnBorder}`,
+    borderRadius: RADIUS.surface,
+    bottom: TOUCH_TARGET + 8,
+    boxShadow: SHADOW.float,
+    color: SEMANTIC.warnText,
+    fontSize: TEXT.caption,
+    maxWidth: 420,
+    padding: '5px 10px',
+    position: 'absolute',
+    right: 10,
+    zIndex: 4,
+  },
   detail: {
     ...FLOATING,
     borderRadius: RADIUS.surface,
@@ -401,7 +417,8 @@ export const styles = {
   detailCompact: {
     ...FLOATING,
     borderRadius: RADIUS.surface,
-    bottom: 8,
+    // Clears the sheet's tab strip, which is always at the bottom of the map on a phone (2026-09-08).
+    bottom: TOUCH_TARGET + 8,
     left: 8,
     padding: '9px 11px',
     position: 'absolute',
@@ -480,7 +497,7 @@ export const styles = {
     maxWidth: 240,
     padding: '6px 8px',
     position: 'absolute',
-    zIndex: 5,
+    zIndex: 6,
   },
   /** Folded: the header alone, so the map keeps the corner. `width: fit-content` rather than the panel's
    *  240 — a one-line summary that still reserved a 240-px block would not have given anything back. */
@@ -746,7 +763,9 @@ export const styles = {
   /** Phone: smaller, and clear of the sheet's grab handle. 108 px still reads at arm's length. */
   minimapCompact: {
     borderRadius: '50%',
-    bottom: 8,
+    // Above the sheet's tab strip, since 2026-09-08: the sheet floats over the map now, so a radar at
+    // `bottom: 8` had its lower 44 px behind the strip on every screen — a half-moon, permanently.
+    bottom: TOUCH_TARGET + 8,
     cursor: 'pointer',
     height: 108,
     position: 'absolute',
@@ -837,8 +856,42 @@ export const styles = {
     minWidth: TOUCH_TARGET,
     padding: '4px 8px',
   },
-  /** The phone sheet: as tall as the list needs, and never more than this share of the screen. */
-  sheet: { display: 'flex', flexDirection: 'column' as const, maxHeight: '44vh', minHeight: 0 },
+  /**
+   * The phone sheet — a drawer OVER the map, as tall as the list needs and never more than this share of it.
+   *
+   * **It was a grid row until 2026-09-08, and that made the map resize under the operator** (their report).
+   * Opening the list took its height out of the `1fr` map track: the camera reframed, every render target
+   * was rebuilt at the new size, and the CSS box the symbology is drawn in moved — the same 360x320 ↔
+   * 360x609 swing that makes two captures unsubtractable (`world/capture-box.ts`). One toggle moved both the
+   * picture and the measurement.
+   *
+   * So it floats, which is also what the desk already does: 201/7-08 made the map the workspace and the two
+   * lists windows over it, and this is that model at the phone's density rather than a second one. The map
+   * keeps its whole height on every toggle; an open list COVERS its lower part and the camera is not
+   * compensated for it (the user's call, 2026-09-08) — an operator who wants the ground back closes the
+   * list, exactly as they close a window on the desk.
+   *
+   * The background is the floating one and never transparent: this is list text over a moving map, which no
+   * contrast rule in [apca.ts](apca.ts) can rescue. `%` rather than `vh` because the containing block is now
+   * the map rather than the page.
+   */
+  sheet: {
+    background: 'var(--os-float-bg)',
+    borderTop: `1px solid ${RAMP.lineStrong}`,
+    bottom: 0,
+    boxShadow: SHADOW.float,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    left: 0,
+    maxHeight: '44%',
+    minHeight: 0,
+    position: 'absolute' as const,
+    right: 0,
+    // Above the degraded banner (4), below the inventory readout (6): a state notice may not paint over the
+    // list — its own rule is to say what is missing *without covering it* — and a measurement panel that an
+    // open drawer hid would be a capture nobody could read.
+    zIndex: 5,
+  },
   sheetTab: {
     background: 'transparent',
     border: 'none',

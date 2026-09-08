@@ -213,7 +213,7 @@ export function MapCanvas({
       {children}
       {agent && <AgentBand compact={compact} status={agent} />}
       <AgentNotices notices={notices.notices} />
-      {degraded && <DegradedBanner message={degraded} />}
+      {degraded && <DegradedBanner compact={compact} message={degraded} />}
       {dispatchParams().get('inventory') === '1' && (
         <InventoryPanel read={() => handleRef.current?.inventory() ?? null} />
       )}
@@ -222,9 +222,9 @@ export function MapCanvas({
 }
 
 /** The board still works; say what is missing and why, without covering it. */
-function DegradedBanner({ message }: { message: string }): ReactElement {
+function DegradedBanner({ compact = false, message }: { compact?: boolean; message: string }): ReactElement {
   return (
-    <div style={styles.degradedBanner}>
+    <div style={compact ? styles.degradedBannerCompact : styles.degradedBanner}>
       <strong>2D plan mode</strong> — no 3D world: {message}
     </div>
   );

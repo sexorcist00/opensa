@@ -168,10 +168,27 @@ describe('dispatch styles', () => {
       }
     });
 
-    it('caps the phone sheet rather than reserving a share of the screen for it', () => {
-      // A fixed 44% left ~200 px of black under two calls while the map was starved to 350.
-      expect(styles.sheet.maxHeight).toBe('44vh');
-      expect(String(styles.appCompact.gridTemplateRows)).toContain('auto');
+    it('never gives the phone sheet a track of its own — a toggle may not resize the map', () => {
+      // The operator's report, 2026-09-08: opening the list took its height out of the map's `1fr` track, so
+      // the camera reframed, every render target was rebuilt and the CSS box the symbology is drawn in
+      // moved. The sheet floats over the map now, and the map keeps its whole height on every toggle.
+      expect(styles.sheet.position).toBe('absolute');
+      expect(styles.sheet.bottom).toBe(0);
+      expect(String(styles.appCompact.gridTemplateRows)).not.toContain('auto');
+    });
+
+    it('caps the sheet against the MAP rather than the page, and never lets the map show through it', () => {
+      // `%` because the containing block is the map now; opaque because this is list text over a moving map.
+      expect(styles.sheet.maxHeight).toBe('44%');
+      expect(styles.sheet.background).not.toBe('transparent');
+    });
+
+    it('keeps the map chrome clear of the strip the sheet always leaves at the bottom', () => {
+      // The radar is 108 px at the bottom-right: at `bottom: 8` its lower 44 px sit behind the tab strip on
+      // every screen, permanently, which is a half-moon rather than a map.
+      for (const style of [styles.minimapCompact, styles.detailCompact]) {
+        expect(Number(style.bottom)).toBeGreaterThanOrEqual(TOUCH_TARGET);
+      }
     });
   });
 });
