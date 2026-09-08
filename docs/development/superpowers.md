@@ -27,8 +27,18 @@ claude plugin marketplace add obra/superpowers
 claude plugin install superpowers@superpowers-dev
 ```
 
-**The 14 skills appear in the SAME session** — measured, no restart needed; the hook below is what needs a
-new session, not the skills.
+**The plugin installs in the same session; its SKILLS do not become invocable in it.** Measured again
+2026-09-08, in a fresh web container: both commands succeed (`Successfully added marketplace: superpowers-dev`
+→ `Successfully installed plugin: superpowers@superpowers-dev`, v6.3.0, `Status: enabled`), and
+`Skill superpowers:brainstorming` still answers **`Unknown skill`** — a session's skill list is assembled
+before its first turn, so a plugin installed mid-session is not in it. The 2026-08-30 line said the opposite
+and is corrected here rather than left to cost a session.
+
+**What to do instead of waiting for a restart** (which a web session cannot ask for): the skills are plain
+Markdown at `~/.claude/plugins/marketplaces/superpowers-dev/skills/<name>/SKILL.md`, so READ the one you
+were told to use and follow it. That is what was done on 2026-09-08 for `brainstorming` and `writing-plans`
+([the audio concept](../concepts/audio.md) is the result), and it costs a `cat` — the skill is a procedure,
+not a tool call. Where its instructions and `CLAUDE.md` disagree, the precedence below still decides.
 
 `claude plugin install` writes its two keys into **`~/.claude/settings.json`** (`extraKnownMarketplaces` +
 `enabledPlugins`), and `~/.claude` does not survive the container. That is why the same two keys are

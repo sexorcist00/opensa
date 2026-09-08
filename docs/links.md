@@ -5,6 +5,14 @@ Rule (also in `CLAUDE.md`): when an external resource proves useful, add it here
 
 ## GTA SA reverse engineering & modding
 
+- <https://gtamods.com/wiki/SFX_(SA)> — **the SFX bank format**, exact enough to address a single sound by
+  arithmetic: `BankLkup.dat`'s 12-byte entries, `PakFiles.dat`'s 52-byte names, the 4 084-byte bank header
+  (400 × a 12-byte `SoundMeta` carrying buffer offset, loop offset in samples, sample rate and headroom) and
+  the fact that the buffers are signed 16-bit mono PCM with no encryption. Read 2026-09-08 for
+  [the audio concept](concepts/audio.md), where every number is owed a check against the real files.
+- <https://gtamods.com/wiki/Audio_stream> — **the radio streams**: the 16-byte XOR key the files are
+  obfuscated with, the 8 068-byte per-track header (1 000 beat entries, then eight length pairs), and the Ogg
+  Vorbis payload behind it. Same concept, same caveat.
 - <https://gtamods.com/wiki/IMG_archive> — the IMG format and, usefully, the ARCHIVE-COUNT limit stated
   plainly ("max of 8 archives … 3 standard … and 5 defined within default.dat or gta.dat"). Used in 2026-08-15
   to corroborate `TOTAL_IMG_ARCHIVES` independently of the address arithmetic — see
