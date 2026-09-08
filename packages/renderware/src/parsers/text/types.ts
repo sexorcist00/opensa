@@ -27,6 +27,44 @@ export interface IdeObjectDef {
   txdName: string;
 }
 
+/** An axis-aligned box zone: `name id flags x1 y1 z1 x2 y2 z2`. */
+export interface IplAudioBox extends IplAudioZoneBase {
+  readonly max: readonly [number, number, number];
+  readonly min: readonly [number, number, number];
+  readonly shape: 'box';
+}
+
+/** A sphere zone: `name id flags x y z radius`. */
+export interface IplAudioSphere extends IplAudioZoneBase {
+  readonly centre: readonly [number, number, number];
+  readonly radius: number;
+  readonly shape: 'sphere';
+}
+
+/**
+ * One audio zone from an IPL `auzo` section (203/1-03) — the shape SA picks its AMBIENCE by.
+ *
+ * `CAEAmbienceTrackManager` asks `CAudioZones` which zone the listener stands in and plays that zone's bed,
+ * so this is the authored data behind "what this part of the city sounds like". It is placement data like
+ * everything else in an IPL, and it was the one section this parser skipped on purpose until audio needed it.
+ *
+ * **The original's array ceilings are 158 boxes and 3 spheres, and they are not ours** — a 2004 static array
+ * is a fact about that machine ([directive 2](../../../../../docs/project-goals.md)). Nothing here counts.
+ */
+export type IplAudioZone = IplAudioBox | IplAudioSphere;
+
+/** The fields both zone shapes carry. */
+export interface IplAudioZoneBase {
+  /** Whether the zone starts ACTIVE (`flags` is 1). SA toggles it at runtime with `SwitchAudioZone`, so this
+   *  is a starting state rather than a property of the place. */
+  readonly active: boolean;
+  /** The zone id the ambience table is keyed by (`int16` in the game). */
+  readonly id: number;
+  /** The zone's name. The game stores `char[8]`, so anything past 7 characters is truncated THERE and
+   *  carried whole here — the truncation is the game's behaviour, not the file's meaning. */
+  readonly name: string;
+}
+
 /**
  * A car generator from a binary IPL `CARS` section — SA's map-baked parked/spawned cars (the same
  * concept as the CLEO `0x014B` generators). Model and colour fields use `-1` for "pick at runtime".

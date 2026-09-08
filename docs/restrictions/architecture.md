@@ -1039,6 +1039,27 @@ naming the trap where the links are defined. The general form has no guard: any 
 budget's default is dead, and only a reader comparing the two by hand will know. Its neighbour one section
 down is the same family — a surface that disagrees with the checkout while both report themselves current.
 
+## A SEQUENTIAL read may not be written as an object literal — key order is the linter's
+
+**The rule.** When a parser reads fields off a moving cursor, the ORDER of the reads is the format's and
+nothing else's. An object literal does not own its key order in this repository: `perfectionist/sort-objects`
+sorts it alphabetically on the next `eslint --fix`, and if the values are `stream.u32()` calls, that fix
+reorders the READS. So a cursor-based parser reads into locals first and builds the object afterwards.
+A parser addressing ABSOLUTE offsets (`view.getInt32(offset + 32, true)`) is immune and may keep its
+literal — which is what every other binary parser here already does.
+
+**What it cost.** Twenty minutes, on 2026-09-08, in the first parser of plan 203: `readBankHeader` pushed
+`{ bufferOffset: stream.u32(), loopOffset: stream.i32(), sampleRate: stream.u16(), headroom: stream.i16() }`
+— correct as written, and the first lint run sorted it to `bufferOffset, headroom, loopOffset, sampleRate`,
+which reads a 16-bit headroom where the 32-bit loop point belongs and walks every field after it two bytes
+early.
+
+**CAUGHT ONLY BY A TEST THAT ASSERTS VALUES.** It typechecks (every field is a number), it lints (the fix IS
+the lint), and a test that merely parsed without throwing would pass — the bytes are all readable, they are
+simply the wrong bytes. Here `readBankHeader`'s own unit tests failed on the values within a minute, which is
+the argument for asserting a parser's fields rather than its shape. The general form is not caught: any new
+cursor-based parser written as a literal will be reordered the first time somebody runs the fixer.
+
 ## A fallback that YIELDS to work in flight must ask whether that work can arrive at all
 
 **The rule.** A placeholder rule of the shape *"do not draw the stand-in, something better is on its way"*

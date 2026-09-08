@@ -2,6 +2,18 @@
 
 // IMG archive + asset resolution
 export * from './archive';
+export {
+  BANK_HEADER_BYTES,
+  readBankHeader,
+  readBankLookup,
+  readPakFiles,
+  type SfxBank,
+  type SfxBankHeader,
+  type SfxPackage,
+  type SfxSound,
+  type SfxSoundRange,
+  soundRange,
+} from './audio/sfx-banks';
 
 // 2dfx particles (074/06 row 13, B6): the shared FX baking both renderers run.
 export { breakableKeyHash } from './breakable/key';
