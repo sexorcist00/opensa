@@ -184,60 +184,72 @@ questioned through the Ask Menu. The plan (`docs/plans/203-…`, or a tool's cha
 
 ---
 
-## 5. The rounds
+## 5. The rounds, and what they settled
 
-**Prepared 2026-09-08 while the user was away; nothing is acted on until they are answered.** They go through
-the Ask Menu (`CLAUDE.md`'s standing rule) one round at a time — a question whose answer depends on another
-still-open one belongs to a later round, which is why the tree above has the shape it does.
+**Asked and answered 2026-09-08** through the Ask Menu, in four rounds worked as a design tree — each round
+the whole settled frontier, then recompute. Recorded here as the record of record; the reasoning that
+produced each recommendation is above.
 
-### Round 1 — the frontier
+| # | Decision | The answer |
+| --- | --- | --- |
+| 1.1 | Scope of v1 | **All of the world's SFX** — engines, feet, weapons, impacts, ambience. Radio and speech are OUT of v1 (neither was chosen) |
+| 1.2 | Where the bytes come from | **Split**: the index is baked, the samples are fetched live by byte range |
+| 1.3 | Which layer owns the context | **A new `@opensa/audio`** package, `type:engine`, Node-free, no runtime dependencies |
+| 1.4 | Does the console get audio | **Yes, the world too** — the second consumer hears the city, not just its own alerts |
+| 2.1 | How our event table is built | **Take the reverse.** The user's call: names and tables come from `gta-reversed`; see 3.1 for the licence question it raised and how it was closed |
+| 2.2 | Where the table lives | **An authored data file**, overridable by a mod, documented in `docs/contracts/` in the same change |
+| 2.3 | The console's listener | **The camera, as it is.** Honest attenuation: at 900 m there is nearly nothing to hear, and the world arrives as the operator zooms in |
+| 2.4 | The budgets, named before the work | **64 voices · 2 ms/frame · 64 MB** on a phone |
+| 3.1 | The licence, re-asked against the fact that this repository is PUBLIC and AGPL-3.0 | **The decision stands**, taken knowingly. Recorded here with its date and its basis so nobody re-opens it — and note the half it does not settle: [directive 1](../project-goals.md) forbids porting the LOGIC whatever the licence says, so tables and names are taken and behaviour is written here |
+| 3.2 | Audio when the console idles | **Its own clock.** The render gate takes drawn frames to zero at rest (201/4-01, a shipped battery figure); audio runs on a slow tick of its own, so a still map still sounds like a city. The battery cost is owed a measurement |
+| 3.3 | The autoplay gesture | **Any first touch** wakes it, with an honest indicator in the chrome until then — no gate screen on either surface |
+| 3.4 | How a verdict is taken | **The operator's ear on the phone**, plus the numbers that do not need one (voices, ms, MB, steals, load misses) |
+| 4.1 | Where the baked index lives | **A file beside the pak**, the way `water.bin` and the district table already are — so a sound fix costs seconds and never a world rebuild |
+| 4.2 | Voice stealing at the budget | **The quietest at the listener** — computed from attenuation, so the rule derives from what the sound carries rather than from a category ([assets-and-data](../restrictions/assets-and-data.md)) |
+| 4.3 | A build with no audio at all | **Silence, one line per name in the log, counted in the report** — the same shape the unit-model fallback already has, and the exact class of defect that cost 2026-09-05 three days of invisible units |
+| 4.4 | What must sound FIRST | **The city's ambience** |
 
-| # | Question | Options | The recommendation, and why |
-| --- | --- | --- | --- |
-| **Q1** | **What does "the game's sounds" mean for v1?** | (a) the world's SFX only — engines, feet, gunshots, impacts, ambience; (b) SFX + radio; (c) everything, speech included; (d) a vertical SLICE: one looping positioned engine, one one-shot, end to end | **(d) first, then (a).** The slice is chosen to be the hardest SHAPE rather than the smallest piece — a looping, positioned, pitch-shifted engine driven by authored data exercises every seam this subsystem has. Radio is a separate lane (Ogg, stereo, no spatialisation, no event map) that can land at any time and proves nothing about the architecture |
-| **Q2** | **Where do the bytes come from at runtime?** | the three approaches in §4 | **(3) split**, unless the phone measurement kills it. The index is small enough to bake in seconds and the sample fetch is arithmetic we already do for cars — but this is a [build-vs-runtime](../restrictions/build-vs-runtime.md) decision and it is permanent per build, so it is the user's |
-| **Q3** | **Which layer owns the `AudioContext`?** | (a) a new `@opensa/audio` package (`type:engine`, Node-free, framework-agnostic); (b) a system inside `@opensa/game`; (c) inside `@opensa/engine` | **(a).** The console imports exactly one thing from `packages/game` (the environment driver) and that boundary is a restriction; audio in `game` is audio the second consumer cannot have. Audio in `engine` is worse — it is not the frame |
-| **Q4** | **Does the dispatch console get audio at all?** | (a) no, silent; (b) UI only — an alert when a call comes in; (c) the world's audio too | **(b).** A dispatcher works a shift beside other windows, and a map that plays traffic is a map that gets muted. But (c) is the one that would prove the engine layer stayed an engine, so this is a product call, not a technical one |
+## 6. What the answers make true, before a plan is written
 
-### Round 2 — unlocked by Round 1
+**The first deliverable begins in a parser, not in a browser — and the ordering choice landed on authored
+data.** SA picks its ambience by AUDIO ZONE (`CAEAmbienceTrackManager` reads `CAudioZones`), and those zones
+are an **`AUZO` section of the IPLs** — `name id flags x y z radius` for a sphere, eight numbers for a box
+(`CFileLoader::LoadAudioZone`). That is exactly the class of authored data this project already reads, and
+**our IPL parser skips it on purpose today**: *"`pick`, `jump`, `tcyc`, `auzo`, `mult` are out of scope and
+ignored"* (`packages/renderware/src/parsers/text/ipl.parser.ts`). So step one is a section we already have a
+parser shaped for, testable on fixtures, no sound involved.
 
-- **If baked (Q2a/Q2c)**: which codec (Opus is the honest default; AAC where Safari matters), what granularity
-  (per sound, per bank, one atlas), and what a rebuild costs on a phone.
-- **If live (Q2b/Q2c)**: the cache policy and its share of the 300–500 MB ceiling; what a cold street corner
-  costs on first arrival; whether a bank is prefetched by zone.
-- **The event map** (the §1 split): do we (i) recover SA's mapping wholesale into our own table, (ii) invent
-  our own event vocabulary and map it ourselves, or (iii) seed ours from the recovered one and diverge where
-  we can do better? And **where does that table live** — a new authored file a mod author may override, or
-  code?
-- **The listener**: the camera, the player, or the camera with a player bias (which is what the original
-  does, and therefore needs an argument rather than a citation).
-- **Vehicle audio**: `gtasa_vehicleAudioSettings.cfg` is authored data we already merge — do we read it in v1,
-  and what happens for a car with no row (the same question `audio.txt` already answers for the real game)?
-- **The budgets**, named before the work: concurrent voices on a phone, ms/frame for the audio update, MB of
-  buffers, and what happens when the voice budget is exhausted (steal the quietest? the oldest? the furthest?).
-- **The autoplay gesture**: where each surface gets its first trusted gesture, and what the operator/player
-  sees before it happens.
+**The six sub-projects from §4 keep their order, with A and D re-pointed by 4.4:**
 
-### Round 3 — after the design is agreed
+| | | |
+| --- | --- | --- |
+| **A** | the bank reader + the `AUZO` section | `@opensa/renderware`, fixtures, no browser |
+| **B** | the baked index beside the pak, and the live range fetch | a build step of seconds, plus a reader |
+| **C** | the voice layer: context, listener, panning, the 64/2/64 budget, quietest-first stealing | `@opensa/audio` |
+| **D** | the ambience consumer, driven by the zone the listener stands in | the first thing anybody hears |
+| **E** | the rest of the world's SFX behind our event table | the long half |
+| **F** | the console's own wiring — camera listener, its own idle clock | shares C entirely |
 
-- **How a verdict is taken.** A sound change cannot be judged by a test: it is a field verdict, on the device,
-  and this project's rule is that better must be DEMONSTRATED. What is the pass/fail?
-- **The mod contract** — what a sound mod ships, how it is found, and what happens when it is misspelled
-  (`docs/contracts/` gets a subject file, and the rule that a name carrying behaviour is documented in the
-  same change).
-- **Where the plan lives**: `docs/plans/203-…` if it is engine work, or a tool's own chain if the bake half
-  dominates.
+**Three consequences worth stating rather than discovering**, each following from two answers that were taken
+separately:
 
----
+- **The console will be nearly silent at its working zoom.** 2.3 keeps the camera as the listener and 4.4
+  makes ambience the first sound; a map at 900 m therefore hears almost nothing until the operator zooms in.
+  That is the honest physics they chose, and it is a thing to LOOK at on the device before deciding it is
+  wrong.
+- **Audio on its own clock (3.2) partly spends what render-on-demand bought.** 4/01 shipped with a battery
+  figure; audio at rest is new work at rest. The `power` block landed in the report today, so the delta is
+  measurable rather than arguable — and it must be measured on the first console build that has sound.
+- **`AUZO` is map data, so a total conversion that ships none gets no ambience** — which 4.3 already answers
+  (silence and a line), and which the contract doc has to state in a mod author's words.
 
-## 6. The go/no-go
+## 7. The go/no-go
 
-**This graduates to a plan when** Round 1 and Round 2 are answered, the phone has verified the format numbers
-in §1 against the real files, and the budgets in Round 2 are written down. **It dies to a postmortem if** the
-measurement says the sample delivery cannot fit beside the world inside the phone's ceiling and no
-granularity fixes it — in which case the honest outcome is radio and UI audio only, which is a different and
-much smaller product.
+**This graduates to a plan when** the format numbers in §1 are verified against the real files on the phone
+(the container has none), because everything B does is arithmetic over them. **It dies to a postmortem if**
+the sample delivery cannot fit beside the world inside the phone's ceiling and no granularity fixes it.
 
 **What would make it fail quietly**, and therefore what the plan must guard: a subsystem that sounds right on
 the desk of whoever wrote it and drowns a phone; an event map that reproduces SA's logic instead of its
-meaning; and a bake that makes a mod author's sound unreachable without a rebuild nobody told them about.
+meaning; a bake that makes a mod author's sound unreachable without a rebuild nobody told them about; and a
+console whose audio quietly holds the device awake.

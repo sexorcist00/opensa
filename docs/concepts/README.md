@@ -33,8 +33,14 @@ its research record into its `docs/plans/<n>-…/` folder, and a killed one move
   dispatcher's READ path as a greenfield service that validates the existing JWT and can be deleted. The
   throughput argument does not apply: ~37 position messages/s at 150 units. Graduates only on a measurement,
   a written event contract, and somebody willing to maintain a second toolchain on a phone.
-- **[audio](audio.md)** — the game's own sound, opened 2026-09-08 on the user's instruction. The research half
-  is done and **nothing is decided**: SA's banks are addressable by arithmetic (12-byte `BankLkup` entries, a
+- **[audio](audio.md)** — the game's own sound, opened 2026-09-08 on the user's instruction and **questioned
+  the same day: four rounds, fourteen decisions, frontier empty**. v1 is the world's SFX (no radio, no
+  speech); the index is baked beside the pak while samples are fetched live by byte range; a new
+  `@opensa/audio` owns the context; the console hears the world through its own camera; the budgets are
+  64 voices · 2 ms · 64 MB. The first sound is the CITY'S AMBIENCE, which turned out to land on authored data:
+  SA picks ambience by audio zone, and zones are the `AUZO` section our IPL parser skips on purpose today.
+  Still owed before it graduates: the format numbers verified against the real files on the phone. The
+  research half: SA's banks are addressable by arithmetic (12-byte `BankLkup` entries, a
   4 084-byte bank header, signed 16-bit mono PCM, no encryption), which makes a no-build-step delivery path
   real rather than appealing; the streams are Ogg behind a 16-byte XOR key. The line [directive 1](../project-goals.md)
   cuts runs straight through this subsystem — the banks and their rates are authored DATA to honour, while
