@@ -27,18 +27,21 @@ claude plugin marketplace add obra/superpowers
 claude plugin install superpowers@superpowers-dev
 ```
 
-**The plugin installs in the same session; its SKILLS do not become invocable in it.** Measured again
-2026-09-08, in a fresh web container: both commands succeed (`Successfully added marketplace: superpowers-dev`
-→ `Successfully installed plugin: superpowers@superpowers-dev`, v6.3.0, `Status: enabled`), and
-`Skill superpowers:brainstorming` still answers **`Unknown skill`** — a session's skill list is assembled
-before its first turn, so a plugin installed mid-session is not in it. The 2026-08-30 line said the opposite
-and is corrected here rather than left to cost a session.
+**The plugin installs in a running session; its skills are NOT invocable on the turn that installs them —
+they appear a few turns later.** Measured 2026-09-08 in a fresh web container: both commands succeed
+(`Successfully added marketplace: superpowers-dev` → `Successfully installed plugin:
+superpowers@superpowers-dev`, v6.3.0, `Status: enabled`), and the very next `Skill superpowers:brainstorming`
+answered **`Unknown skill`** — while later in the same session all fourteen were listed and callable. The
+2026-08-30 line ("no restart needed") is right about the session and wrong about the moment, which is the
+half that costs a turn.
 
-**What to do instead of waiting for a restart** (which a web session cannot ask for): the skills are plain
-Markdown at `~/.claude/plugins/marketplaces/superpowers-dev/skills/<name>/SKILL.md`, so READ the one you
-were told to use and follow it. That is what was done on 2026-09-08 for `brainstorming` and `writing-plans`
-([the audio concept](../concepts/audio.md) is the result), and it costs a `cat` — the skill is a procedure,
-not a tool call. Where its instructions and `CLAUDE.md` disagree, the precedence below still decides.
+**So do not block on the skill tool**: the skills are plain Markdown at
+`~/.claude/plugins/marketplaces/superpowers-dev/skills/<name>/SKILL.md` — READ the one you were told to use
+and follow it. That is what was done on 2026-09-08 for `brainstorming` and `writing-plans`
+([the audio concept](../plans/203-audio/concept.md) and [plan 203](../plans/203-audio/readme.md) are the
+result), and it costs a `cat`: a skill is a procedure, not a tool call. Where its instructions and
+`CLAUDE.md` disagree, the precedence below still decides — and it decided twice here, on where a spec goes
+and on where a plan goes.
 
 `claude plugin install` writes its two keys into **`~/.claude/settings.json`** (`extraKnownMarketplaces` +
 `enabledPlugins`), and `~/.claude` does not survive the container. That is why the same two keys are

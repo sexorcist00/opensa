@@ -33,26 +33,19 @@ its research record into its `docs/plans/<n>-…/` folder, and a killed one move
   dispatcher's READ path as a greenfield service that validates the existing JWT and can be deleted. The
   throughput argument does not apply: ~37 position messages/s at 150 units. Graduates only on a measurement,
   a written event contract, and somebody willing to maintain a second toolchain on a phone.
-- **[audio](audio.md)** — the game's own sound, opened 2026-09-08 on the user's instruction and **questioned
-  the same day: four rounds, fourteen decisions, frontier empty**. v1 is the world's SFX (no radio, no
-  speech); the index is baked beside the pak while samples are fetched live by byte range; a new
-  `@opensa/audio` owns the context; the console hears the world through its own camera; the budgets are
-  64 voices · 2 ms · 64 MB. The first sound is the CITY'S AMBIENCE, which turned out to land on authored data:
-  SA picks ambience by audio zone, and zones are the `AUZO` section our IPL parser skips on purpose today.
-  Still owed before it graduates: the format numbers verified against the real files on the phone. The
-  research half: SA's banks are addressable by arithmetic (12-byte `BankLkup` entries, a
-  4 084-byte bank header, signed 16-bit mono PCM, no encryption), which makes a no-build-step delivery path
-  real rather than appealing; the streams are Ogg behind a 16-byte XOR key. The line [directive 1](../project-goals.md)
-  cuts runs straight through this subsystem — the banks and their rates are authored DATA to honour, while
-  the event→sound mapping is 2004 CODE we may not port and must re-express. Carries the prepared question
-  rounds; graduates on the user's answers plus a verification of the format numbers against the real files on
-  the phone.
 - **[webgl2-fallback-backend](webgl2-fallback-backend.md)** — a second rendering backend for devices with no
   WebGPU adapter. In scope by decision; carries its own counter-case (the reach window is closing, the tax is
   permanent). Gate on
   [plan 200 chain 5](../plans/200-platform-reach/5-webgl2-fallback/readme.md).
 
 ## Graduated to plans
+
+- **audio** → [docs/plans/203-audio/concept.md](../plans/203-audio/concept.md) — the research record of the
+  sound subsystem: SA's banks are addressable by arithmetic, the streams are Ogg behind a 16-byte XOR key,
+  and [directive 1](../project-goals.md) cuts through the middle of it (the banks are authored DATA, the
+  event mapping is 2004 CODE). Graduated **2026-09-08**, the day it was opened, after four rounds of
+  questioning settled fourteen decisions; the chain it became is [203](../plans/203-audio/readme.md), whose
+  own first step is the device check that turns §1's numbers from documentation into measurements.
 
 - **webgpu-migration** → [docs/plans/073-webgpu-migration-threejs/concept/](../plans/073-webgpu-migration-threejs/concept/README.md) —
   the research record of the three-WebGPU attempt (spikes, Babylon comparison, upstream issue draft, the full

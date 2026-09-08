@@ -35,6 +35,14 @@ Newest first:
 
 ### The fork's block (`2xx`)
 
+- **[203 — Audio](./203-audio/readme.md)** — the world's own sound, opened 2026-09-08 out of
+  [its concept](./203-audio/concept.md) after four rounds of questioning. v1 is the world's SFX (radio and
+  speech are out); the index bakes into a file BESIDE the pak while samples are fetched live by byte range;
+  a new `@opensa/audio` (`type:engine`, zero runtime dependencies) owns the context, which is what lets the
+  dispatch console hear the city too; 64 voices, 2 ms, 64 MB, and the quietest voice at the listener is the
+  one stolen. Six chains, and chain 1 is a parser with fixtures rather than a browser — SA picks ambience by
+  audio zone, and zones are the `AUZO` section our IPL parser skips on purpose today. **Gated on 1/01**: the
+  format numbers are documentation until the phone reads the real files.
 - **[202 — PCAD Dispatch](./202-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
   product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
   client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this
