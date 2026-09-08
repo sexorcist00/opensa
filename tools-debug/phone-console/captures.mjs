@@ -27,6 +27,30 @@ const CYRILLIC = /[\u0400-\u052F]/;
 /** PMTiles v3 archives start with these seven bytes — an HTML error page saved as `tiles.pmtiles` does not. */
 const PMTILES_MAGIC = 'PMTiles';
 
+/**
+ * What the battery was doing, for the note — ALWAYS a sentence, and a named skip when it could not be read.
+ *
+ * **The browser has no die temperature and never will**, so this is the only reader on this device that can
+ * answer the thermal question every row in 201 has argued about without a number (`docs/plans/201`, §6).
+ * The console records the charge and the charging state itself; this adds the temperature, and it is the
+ * panel's job because `termux-battery-status` is a Termux:API binary rather than a web API.
+ *
+ * **An absent reading is stated rather than omitted.** A note that simply lacked the fact would read exactly
+ * like a device whose battery was never asked about, and the next reader would not know which — so a phone
+ * without `termux-api` installed says so in the file, and that sentence is what tells somebody how to make
+ * the next row carry it.
+ */
+export function batteryFact(reading) {
+  if (!reading || typeof reading !== 'object') {
+    return 'battery not read (termux-api absent) — no die temperature on this row';
+  }
+  const percentage = Number.isFinite(reading.percentage) ? `battery ${Math.round(reading.percentage)}%` : 'battery';
+  const status = typeof reading.status === 'string' && reading.status !== '' ? reading.status.toLowerCase() : null;
+  const temperature = Number.isFinite(reading.temperature) ? `${reading.temperature.toFixed(1)}C` : null;
+
+  return [percentage, status, temperature].filter((part) => part !== null).join(' ');
+}
+
 /** Where a capture lands: the family's naming rule, `<engine>/YYYY-MM-DD-<surface>-<what>.json`. */
 export function capturePath(date, slug) {
   const clean = slugify(slug);
@@ -176,6 +200,7 @@ export function withNote(payload, note, facts) {
   }
   const proven = [
     facts.device,
+    batteryFact(facts.battery),
     facts.node ? `node ${facts.node}` : null,
     facts.pak ? `pak ${facts.pak}` : null,
     facts.commit ? `commit ${facts.commit}` : null,

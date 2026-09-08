@@ -68,16 +68,23 @@ const CONTEXT = {
   firstFrames: [],
   framesSkipped: 0,
   hasTimestamps: true,
+  models: 'on' as const,
   overlay: 'on' as const,
   pickingBytes: 0,
+  power: { charging: null, chargingChanged: false, levelEnd: null, levelStart: null, supported: false },
   surface: {
     ablated: 'none',
     bloomDownsample: 'box13',
     bloomFormat: 'rgba16float',
     bloomMinLevelPx: 1,
     bloomPrefilterScale: 1,
+    boxPinned: false,
     cssHeight: 364,
+    cssHeightMax: 364,
+    cssHeightMin: 364,
     cssWidth: 360,
+    cssWidthMax: 360,
+    cssWidthMin: 360,
     deviceHeight: 728,
     deviceWidth: 720,
     dpr: 2,
@@ -108,6 +115,7 @@ const CONTEXT = {
     unitsUnresolvedModels: 1,
   },
   tracks: { bytes: 2601, capacity: 17, incidentEvents: 4, samples: 42, tracks: 9, window: [0, 30_000] as const },
+  visibility: { hiddenMs: 0, hiddenSpells: 0, visibleAtReport: true },
 };
 
 describe('FrameInventory', () => {
@@ -662,6 +670,62 @@ describe('FrameInventory overlay state (201/2 and 9-01, ?overlay=)', () => {
       inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
 
       expect(inventory.report({ ...CONTEXT, overlay: 'on' }).overlay).toBe('on');
+    });
+  });
+});
+
+describe('FrameInventory CSS box (201/9, §6)', () => {
+  describe('negative cases', () => {
+    it('warns when the window mixed two boxes, naming both — the overlay is sized from it', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+      const surface = { ...CONTEXT.surface, cssHeightMax: 609, cssHeightMin: 320 };
+
+      const warnings = inventory.report({ ...CONTEXT, surface }).warnings;
+
+      expect(warnings.some((warning) => warning.includes('360x320 to 360x609'))).toBe(true);
+      expect(warnings.some((warning) => warning.includes('?box=WxH'))).toBe(true);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('says nothing about a box that held still for the whole window', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+
+      const warnings = inventory.report(CONTEXT).warnings;
+
+      expect(warnings.some((warning) => warning.includes('CSS box MOVED'))).toBe(false);
+    });
+
+    it('carries the pin so a row cannot claim an arm it did not take', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+      const surface = { ...CONTEXT.surface, boxPinned: true };
+
+      expect(inventory.report({ ...CONTEXT, surface }).surface.boxPinned).toBe(true);
+    });
+  });
+});
+
+describe('FrameInventory fleet arm (201/9, ?models=0)', () => {
+  describe('negative cases', () => {
+    it('does not let a fleet-less window pass for a board that drew its cars', () => {
+      // A run with no models and a build whose models failed to arrive are identical field by field —
+      // `unitsAsModels: 0`, `modelTextureMb: 0`, every unit on its symbol. Only this says which happened.
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+
+      expect(inventory.report({ ...CONTEXT, models: 'off' }).models).toBe('off');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('says the fleet was drawn when it was', () => {
+      const inventory = new FrameInventory();
+      inventory.sample(16, stats(), NO_SPANS, NO_CPU, IDLE);
+
+      expect(inventory.report(CONTEXT).models).toBe('on');
     });
   });
 });

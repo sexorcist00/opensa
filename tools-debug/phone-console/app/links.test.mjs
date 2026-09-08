@@ -163,6 +163,56 @@ describe('the pinned capture surface (201/9-01)', () => {
   });
 });
 
+describe('the fleet arm and the pinned box (201/9, §6)', () => {
+  describe('negative cases', () => {
+    it('never lets the fleet arm move anything but the fleet — it is a subtraction against the BOARD', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.nomodels.replace('&models=0', '')).toBe(links.board);
+    });
+
+    it('keeps the board on the fleet arm — what it removes is the cars, never the units', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.nomodels).toContain('units=150&calls=40');
+      expect(links.nomodels).not.toContain('units=0');
+    });
+
+    it('never lets the box arm move anything but the box', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.boxed.replace('&box=360x320', '')).toBe(links.field);
+    });
+
+    it('leaves both knobs off every other link, so no filed row carries one it did not ask for', () => {
+      const links = consoleUrls(SERVED);
+
+      for (const [name, url] of Object.entries(links)) {
+        if (name !== 'nomodels') {
+          expect(url).not.toContain('models=');
+        }
+        if (name !== 'boxed') {
+          expect(url).not.toContain('box=');
+        }
+      }
+    });
+  });
+
+  describe('positive cases', () => {
+    it('offers both by name, so an agent can fly them without typing a query', () => {
+      expect(LINK_NAMES).toContain('nomodels');
+      expect(LINK_NAMES).toContain('boxed');
+    });
+
+    it('pins the same buffer on both, like every other arm', () => {
+      const links = consoleUrls(SERVED);
+
+      expect(links.nomodels).toContain('surface=720x640');
+      expect(links.boxed).toContain('surface=720x640');
+    });
+  });
+});
+
 describe('the attachment ladder (201/9-04)', () => {
   describe('negative cases', () => {
     it('never moves two things at once — an arm differs from the field run by ONE parameter', () => {

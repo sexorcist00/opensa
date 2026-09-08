@@ -333,6 +333,24 @@ async function commit(body) {
   });
 }
 
+/**
+ * The battery as Android sees it — charge, charging state and the DIE TEMPERATURE, which no browser exposes.
+ *
+ * `termux-battery-status` ships with the Termux:API package and needs the companion app installed; on a
+ * device without it the binary is simply absent, and that is a named skip in the capture's note rather than
+ * a silence (`captures.mjs` → `batteryFact`). Bounded, because a missing companion app makes the API
+ * binaries HANG rather than fail — a capture must never wait on one.
+ */
+function deviceBattery() {
+  try {
+    const raw = execFileSync('termux-battery-status', [], { encoding: 'utf8', timeout: 4000 });
+
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 /** The device, for a capture's conditions. `getprop` is Android's own and absent everywhere else. */
 function deviceName() {
   try {
@@ -529,7 +547,12 @@ async function handle(request, response) {
   }
   if (request.method === 'POST' && path === '/api/capture') {
     const body = await readJson(request);
-    const filed = await fileCapture(REPO, body, { device: deviceName(), node: process.version, probe });
+    const filed = await fileCapture(REPO, body, {
+      battery: deviceBattery(),
+      device: deviceName(),
+      node: process.version,
+      probe,
+    });
 
     return send(response, 200, filed);
   }

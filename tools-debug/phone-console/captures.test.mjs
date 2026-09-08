@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  batteryFact,
   capturePath,
   checkTilesArchive,
   commitPlan,
@@ -36,6 +37,14 @@ describe('phone console captures', () => {
       expect(() => withNote({}, 'Прогон на телефоне', FACTS)).toThrow(/must be in English/);
       // The panel's own separators are not letters and must keep working.
       expect(withNote({}, 'the ASTC side of the A/B', FACTS).note).toContain(' · ');
+    });
+
+    it('names the skip when the battery could not be read, rather than leaving the fact out', () => {
+      // A note that simply lacked the fact reads exactly like a device nobody asked — and the sentence is
+      // what tells the next operator how to make the next row carry a temperature.
+      expect(batteryFact(null)).toMatch(/termux-api absent/);
+      expect(batteryFact(undefined)).toMatch(/termux-api absent/);
+      expect(batteryFact('81%')).toMatch(/termux-api absent/);
     });
 
     it('refuses a file that is not a PMTiles archive', () => {
@@ -107,8 +116,22 @@ describe('phone console captures', () => {
 
       expect(stamped.frames).toBe(400);
       expect(stamped.note).toBe(
-        'the ASTC side of the format A/B — Pixel · node v22.0.0 · pak original rect 8,-8,11,-5 · commit abc1234 · captured through tools-debug/phone-console',
+        'the ASTC side of the format A/B — Pixel · battery not read (termux-api absent) — no die temperature on this row · node v22.0.0 · pak original rect 8,-8,11,-5 · commit abc1234 · captured through tools-debug/phone-console',
       );
+    });
+
+    it('carries the die temperature the browser cannot see', () => {
+      const stamped = withNote({ frames: 400 }, 'the ASTC side of the format A/B', {
+        ...FACTS,
+        battery: { percentage: 81, status: 'DISCHARGING', temperature: 30.16 },
+      });
+
+      expect(stamped.note).toContain('battery 81% discharging 30.2C');
+    });
+
+    it('reads a partial reading for what it has rather than refusing it', () => {
+      expect(batteryFact({ percentage: 81 })).toBe('battery 81%');
+      expect(batteryFact({ status: 'CHARGING', temperature: 41 })).toBe('battery charging 41.0C');
     });
 
     it('reads the pak own recipe, and says so when there is none', () => {

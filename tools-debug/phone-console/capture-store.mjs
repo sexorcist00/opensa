@@ -28,7 +28,12 @@ export async function fileCapture(repo, body, context) {
   const report = await readJson(join(out, 'pak/report.json'));
   const date = (body.date ?? new Date().toISOString().slice(0, 10)).slice(0, 10);
   const relative = capturePath(date, body.slug ?? '');
-  const stamped = withNote(payload, body.note, { ...pakFacts(report), device: context.device, node: context.node });
+  const stamped = withNote(payload, body.note, {
+    ...pakFacts(report),
+    battery: context.battery,
+    device: context.device,
+    node: context.node,
+  });
   const file = safePath(repo, relative);
   await mkdir(dirname(file), { recursive: true });
   const text = `${JSON.stringify(stamped, null, 2)}\n`;

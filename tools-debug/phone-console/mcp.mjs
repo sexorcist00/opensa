@@ -36,6 +36,7 @@ import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { promisify } from 'node:util';
 
+import { LINK_NAMES } from './app/links.mjs';
 import {
   discoverResult,
   INSTRUCTIONS,
@@ -182,37 +183,17 @@ export const TOOLS = [
             'the snapshot before believing any of them. Also the map itself, its inventory report, the ' +
             'flat 2D map, the tile bake, or the share build. `nosprites` is the symbology arm: `board` with the ' +
             'symbol sprites off, so a mark is rebuilt as a path per instance the way it was before ' +
-            '2026-09-05 — its difference from `board` is what a blit is worth on this device.',
-          enum: [
-            'map',
-            'inventory',
-            'field',
-            'cleared',
-            'engine',
-            'board',
-            'nosprites',
-            'msaa1',
-            'rgb10a2',
-            'scale75',
-            'scale50',
-            'nocells',
-            'nocloud',
-            'nobloom',
-            'bloomrg11',
-            'bloomhalf',
-            'bloomboth',
-            'bloomfull',
-            'night',
-            'nightfull',
-            'nighthalf',
-            'nightnobloom',
-            'bloom4',
-            'noprobe',
-            'noskylut',
-            'flat',
-            'bake',
-            'share',
-          ],
+            '2026-09-05 — its difference from `board` is what a blit is worth on this device. `nomodels` is ' +
+            "the FLEET's arm: `board` with `?models=0`, which removes the model reads, the uploads and the " +
+            'draws while the units keep their symbols, so `board` − `nomodels` is what 150 cars cost in the ' +
+            'frame AND in residency. `boxed` is a VERIFICATION arm, not a member of the circuit: it pins the ' +
+            'CSS box the overlay is sized from at 360x320, the box every existing row was taken at, so it ' +
+            'should read the same as `field` on a device whose chrome is already there. Read the report ' +
+            'warnings: a window whose box MOVED says so now, and its overlay mean is over two sizes.',
+          // The one owner is `app/links.mjs` (201/9, and the panel's own rule that a link has ONE reader).
+          // A second copy here had already drifted: the three vendor arms shipped 2026-09-05 and never
+          // reached this list, so an agent could not fly what the panel was offering.
+          enum: [...LINK_NAMES],
           type: 'string',
         },
       },

@@ -143,6 +143,19 @@ describe('UnitModels', () => {
       expect(layer.stats()).toMatchObject({ drawn: 0, types: 0, withoutModel: 1 });
     });
 
+    it('says NO car is coming when there is no source — nothing is in flight when nothing can load', async () => {
+      const { engine } = fakeEngine();
+      const layer = new UnitModels(engine, null, noWake);
+      const car = unit('u1');
+      layer.update([car]);
+      await settle();
+
+      // `willDraw` decides whether the symbology and the beacons drop the unit's mark. A source-less build
+      // never resolves a name and never marks it unresolved, so a "a car is coming" answer here is
+      // permanent: the unit is drawn by nothing at all — the disappearance `labels.ts` exists to prevent.
+      expect(layer.willDraw(car)).toBe(false);
+    });
+
     it('draws a unit that claims no model as a symbol alone, and asks for nothing', async () => {
       const { engine } = fakeEngine();
       const { reads, source } = fakeSource({});

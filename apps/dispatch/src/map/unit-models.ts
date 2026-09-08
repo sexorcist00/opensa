@@ -171,6 +171,14 @@ export class UnitModels {
    * build cannot supply ({@link UnitModels.unresolved}). Those two are permanent; everything else is a
    * moment away.
    *
+   * **And so is a build with no SOURCE, which is the third permanent case and was missing until 2026-09-08.**
+   * With `source === null` — `?demo=1`, a pak served without its game dir, `?models=0` — {@link request}
+   * returns at its first condition, so a name is never resolved AND never recorded as unresolved: the
+   * "a car is coming" answer above became permanent and the unit was drawn by nothing at all. Every
+   * patrolling unit in the shareable demo was invisible from 2026-09-05, when this rule shipped, and it is
+   * silent in the way {@link unitWantsSymbol} names — the roster still says 150, `unitsAsSymbolOnly` still
+   * counts them, and only an eye on the map can tell.
+   *
    * **The trade, stated rather than discovered:** a unit whose model is in flight has neither a car nor a
    * mark, so it is absent for as long as the load takes. That is the calmer of the two at a second, and it
    * would be the wrong answer if loads ran long — `unitsAsModels` in the report is what says whether they
@@ -179,6 +187,9 @@ export class UnitModels {
   willDraw(unit: { id: string; model: null | string }): boolean {
     if (this.drawnUnits.has(unit.id)) {
       return true;
+    }
+    if (this.source === null) {
+      return false;
     }
     const name = unit.model === null ? null : unit.model.toLowerCase();
 

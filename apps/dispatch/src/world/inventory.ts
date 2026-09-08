@@ -31,9 +31,14 @@
 import type { EngineStats, FrameSpanTotals, PakTrafficKind, StreamStats } from '@opensa/engine';
 
 import type { MapProjection } from '../map/map-camera';
+import type { CssBoxExtremes } from './capture-box';
+import type { VisibilityReport } from './capture-visibility';
 import type { FrameIntervalKind } from './frame-clock';
+import type { ModelsArm } from './models-arm';
 import type { OverlayArm } from './overlay-arm';
+import type { PowerReport } from './power';
 
+import { boxMoved } from './capture-box';
 import { DISTRICTS, PINNED_DISTRICT } from './districts';
 import { FrameHistogram } from './frame-histogram';
 import { FramePacing } from './frame-pacing';
@@ -193,6 +198,16 @@ export interface InventoryReport {
    */
   readonly framesSkipped: number;
   /**
+   * Whether this window drew its units as CARS, or ran the fleet's control arm (`?models=0`, 201/9).
+   *
+   * A capture states what its run was configured with. On `off` there is no model read, no texture upload
+   * and no vehicle draw, so `unitsAsModels` is 0, `modelTextureMb` is 0 and every unit is on its symbol —
+   * which is indistinguishable, field by field, from a build whose models merely failed to arrive. That is
+   * not a hypothetical: the fleet's cost was first subtracted across two windows where the difference was
+   * exactly that accident, and this arm exists so the same subtraction can be taken on purpose.
+   */
+  readonly models: ModelsArm;
+  /**
    * Which of the overlay's three arms this window ran (201/9-01) — `on`, `clear` or `off` (`?overlay=0`).
    *
    * A capture states what its run was configured with, or an A/B is not one: on any arm but `on` the
@@ -206,6 +221,20 @@ export interface InventoryReport {
   readonly overlay: OverlayArm;
   /** Per-frame cost centres, descending by mean. */
   readonly passes: readonly InventoryPass[];
+  /**
+   * What the battery was doing while this window ran (201/9, §6) — `supported: false` where the browser has
+   * no such API rather than a fabricated reading.
+   *
+   * **Read `charging` before comparing this row to another one.** A phone on a charger has a different
+   * thermal envelope and a different governor, and until 2026-09-08 no capture in this repository said
+   * which side of the cable it was taken on — every thermal argument in the chain was made without it.
+   * `chargingChanged` is the harder case: the cable moved mid-window, so the row cannot carry a thermal
+   * claim at all, and nothing else in it would ever say so.
+   *
+   * The DIE TEMPERATURE is not here and cannot be: no browser exposes it. The phone panel stamps it onto
+   * the capture's note from `termux-battery-status`, which is the only reader on that device that has it.
+   */
+  readonly power: PowerReport;
   /** Between-frame named work, mean ms per sampled frame, descending. Empty means nothing was wrapped. */
   /**
    * The half of the drawn frames whose interval was NOT a frame time (201/3-05): the previous loop pass was
@@ -245,8 +274,21 @@ export interface InventoryReport {
      *  prefilter the engine has always run; 0.5 quarters the three passes that are 90 % of the chain and is
      *  a LOOK change (sub-pixel emitters are averaged before they are thresholded). */
     readonly bloomPrefilterScale: number;
+    /** Whether `?box=WxH` PINNED the CSS box for this run (201/9, §6). `?surface=` holds the scene's BUFFER
+     *  still and deliberately leaves the box alone, so the overlay — the largest CPU line in this frame —
+     *  followed the browser's chrome until this arm existed. */
+    readonly boxPinned: boolean;
+    /** The box at REPORT time. Kept beside the extremes below because every row filed before 2026-09-08
+     *  carries only this one, and a series has to stay comparable. */
     readonly cssHeight: number;
+    /** The extremes of the CSS box over the WINDOW, from the resize observer rather than a per-frame poll.
+     *  Max ≠ min means this capture mixed two overlay sizes and its `overlay-2d` mean is over both — the
+     *  warning says so, because every other field in such a window is internally consistent. */
+    readonly cssHeightMax: number;
+    readonly cssHeightMin: number;
     readonly cssWidth: number;
+    readonly cssWidthMax: number;
+    readonly cssWidthMin: number;
     /** The drawing buffer, device pixels — what the swapchain and the post pass are sized at. */
     readonly deviceHeight: number;
     readonly deviceWidth: number;
@@ -355,6 +397,17 @@ export interface InventoryReport {
   } | null;
   /** Human-readable reasons a column above is absent on this device. */
   readonly unavailable: readonly string[];
+  /**
+   * Whether the page held the FOREGROUND for this window (201/9, §6).
+   *
+   * **The §6 line asked how many tabs competed with the capture, and that number cannot be measured** — no
+   * web API names another tab, and Termux on an unrooted phone cannot see another app. What CAN be measured
+   * is this page losing the foreground, which is the shape that has actually cost this chain a measurement:
+   * Android suspends a backgrounded tab, and the 2026-08-31 run lost the one flight that had the world
+   * resident to exactly that. A row with `hiddenMs` above zero was not measured on a page anybody was
+   * looking at, and nothing else in it would say so.
+   */
+  readonly visibility: VisibilityReport;
   /** Reasons this capture may NOT be cited as a before-table. Empty = nothing obviously wrong with it.
    *  The first real capture (2026-08-07) was pasted, read and filed before anyone noticed it had streamed
    *  no cells at all — the numbers describe water over an empty world. A capture that says so itself is
@@ -566,13 +619,19 @@ export class FrameInventory {
      *  frame never reaches `sample`. */
     framesSkipped: number;
     hasTimestamps: boolean;
+    /** Whether the fleet was drawn at all — `off` is `?models=0`, the control arm for what 150 cars cost. */
+    models: ModelsArm;
     /** Which overlay arm the frame ran — `on`, `clear` (the layer without its content) or `off`. */
     overlay: OverlayArm;
     /** `engine.cells.pickingBytes` — the host cost of the placement mapper the console picks against. */
     pickingBytes: number;
+    /** The battery over the window — `PowerMonitor.report()`, or the unsupported reading on a desk. */
+    power: PowerReport;
     surface: InventoryReport['surface'];
     symbology: InventoryReport['symbology'];
     tracks: InventoryReport['tracks'];
+    /** Time this page spent out of the foreground — `VisibilityWatch.report()`. */
+    visibility: VisibilityReport;
   }): InventoryReport {
     const frames = Math.max(1, this.frames);
     const windowMs = this.started === 0 ? 0 : performance.now() - this.started;
@@ -627,8 +686,10 @@ export class FrameInventory {
       },
       frames: this.frames,
       framesSkipped: context.framesSkipped,
+      models: context.models,
       overlay: context.overlay,
       passes,
+      power: context.power,
       rest: {
         frames: this.restIntervals.count,
         maxMs: this.restIntervals.maxMs,
@@ -654,10 +715,17 @@ export class FrameInventory {
       symbology: context.symbology,
       tracks: context.tracks,
       unavailable,
+      visibility: context.visibility,
       warnings: warningsFor({
         blockedOnArrays: this.stream.blockedOnArrays,
         blockedOnBlob: this.stream.blockedOnBlob,
         bodyMeanMs,
+        box: {
+          heightMax: context.surface.cssHeightMax,
+          heightMin: context.surface.cssHeightMin,
+          widthMax: context.surface.cssWidthMax,
+          widthMin: context.surface.cssWidthMin,
+        },
         cellsTotal: this.worldLast.cellsTotal,
         district: context.district,
         frames: this.frameIntervals.count,
@@ -837,13 +905,23 @@ function warningsFor(capture: {
   blockedOnArrays: number;
   blockedOnBlob: number;
   bodyMeanMs: number;
+  box: CssBoxExtremes;
   cellsTotal: number;
   district: string;
   frames: number;
   pendingCells: number;
 }): string[] {
-  const { bodyMeanMs, cellsTotal, district, frames } = capture;
+  const { bodyMeanMs, box, cellsTotal, district, frames } = capture;
   const warnings: string[] = [];
+  if (boxMoved(box)) {
+    // Silent without this: every field in such a window is internally consistent, and the overlay is the
+    // largest CPU line in the frame — so two arms taken at two boxes subtract to a number about the chrome.
+    warnings.push(
+      `the CSS box MOVED during this window (${box.widthMin}x${box.heightMin} to ${box.widthMax}x${box.heightMax}) — ` +
+        'the overlay is sized from it, so this row cannot be subtracted from one taken at another box. ' +
+        'Pin it with ?box=WxH',
+    );
+  }
   if (cellsTotal === 0) {
     warnings.push(
       'VOID: no cells streamed (cellsTotal 0) — these numbers describe an empty world. Wait for the world ' +

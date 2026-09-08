@@ -66,8 +66,10 @@ import {
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
 import { captureAblation } from './capture-ablation';
+import { captureBox, CssBoxRange } from './capture-box';
 import { captureBudget } from './capture-budget';
 import { canvasAspect, captureSurface } from './capture-surface';
+import { VisibilityWatch } from './capture-visibility';
 import { CONSOLE_RENDER_BUDGET } from './console-budget';
 import { buildDemoCity, DEMO_EXTENT, DEMO_REACH } from './demo-city';
 import { DISTRICTS } from './districts';
@@ -76,8 +78,10 @@ import { FrameClock } from './frame-clock';
 import { type GraphicsPreset, initialPreset, settingsFor } from './graphics';
 import { type FrameCpuSample, FrameInventory, type InventoryReport, UNNAMED_DISTRICT } from './inventory';
 import { openModelSource } from './model-source';
+import { modelsArm } from './models-arm';
 import { armDrawsContent, armTouchesSurface, overlayArm } from './overlay-arm';
 import { DEFAULT_SRC, type PakBase, resolvePakBase } from './pak-source';
+import { PowerMonitor } from './power';
 import { RenderGate } from './render-gate';
 import { bakeFlatMap } from './tile-bake-host';
 import { fetchWater, installWater } from './water';
@@ -420,6 +424,26 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   /** `?surface=WxH` — the drawing buffer held still for a measurement arm, see `capture-surface.ts`. */
   const pinnedSurface = captureSurface(params);
+  /** `?box=WxH` — the CSS box itself held still, and the extremes it reached anyway (`capture-box.ts`). */
+  const pinnedBox = captureBox(params);
+  const boxRange = new CssBoxRange();
+  // Fire-and-forget: the battery is read once, off the boot's critical path, and its two properties are live
+  // afterwards — so `report()` stays synchronous (201/9, §6). A browser without the API is an absent
+  // reading, never a fabricated one.
+  const power = new PowerMonitor(navigator);
+  void power.attach();
+  // A backgrounded tab is suspended by Android, and a window that lost the foreground files exactly like one
+  // that did not — which is what cost 2026-08-31 the only flight with the world resident (201/9, §6).
+  const visibility = new VisibilityWatch(document, () => performance.now());
+  if (pinnedBox) {
+    // The BOX, never the buffer: both canvases go on sizing their stores from what they are displayed in,
+    // so the symbology is still drawn in its own coordinates and the pin costs it nothing. Absolute
+    // positioning gives `width`/`height` precedence over the wrapper's `inset`, so this wins the layout.
+    for (const element of [canvas, overlay]) {
+      element.style.width = `${pinnedBox.width}px`;
+      element.style.height = `${pinnedBox.height}px`;
+    }
+  }
   /**
    * Only ASSIGN when the size actually moved.
    *
@@ -456,6 +480,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       canvas.width = width;
       canvas.height = height;
     }
+    // Every box this window is drawn in, seen exactly once and off the frame's path: the observer below
+    // already fires on each change, so the range costs nothing and cannot miss one (201/9, §6).
+    boxRange.note(overlay.clientWidth, overlay.clientHeight);
     const overlayWidth = Math.max(2, Math.floor(overlay.clientWidth * dpr));
     const overlayHeight = Math.max(2, Math.floor(overlay.clientHeight * dpr));
     if (overlay.width !== overlayWidth || overlay.height !== overlayHeight) {
@@ -620,7 +647,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // Units are drawn as CARS under their symbols (201/5-04). The wake is the point of the callback: a model
   // arrives between frames and changes none of the values the render gate compares, so without it the fleet
   // would appear on whatever frame the operator happened to cause next.
-  const unitModels = new UnitModels(engine, openModelSource(world.gameDir), () => gate.wake());
+  // `?models=0` hands the layer NO source, which is the same state a pak-only deploy is in: no reads, no
+  // uploads, no draws, and every unit keeps the mark `willDraw` gives back (201/9, `models-arm.ts`).
+  const fleet = modelsArm(params);
+  const unitModels = new UnitModels(engine, fleet === 'off' ? null : openModelSource(world.gameDir), () => gate.wake());
   const symbology = new SymbologyLayer(dpr, spritesFrom(params, dpr));
   const sketch = new SketchStore();
   // A click on the radar is "look over there", not "zoom in on that": the flight keeps the operator's
@@ -1179,8 +1209,10 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         firstFrames: engine.firstFrames.map((totals) => totals.byName),
         framesSkipped: gate.idleFrames,
         hasTimestamps: !engine.deviceReport.missing.includes('timestamp-query'),
+        models: fleet,
         overlay: arm,
         pickingBytes: engine.cells.pickingBytes,
+        power: power.report(),
         surface: {
           // 9: what this arm REMOVED from the frame. `none` on every shipping run — and the reason it is
           // stated rather than assumed is that an ablated run is otherwise indistinguishable from a fast one.
@@ -1192,8 +1224,13 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           bloomFormat: engine.budget.bloomFormat,
           bloomMinLevelPx: engine.budget.bloomMinLevelPx,
           bloomPrefilterScale: engine.budget.bloomPrefilterScale,
+          boxPinned: pinnedBox !== null,
           cssHeight: canvas.clientHeight,
+          cssHeightMax: boxRange.extremes().heightMax,
+          cssHeightMin: boxRange.extremes().heightMin,
           cssWidth: canvas.clientWidth,
+          cssWidthMax: boxRange.extremes().widthMax,
+          cssWidthMin: boxRange.extremes().widthMin,
           deviceHeight: canvas.height,
           deviceWidth: canvas.width,
           dpr,
@@ -1216,6 +1253,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         },
         symbology: symbologyCounts(),
         tracks: options.trackStats?.() ?? null,
+        visibility: visibility.report(),
       });
     },
     locate(at: GtaGround): void {

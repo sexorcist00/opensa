@@ -18,7 +18,9 @@ export const LINK_NAMES = [
   'cleared',
   'engine',
   'board',
+  'nomodels',
   'nosprites',
+  'boxed',
   'msaa1',
   'rgb10a2',
   'scale75',
@@ -167,6 +169,16 @@ export function consoleUrls(state = {}) {
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.
     board: `${app}?${query}&units=150&calls=40&${capture}`,
+    // THE BOX PINNED, and it is a VERIFICATION arm rather than a member of the circuit yet (201/9, §6).
+    // `?surface=` holds the scene's buffer still and deliberately leaves the CSS box alone, so the overlay —
+    // the largest CPU line in this frame — has always followed the browser's chrome: 360x320, 360x570 and
+    // 360x609 inside one session, and two arms taken at two of them are not subtractable. The report says
+    // so now (a warning naming both boxes), and this link is how the other half gets proven: 360x320 is the
+    // box every existing measurement row was taken at, so `boxed` and `field` should read the SAME on a
+    // device whose chrome is already there. Once a flight says they do, the circuit can adopt the pin;
+    // until then no arm carries it, because a knob that moved every filed row without a verification is the
+    // failure this whole file exists to prevent.
+    boxed: `${app}?${empty}&box=360x320`,
     // The overlay canvas cleared every frame with nothing drawn into it (201/9-01). `engine` below skips the
     // `clearRect` as well, so the compositor may skip the layer whole — which is why the two-arm pair could
     // not say whether the ~21 ms it removed was the layer or its content.
@@ -212,12 +224,19 @@ export function consoleUrls(state = {}) {
     nobloom: `${app}?${empty}&ablate=bloom`,
     nocells: `${app}?${empty}&ablate=cells`,
     nocloud: `${app}?${empty}&ablate=cloud`,
-    noprobe: `${app}?${empty}&ablate=probe`,
-    noskylut: `${app}?${empty}&ablate=skylut`,
     // THE SYMBOLOGY ARM (201/9-01): `board` with the symbol sprites off, so the marks are rebuilt as paths
     // the way they were before 2026-09-05. `nosprites` − `board` is what a blit is worth on this device —
     // the only way to price it here, since the adapter has no `timestamp-query`. Its own fallback, not a
     // second path written for the measurement, so what it measures is exactly what shipped before.
+    // THE FLEET'S OWN ARM (201/9, §6): `board` with the cars off, so `board` − `nomodels` is what 150 units
+    // drawn as MODELS cost — the frame and the residency both, since `?models=0` removes the reads and the
+    // uploads as well as the draws. The subtraction has been taken before, but only across two windows whose
+    // difference was an ACCIDENT (a convert without the board's names, a pak served without its game dir),
+    // which is a measurement nobody can re-fly. The units keep their symbols on this arm, so what it removes
+    // is the fleet and not the board.
+    nomodels: `${app}?${query}&units=150&calls=40&${capture}&models=0`,
+    noprobe: `${app}?${empty}&ablate=probe`,
+    noskylut: `${app}?${empty}&ablate=skylut`,
     nosprites: `${app}?${query}&units=150&calls=40&${capture}&sprites=0`,
     rgb10a2: `${app}?${empty}&scene=rgb10a2unorm`,
     scale50: `${app}?${empty}&scale=0.5`,
