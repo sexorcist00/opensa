@@ -209,5 +209,18 @@
     "longestInGENRL": "4.97 s x8 (bank 82, 32 000 Hz — eight loops of identical length, which reads as a set)",
     "whatItSettles": "The SFX banks DO carry enough loops to assemble a bed. What they do NOT carry is a long pre-mixed track: nothing loops longer than 5.25 s, so an assembled ambience is short loops layered and crossfaded rather than an authored mix played back.",
     "exported": "Four candidates written as WAVs to the phone for the operator to hear: banks 82/0, 84/0, 137/0, 65/0."
+  },
+  "streamsShelf": {
+    "what": "What `audio/streams/` costs, measured because the chain excluded it by argument and never by a number (`audio-streams-probe`, 2026-09-09).",
+    "files": 15,
+    "totalMB": 92.5,
+    "ambienceMB": 44.4,
+    "aaMB": 0.7,
+    "beatsMB": 29.0,
+    "obfuscationConfirmed": "The repeating 16-byte XOR and the 8 068-byte header are RIGHT on the real files: after de-obfuscating the header the payload says `OggS` in both AMBIENCE and AA. The key was documentation until this run.",
+    "beatTable": "0 of 1 000 beat entries carry a timing in either AMBIENCE or AA — the beat track is a radio feature and lives in its own 29 MB file.",
+    "trackTable": "Only the first of the 8 length pairs holds anything; the other seven are 0xCDCDCDCD, the same uninitialised fill `PakFiles.dat` pads with. The pair's own field order is therefore NOT verified by this run and nothing should be built on it.",
+    "whyItMattersForAmbience": "AMBIENCE is ONE 44.4 MB Ogg Vorbis file, and `decodeAudioData` decodes a whole buffer to float PCM. At any plausible bitrate that is 45-90 minutes of audio, so on the order of a GIGABYTE decoded — roughly 16x the chain's entire 64 MB audio budget. ESTIMATED from the file size, not measured: nothing has decoded it. What it settles is that the stream cannot come through the door everything else uses (a byte range into `decodeAudioData`); it needs progressive decode, which on the web means an `<audio>` element — and an `<audio>` element cannot be handed an XOR'd file.",
+    "exported": "AA.ogg (0.7 MB) and AMBIENCE.ogg (44.4 MB) written plain to the phone's Download for the operator's ear — decision 3.4's own way of settling what a sound IS."
   }
 }
