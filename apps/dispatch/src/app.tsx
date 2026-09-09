@@ -211,6 +211,7 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
         touch={touch}
       />
       <MapNav
+        audio={readout?.audio}
         compact={compact}
         handle={handle}
         mode={mapMode?.mode ?? null}

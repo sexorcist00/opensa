@@ -46,7 +46,24 @@ export interface DispatchAudioReport {
   readonly resumesRefused: number;
   /** `null` until there is a context to build voices on. */
   readonly voices: null | VoicePoolReport;
+  /** The step the operator left the volume on, 0..1 — 0 being mute. Carried whether or not there is a pool. */
+  readonly volume: number;
 }
+
+/**
+ * The volume steps, loudest first, and why there are steps rather than a slider.
+ *
+ * **One control has to work on a phone and on a desk in the same change** — the cross-platform rule's own
+ * words, and it forbids two layouts that drift apart. A `<input type="range">` beside a mute button is two
+ * targets and about 120 px of a top bar that already CLIPS at 360 CSS px (measured; see
+ * `docs/restrictions/cross-platform-surface.md`), while a stepped button is one target at `TOUCH_TARGET`,
+ * needs no hover, no keyboard and no popover, and says its own state.
+ *
+ * **This is an ASSUMPTION taken 2026-09-09 with the operator away.** The step says *volume and mute*; four
+ * steps is the reading that fits the surface rule. A continuous slider is the alternative, and what would
+ * settle it is the operator wanting a level between two of these.
+ */
+export const VOLUME_STEPS = [1, 0.5, 0.2, 0] as const;
 
 /** Holds the console's audio for the life of the page. */
 export class DispatchAudio {
@@ -55,6 +72,7 @@ export class DispatchAudio {
   private readonly clock: AudioClock;
   private readonly host: AudioHost;
   private readonly pool: null | VoicePool;
+  private volume = 1;
 
   constructor(params: URLSearchParams, options: { clockHost?: AudioClockHost; log?: (message: string) => void } = {}) {
     this.arm = audioArm(params);
@@ -81,7 +99,17 @@ export class DispatchAudio {
       clock: this.clock.report(),
       resumesRefused: this.host.state.resumesRefused,
       voices: this.pool?.report() ?? null,
+      volume: this.volume,
     };
+  }
+
+  /**
+   * Set the master volume, 0..1. Zero is mute and nothing else — the pool goes on playing and counting, so
+   * unmuting is instant and a capture still says what the world asked for.
+   */
+  setVolume(value: number): void {
+    this.volume = Math.min(1, Math.max(0, value));
+    this.pool?.setMasterGain(this.volume);
   }
 
   /**
@@ -96,6 +124,23 @@ export class DispatchAudio {
     this.clock.start(() => {
       pool.setListener(listenerOf());
     });
+  }
+
+  /**
+   * The next volume step, wrapping past mute back to full — the whole of what one control does.
+   *
+   * It also RESUMES, because the operator pressing the sound control is the clearest gesture there is and a
+   * button that changed a number while the page stayed silent would be a lie.
+   */
+  stepVolume(): number {
+    const at = VOLUME_STEPS.indexOf(this.volume as (typeof VOLUME_STEPS)[number]);
+    const next = VOLUME_STEPS[(at + 1) % VOLUME_STEPS.length] ?? 1;
+    this.setVolume(next);
+    if (next > 0) {
+      void this.host.resume();
+    }
+
+    return next;
   }
 
   /** Stop the tick and every voice. The context stays, so a resume is instant. */

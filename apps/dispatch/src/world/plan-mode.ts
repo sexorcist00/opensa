@@ -14,6 +14,7 @@
 import type { GtaGround } from '../map/coords';
 import type { SharedView } from '../map/view-link';
 import type { Operations, Selection } from '../ops/types';
+import type { DispatchAudioReport } from './audio';
 import type { BootOptions, DispatchHandle, DispatchReadout, ZoomLevel } from './boot';
 import type { SearchedPlace } from './zones';
 
@@ -55,6 +56,17 @@ export type PlanModeOps = () => Operations;
 
 /** Kept for symmetry with the 3D host's selection getter. */
 export type PlanModeSelection = () => Selection;
+
+/** What a surface with no audio host reports. Stated once so the shape cannot drift from the real one. */
+const SILENT_AUDIO: DispatchAudioReport = {
+  absence: { names: 0, noIndex: false, noSource: false, packages: 0, reasons: [], sounds: 0 },
+  arm: 'on',
+  availability: 'unsupported',
+  clock: { maxMs: 0, meanMs: 0, rateHz: 0, ticks: 0 },
+  resumesRefused: 0,
+  voices: null,
+  volume: 1,
+};
 
 export function bootPlanMode(options: BootOptions, why: string): DispatchHandle {
   const { canvas, overlay } = options;
@@ -315,6 +327,9 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       lastReadout = now;
       const rate = frameClock.read(now);
       lastPayload = {
+        // Plan mode is the flat 2D fallback: it builds no audio host at all, so the control it feeds says
+        // so rather than claiming a world this surface could not make a sound in.
+        audio: { availability: 'unsupported' as const, volume: 1 },
         buildTime: `plan mode — ${why}`,
         cellsTotal: 0,
         cellsVisible: 0,
@@ -344,6 +359,13 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
   requestAnimationFrame(loop);
 
   return {
+    // Plan mode makes no sound: the control it feeds reads `unsupported` and its step does nothing, which
+    // is the honest answer for a surface with no audio host rather than a knob that turns and changes
+    // nothing.
+    audio: {
+      report: (): DispatchAudioReport => SILENT_AUDIO,
+      step: (): number => 1,
+    },
     camera,
     dispose(): void {
       disposed = true;

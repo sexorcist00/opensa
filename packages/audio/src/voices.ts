@@ -42,6 +42,8 @@ export interface VoicePoolReport {
   readonly ceiling: number;
   /** Playing right now. */
   readonly live: number;
+  /** The master volume every voice passes through, 0..1. Zero is mute, and a muted world still counts. */
+  readonly masterGain: number;
   /** The most that were ever live at once — the number that says whether the ceiling is near. */
   readonly peak: number;
   /** Sounds turned away because every live voice was already louder. */
@@ -98,6 +100,8 @@ export class VoicePool {
   private readonly ceiling: number;
   private readonly context: AudioContextLike;
   private listener: AudioListener = ORIGIN_LISTENER;
+  /** Every voice passes through this one node, which is what makes volume and mute a single value. */
+  private readonly master: GainLike;
   private nextId = 1;
   private peak = 0;
   private refused = 0;
@@ -108,6 +112,8 @@ export class VoicePool {
   constructor(context: AudioContextLike, options: { maxVoices?: number } = {}) {
     this.context = context;
     this.ceiling = options.maxVoices ?? MAX_VOICES;
+    this.master = context.createGain();
+    this.master.connect(context.destination);
   }
 
   /**
@@ -142,6 +148,7 @@ export class VoicePool {
     return {
       ceiling: this.ceiling,
       live: this.voices.size,
+      masterGain: this.master.gain.value,
       peak: this.peak,
       refused: this.refused,
       started: this.started,
@@ -155,6 +162,14 @@ export class VoicePool {
     for (const voice of this.voices.values()) {
       this.place(voice);
     }
+  }
+
+  /**
+   * The master volume, 0..1. Mute is 0 and nothing else: a muted pool goes on playing and stealing, so
+   * unmuting is instant and a capture still says how many voices a world asked for.
+   */
+  setMasterGain(value: number): void {
+    this.master.gain.value = Math.min(1, Math.max(0, value));
   }
 
   /** Move one sound. A car is a moving source; a siren that stayed where it was fired is a bug people hear. */
@@ -194,7 +209,7 @@ export class VoicePool {
     gainNode.gain.value = heard;
     source.connect(gainNode);
     gainNode.connect(panner);
-    panner.connect(this.context.destination);
+    panner.connect(this.master);
 
     const handle: MutableVoice = {
       id,

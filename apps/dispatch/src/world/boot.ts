@@ -1,3 +1,4 @@
+import type { AudioAvailability } from '@opensa/audio';
 import type { OpenedPak, ResidencyView, StreamingHost, StreamStats } from '@opensa/engine';
 import type { TimecycSource } from '@opensa/renderware';
 
@@ -63,7 +64,7 @@ import {
   type WorldClockSource,
   type WorldTimeAnchor,
 } from '../ops/world-clock';
-import { DispatchAudio } from './audio';
+import { DispatchAudio, type DispatchAudioReport } from './audio';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
 import { captureAblation } from './capture-ablation';
@@ -120,6 +121,14 @@ export interface BootOptions {
 }
 
 export interface DispatchHandle {
+  /**
+   * The sound control's two halves (203/6-02): what to draw, and the one action there is.
+   *
+   * A method rather than a readout field for the ACTION, because pressing it also resumes the context — the
+   * operator reaching for the sound control is the clearest gesture a page ever gets, and a button that
+   * changed a number while the page stayed silent would be a lie.
+   */
+  readonly audio: { report(): DispatchAudioReport; step(): number };
   readonly camera: MapCamera;
   dispose(): void;
   /**
@@ -201,6 +210,9 @@ export interface DispatchHandle {
 }
 
 export interface DispatchReadout {
+  /** What the sound control shows (203/6-01, 6-02): what the browser allows, and the step the volume is on.
+   *  The chrome draws an HONEST indicator from this rather than claiming the world is audible. */
+  readonly audio: { readonly availability: AudioAvailability; readonly volume: number };
   readonly buildTime: string;
   readonly cellsTotal: number;
   readonly cellsVisible: number;
@@ -1095,7 +1107,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     if (now - lastReadout > 1000 / READOUT_HZ) {
       lastReadout = now;
       const rate = frameClock.read(now);
+      const audioNow = audio.report();
       lastPayload = {
+        audio: { availability: audioNow.availability, volume: audioNow.volume },
         buildTime: world.label,
         cellsTotal: stats.cellsTotal,
         cellsVisible: stats.cellsVisible,
@@ -1163,6 +1177,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   }
 
   return {
+    /** What the sound control needs: the state to draw and the step to take (203/6-02). */
+    audio: {
+      report: (): DispatchAudioReport => audio.report(),
+      step: (): number => audio.stepVolume(),
+    },
     camera,
     dispose(): void {
       disposed = true;

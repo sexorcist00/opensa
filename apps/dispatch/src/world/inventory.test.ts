@@ -64,6 +64,7 @@ const CONTEXT = {
     clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
     resumesRefused: 0,
     voices: null,
+    volume: 1,
   },
   boot: { gpuMs: 0, openMs: 0, overlapMs: 0, phases: [] },
   build: 'original@test',

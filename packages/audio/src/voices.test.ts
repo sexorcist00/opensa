@@ -25,6 +25,11 @@ function sourceOf(context: FakeAudioContext, index: number): FakeBufferSource {
   return source;
 }
 
+/** The gain of the n-th voice. The pool builds its MASTER gain first, so a voice's own is one along. */
+function voiceGain(context: FakeAudioContext, index: number): number {
+  return context.gains[index + 1]?.gain.value ?? Number.NaN;
+}
+
 describe('VoicePool', () => {
   describe('negative cases', () => {
     it('REFUSES a sound quieter than every voice already playing rather than stealing for it', () => {
@@ -93,7 +98,7 @@ describe('VoicePool', () => {
 
       pool.play({ buffer: buffer(context), gain: 0.8, position: [0, 55, 0] });
 
-      expect(context.gains[0]?.gain.value).toBeCloseTo(audibleGain(AT_ORIGIN, [0, 55, 0], 0.8), 10);
+      expect(voiceGain(context, 0)).toBeCloseTo(audibleGain(AT_ORIGIN, [0, 55, 0], 0.8), 10);
     });
 
     it('wires source → gain → pan → destination, and starts it', () => {
@@ -102,9 +107,9 @@ describe('VoicePool', () => {
 
       pool.play({ buffer: buffer(context), position: [10, 0, 0] });
 
-      expect(sourceOf(context, 0).connectedTo[0]).toBe(context.gains[0]);
-      expect(context.gains[0]?.connectedTo[0]).toBe(context.panners[0]);
-      expect(context.panners[0]?.connectedTo[0]).toBe(context.destination);
+      expect(sourceOf(context, 0).connectedTo[0]).toBe(context.gains[1]);
+      expect(context.gains[1]?.connectedTo[0]).toBe(context.panners[0]);
+      expect(context.panners[0]?.connectedTo[0]).toBe(context.gains[0]);
       expect(sourceOf(context, 0).startedAt).not.toBeNull();
       expect(context.panners[0]?.pan.value).toBe(1);
     });
@@ -151,7 +156,7 @@ describe('VoicePool', () => {
 
       pool.setListener({ ...AT_ORIGIN, position: [0, 95, 0] });
 
-      expect(context.gains[0]?.gain.value).toBeCloseTo(
+      expect(voiceGain(context, 0)).toBeCloseTo(
         audibleGain({ ...AT_ORIGIN, position: [0, 95, 0] }, [0, 100, 0], 1),
         10,
       );
@@ -167,7 +172,7 @@ describe('VoicePool', () => {
         pool.setPosition(voice, [0, 6, 0]);
       }
 
-      expect(context.gains[0]?.gain.value).toBeGreaterThan(0.5);
+      expect(voiceGain(context, 0)).toBeGreaterThan(0.5);
     });
 
     it('centres a sound with no position and gives it its gain everywhere', () => {
@@ -177,7 +182,7 @@ describe('VoicePool', () => {
 
       pool.play({ buffer: buffer(context), gain: 0.4, position: null });
 
-      expect(context.gains[0]?.gain.value).toBe(0.4);
+      expect(voiceGain(context, 0)).toBe(0.4);
       expect(context.panners[0]?.pan.value).toBe(0);
     });
 
@@ -192,7 +197,36 @@ describe('VoicePool', () => {
       expect(pool.report().live).toBe(0);
       expect(sourceOf(context, 0).stoppedAt).not.toBeNull();
       expect(sourceOf(context, 0).disconnected).toBe(true);
-      expect(context.gains[1]?.disconnected).toBe(true);
+      expect(context.gains[2]?.disconnected).toBe(true);
+    });
+
+    it('routes every voice through ONE master gain, which is what mute and volume set', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.play({ buffer: buffer(context) });
+      pool.play({ buffer: buffer(context) });
+
+      pool.setMasterGain(0.25);
+
+      expect(context.gains[0]?.connectedTo[0]).toBe(context.destination);
+      expect(context.panners[0]?.connectedTo[0]).toBe(context.gains[0]);
+      expect(context.panners[1]?.connectedTo[0]).toBe(context.gains[0]);
+      expect(pool.report().masterGain).toBe(0.25);
+    });
+
+    it('clamps the master to 0..1, and a muted pool goes on playing and counting', () => {
+      // Mute is a gain of zero and nothing else: unmuting is instant, and a capture still says how many
+      // voices the world asked for while nobody could hear them.
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+
+      pool.setMasterGain(-2);
+      expect(pool.report().masterGain).toBe(0);
+      pool.play({ buffer: buffer(context) });
+      expect(pool.report().live).toBe(1);
+
+      pool.setMasterGain(9);
+      expect(pool.report().masterGain).toBe(1);
     });
 
     it('states the budget it was built with', () => {

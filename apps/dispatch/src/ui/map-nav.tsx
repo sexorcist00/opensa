@@ -1,3 +1,5 @@
+import type { AudioAvailability } from '@opensa/audio';
+
 /**
  * The map's own controls (201/7-06): a compass that says which way north is and puts it back, plus zoom,
  * turn and tilt.
@@ -22,6 +24,7 @@ import type { DispatchHandle } from '../world/boot';
 import type { MapMode } from '../world/mode-switch';
 
 import { MAP_YAW } from '../map/map-camera';
+import { AudioKey } from './audio-key';
 import { styles } from './styles';
 
 /** One press of turn or tilt. An eighth of a turn is the smallest step that reads as a deliberate move. */
@@ -29,6 +32,7 @@ const TURN_STEP = Math.PI / 4;
 const TILT_STEP = Math.PI / 12;
 
 export function MapNav({
+  audio,
   compact = false,
   handle,
   mode = null,
@@ -36,6 +40,8 @@ export function MapNav({
   touch = false,
   yaw,
 }: {
+  /** What the sound key shows (203/6-02). Absent before the first readout. */
+  audio?: { availability: AudioAvailability; volume: number };
   /** Narrow screen: the cluster keeps what is used every few seconds and folds the rest behind one key. */
   compact?: boolean;
   handle: DispatchHandle | null;
@@ -71,6 +77,17 @@ export function MapNav({
       >
         <Compass yaw={yaw} />
       </button>
+
+      {/* Sound sits with the map's own controls rather than in the top bar, which already clips at 360 CSS
+          px — and it stays OUT of the fold, because a control the operator reaches for while listening is
+          not one to hide behind a key (203/6-02). */}
+      <AudioKey
+        availability={audio?.availability ?? 'unsupported'}
+        disabled={disabled}
+        onStep={() => handle?.audio.step()}
+        touch={touch}
+        volume={audio?.volume ?? 1}
+      />
 
       {compact && (
         <button
