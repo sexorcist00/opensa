@@ -1069,6 +1069,31 @@ with an unused-directive warning sitting next to the error it was written to sil
 by lint itself, immediately — so the cost is confusion rather than a shipped defect. Put the directive on the
 line immediately above the statement, with the reasoning in a separate comment above it.
 
+## A hand-written subset of a PLATFORM API needs a compile-time conformance assertion
+
+**The rule.** Where this repository declares its own structural type for a browser API — so that a test can
+drive a fake, which is the only way to unit-test anything built on `AudioContext`, `GPUDevice` or
+`navigator` — the real type must be ASSERTED assignable to ours, in a file `tsc` reads. One line:
+
+```ts
+type MustSatisfy<Expected, Actual extends Expected> = Actual;
+export type ContextConforms = MustSatisfy<AudioContextLike, AudioContext>;
+```
+
+Without it nothing checks the resemblance. The real object enters through a constructor cast
+(`new (globalThis.AudioContext)()` typed as our own interface), so a member that drifts — a wrong signature,
+a state the platform has and we do not — is found by a BROWSER, at runtime, on somebody's phone.
+
+**What it caught, on the first run, 2026-09-09.** `AudioContextLike.state` was declared
+`'closed' | 'running' | 'suspended'`, which is what the three engines this project is developed against
+report. Apple's platforms have a fourth: **`interrupted`**, entered when a phone call or Siri takes the audio
+hardware. The host would have read it as `waiting` — *nobody has touched the page yet* — and drawn an
+indicator inviting a gesture that was not the problem. It reads it as `suspended` deliberately now.
+
+**Caught:** by `tsc`, and only where the assertion exists. Every other structural platform type in this
+repository is currently unpinned — `packages/engine`'s WebGPU surface among them — so the general form is
+NOT caught, and the cost of an unpinned one is a bug that only exists on a platform nobody here owns.
+
 ## A fallback that YIELDS to work in flight must ask whether that work can arrive at all
 
 **The rule.** A placeholder rule of the shape *"do not draw the stand-in, something better is on its way"*
