@@ -1060,6 +1060,15 @@ simply the wrong bytes. Here `readBankHeader`'s own unit tests failed on the val
 the argument for asserting a parser's fields rather than its shape. The general form is not caught: any new
 cursor-based parser written as a literal will be reordered the first time somebody runs the fixer.
 
+**The same fixer edits meaning a second way: it ORPHANS an `eslint-disable-next-line`.** `sort-classes` and
+`sort-modules` move whole members, and on 2026-09-09 in `packages/audio` a fix run left a `no-console`
+directive behind while the statement it guarded moved — so the rule fired again on code that was already
+excused. The neighbouring trap is self-inflicted and cost the same minute: a `-- reason` that WRAPS onto a
+second comment line makes the directive's *next line* the prose rather than the statement, and lint answers
+with an unused-directive warning sitting next to the error it was written to silence. **Both are CAUGHT** —
+by lint itself, immediately — so the cost is confusion rather than a shipped defect. Put the directive on the
+line immediately above the statement, with the reasoning in a separate comment above it.
+
 ## A fallback that YIELDS to work in flight must ask whether that work can arrive at all
 
 **The rule.** A placeholder rule of the shape *"do not draw the stand-in, something better is on its way"*

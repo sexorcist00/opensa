@@ -1,0 +1,15 @@
+{
+  "name": "@opensa/audio",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The world's own sound (plan 203): the audio context and its lifecycle, voices, and the listener. Zero runtime dependencies — the console ships as an embeddable widget and may not grow one.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "nx": {
+    "tags": [
+      "type:engine"
+    ]
+  }
+}

@@ -16,6 +16,13 @@ Diagrams live in [assets/](./assets/) and are **generated** — `npm run arch:re
 `%%| <name>` mermaid block in this folder to `assets/<name>.svg`). Edit the mermaid source in the doc,
 re-render, commit both.
 
+**`packages.svg` and `runtime-packages.svg` are one node stale**: they predate `packages/audio` (2026-09-09),
+which the text map below carries. The web container's Chromium is pinned two builds below the one this
+repository's Playwright asks for, and rendering with the one it has rewrites **the whole 206 kB file** — a
+baseline render with no source change came back 229 kB — so re-rendering there would have committed the
+renderer's churn to buy one isolated node. **Re-render both on a machine with the pinned browser** and the
+gap closes in one command.
+
 ## Repository layout
 
 OpenSA is an **Nx + npm-workspaces monorepo** (see [plan 057](../plans/057-nx-monorepo-migration/readme.md)). Every
@@ -37,6 +44,9 @@ packages/                          (tag type:engine)
                                           archive the flat 2D map reads (201/6-02), shared with tools
   cell-weld/      @opensa/cell-weld       RW instances + TXDs → .oscell/.ostex bytes (weld, texture plan, alpha)
   math/           @opensa/math            dependency-free 3D math
+  audio/          @opensa/audio           the world's own sound (plan 203): the context and its autoplay
+                                          lifecycle, and the voices and listener above it. ZERO runtime
+                                          dependencies — the console ships as an embeddable widget
   renderware/     @opensa/renderware      parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + mesh prep
   game/           @opensa/game            ECS, systems, adapters — renderer-agnostic
   loaders/        @opensa/loaders         asset loaders (fetch / local folder / http-dir) — framework-agnostic

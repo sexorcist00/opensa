@@ -51,6 +51,7 @@
     "packages/game",
     "packages/engine-formats",
     "packages/engine",
+    "packages/audio",
     "packages/math",
     "packages/validation",
     "tools/map-optimizer",

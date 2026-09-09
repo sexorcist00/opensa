@@ -23,6 +23,7 @@ implemented ones, and assembling the release changelog.
 | Animated map objects (UV + IFP)               | [animated-map-objects.md](animated-map-objects.md) |
 | Procedural ground clutter (procobj)           | [procobj.md](procobj.md)                           |
 | Road-sign text (2dfx type 7)                  | [roadsign-text.md](roadsign-text.md)               |
+| Audio (the world's own sound, 203)            | [audio.md](audio.md)                               |
 | World effects (2dfx particles)                | [world-effects.md](world-effects.md)               |
 | Vehicle effects (smoke, skids, dust — 089)    | [vehicle-effects.md](vehicle-effects.md)           |
 | Breakable objects                             | [breakable-objects.md](breakable-objects.md)       |
