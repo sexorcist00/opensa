@@ -48,5 +48,17 @@ export {
   panFor,
   type Vec3,
 } from './spatial';
+export {
+  CRZ_FADE_SECONDS,
+  type EngineState,
+  type EngineVoicing,
+  gainOf,
+  IDLE_FADE_SECONDS,
+  IDLE_RATIO,
+  idleProgress,
+  REV_RATIO,
+  revProgress,
+  VehicleEngine,
+} from './vehicle-engine';
 export { MAX_VOICES, type Voice, VoicePool, type VoicePoolReport, type VoiceRequest } from './voices';
 export { audioZoneAt, contains } from './zones';
