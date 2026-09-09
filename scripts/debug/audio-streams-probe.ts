@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { gameArg, gameDir } from '../lib/game';
@@ -18,9 +18,14 @@ import { gameArg, gameDir } from '../lib/game';
  * is free: after the header the payload must say `OggS`. If it does not, the key or the layout is wrong and
  * this script says so instead of printing numbers nobody should trust.
  *
+ * **`--dump` is the one that settles the product question**, because 203's decision 3.4 says a verdict is
+ * taken by the operator's EAR: it writes the de-obfuscated payload out as a plain `.ogg`, which any phone
+ * plays. What the author's ambience actually IS stops being a guess.
+ *
  * ```bash
- * npx tsx scripts/debug/audio-streams-probe.ts             # the shelf
- * npx tsx scripts/debug/audio-streams-probe.ts --file AA   # one file's header
+ * npx tsx scripts/debug/audio-streams-probe.ts               # the shelf
+ * npx tsx scripts/debug/audio-streams-probe.ts --file AA     # one file's header
+ * npx tsx scripts/debug/audio-streams-probe.ts --dump AA --out /storage/emulated/0/Download/AA.ogg
  * ```
  */
 
@@ -31,6 +36,29 @@ const HEADER_BYTES = 8068;
 const BEATS = 1000;
 /** How many tracks one file can hold — the length-pair table's own size. */
 const TRACKS = 8;
+
+/** Write one stream's payload out as a plain `.ogg` — the file an ear can judge. */
+function dumpOgg(file: string, name: string, out: string): void {
+  const raw = readFileSync(file);
+  if (raw.byteLength <= HEADER_BYTES) {
+    console.log(`  ${name}: ${raw.byteLength} bytes — nothing past the header`);
+
+    return;
+  }
+  const payload = new Uint8Array(raw.byteLength - HEADER_BYTES);
+  for (let at = 0; at < payload.length; at += 1) {
+    const source = at + HEADER_BYTES;
+    payload[at] = (raw[source] ?? 0) ^ (KEY[source % KEY.length] ?? 0);
+  }
+  const magic = String.fromCharCode(payload[0] ?? 0, payload[1] ?? 0, payload[2] ?? 0, payload[3] ?? 0);
+  if (magic !== 'OggS') {
+    console.log(`  ${name}: payload starts '${magic}', not 'OggS' — refusing to write a file nobody can trust`);
+
+    return;
+  }
+  writeFileSync(out, payload);
+  console.log(`  wrote ${out} — ${(payload.byteLength / 1048576).toFixed(1)} MB of Ogg Vorbis out of ${name}`);
+}
 
 function flag(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -55,6 +83,12 @@ function main(): void {
     console.log(`  ${file.name.padEnd(12)} ${(file.bytes / 1048576).toFixed(1).padStart(7)} MB`);
   }
 
+  const dump = flag('--dump');
+  if (dump !== undefined) {
+    dumpOgg(join(streams, dump), dump, flag('--out') ?? `${dump}.ogg`);
+
+    return;
+  }
   const asked = flag('--file') ?? files[0]?.name;
   if (asked === undefined) {
     return;
