@@ -27,6 +27,13 @@ consumer — [the chain](../plans/203-audio/readme.md) builds them in that order
 - **Absence is a reported state, never a throw**: no Web Audio in the environment is `unsupported`, one line
   in the log, and a host every caller can go on using.
 
+- **The event table** (203/5-01): `data/audio-events.dat` — our own vocabulary, `event, bank, sound,
+  [gain], [loop|once], [maxDistance]`, read the way the game reads its own rows and documented in
+  [`docs/contracts/audio.md`](../contracts/audio.md). A row that points at a bank this build has not got is
+  dropped at LOAD and named, never at the moment somebody wanted the sound.
+- **The console can play a named event**: `DispatchAudio.load()` then `play(name, position)` — index →
+  table → one Range request → decode → the 64 MB cache → a voice. Nothing names anything yet.
+
 ## Not implemented
 
 - Everything audible: the baked index beside the pak, the range fetch, the cache, voices, the listener,

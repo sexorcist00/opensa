@@ -20,6 +20,7 @@ export type {
   GestureTarget,
   StereoPannerLike,
 } from './audio-host.interface';
+export { type AudioEvent, AudioEventTable } from './event-table';
 export {
   attenuation,
   audibleGain,

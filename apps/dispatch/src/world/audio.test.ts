@@ -34,6 +34,39 @@ describe('audioArm', () => {
   });
 
   describe('positive cases', () => {
+    it('loads an index, resolves the event rows against it, and says how many survived', () => {
+      const audio = new DispatchAudio(new URLSearchParams(), { clockHost: clockHost(), log: vi.fn() });
+
+      audio.load({
+        gameDir: '/game',
+        index: {
+          banks: [{ firstSound: 0, headerOffset: 0, packageIndex: 0, sizeBytes: 24, soundCount: 1 }],
+          packages: ['GENRL'],
+          sounds: [
+            { byteLength: 24, byteOffset: 0, durationSeconds: 0, headroom: 0, loopOffset: -1, sampleRate: 12_000 },
+          ],
+          zones: [],
+        },
+        rows: [
+          { bank: 0, gain: 1, loop: false, maxDistance: null, name: 'HORN', sound: 0 },
+          { bank: 9, gain: 1, loop: false, maxDistance: null, name: 'GONE', sound: 0 },
+        ],
+      });
+
+      // One row resolved, one named a bank this build has not got — dropped at LOAD and counted, never at
+      // the moment somebody wanted the sound.
+      expect(audio.report().events).toBe(1);
+      expect(audio.report().absence.names).toBe(1);
+    });
+
+    it('plays nothing, and says why, for a build with no index at all', async () => {
+      const audio = new DispatchAudio(new URLSearchParams(), { clockHost: clockHost(), log: vi.fn() });
+      audio.load({ gameDir: '/game', index: null, rows: [] });
+
+      await expect(audio.play('ANYTHING')).resolves.toBeNull();
+      expect(audio.report().absence.noIndex).toBe(true);
+    });
+
     it('is on when absent, and off for `?audio=0`', () => {
       expect(audioArm(new URLSearchParams())).toBe('on');
       expect(audioArm(new URLSearchParams('audio=0'))).toBe('off');
@@ -81,7 +114,9 @@ describe('DispatchAudio', () => {
         absence: { names: 0, noIndex: false, noSource: false, packages: 0, reasons: [], sounds: 0 },
         arm: 'on',
         availability: 'unsupported',
+        buffers: { bytes: 0, ceilingBytes: 67_108_864, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },
         clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
+        events: 0,
         resumesRefused: 0,
         voices: null,
         volume: 1,

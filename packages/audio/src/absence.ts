@@ -111,6 +111,21 @@ export class AudioAbsence {
     this.say(`[audio] nothing carries a sound named '${name}'`);
   }
 
+  /**
+   * A row of the event table that names a sound the index does not have.
+   *
+   * Counted with the unknown NAMES, because the effect on a consumer is the same — asking for it plays
+   * nothing — but said differently, because the cause is not: the table has the name and it points nowhere,
+   * which is a mod author's row to fix rather than a caller's typo.
+   */
+  unresolvedRow(name: string, reason: string): void {
+    if (this.names.has(name)) {
+      return;
+    }
+    this.names.add(name);
+    this.say(`[audio] '${name}' is in the event table but ${reason} — nothing plays for it`);
+  }
+
   private say(message: string): void {
     if (this.reasons.length < MAX_REASONS) {
       this.reasons.push(message);
