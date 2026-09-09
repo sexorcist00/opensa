@@ -23,6 +23,7 @@ const unit = (id: string, at: [number, number], patch: Partial<Unit> = {}): Unit
   incident: null,
   kind: 'patrol',
   model: 'copcarls',
+  speed: 0,
   status: 'available',
   target: null,
   ...patch,
@@ -44,6 +45,48 @@ const call = (id: string, at: [number, number], patch: Partial<Incident> = {}): 
 
 const tick = (state: Operations, seconds: number, autoDispatch = false): Operations =>
   stepOperations(state, { autoDispatch, dtSeconds: seconds, now: seconds * 1000, random: QUIET });
+
+describe('unit speed', () => {
+  describe('negative cases', () => {
+    it('reports zero for a unit that is working a scene rather than driving to one', () => {
+      const state = tick(board([unit('u1', [0, 0], { speed: 26, status: 'onScene' })]), 1);
+
+      // A car standing at a call idles; a stale speed would rev an engine nobody is driving.
+      expect(state.units[0]?.speed).toBe(0);
+    });
+
+    it('reports zero the moment a responder arrives, not the speed it arrived at', () => {
+      const start = board([unit('u1', [0, 0], { incident: 'i1', status: 'enRoute' })], [call('i1', [5, 0])]);
+
+      const arrived = tick(start, 1);
+
+      expect(arrived.units[0]?.status).toBe('onScene');
+      expect(arrived.units[0]?.speed).toBe(0);
+    });
+
+    it('does not report a patrol travelling faster than it moved on its last step into a corner', () => {
+      // The last step before a target is a fraction of a full one; a car that reports its cruising speed
+      // there is a car heard flat out as it parks.
+      const state = tick(board([unit('u1', [0, 0], { target: [1, 0] })]), 1);
+
+      expect(state.units[0]?.speed).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports the response speed while a unit is on its way', () => {
+      const start = board([unit('u1', [0, 0], { incident: 'i1', status: 'enRoute' })], [call('i1', [500, 0])]);
+
+      expect(tick(start, 1).units[0]?.speed).toBe(26);
+    });
+
+    it('reports the patrol speed while a unit is driving its own route', () => {
+      const state = tick(board([unit('u1', [0, 0], { target: [500, 0] })]), 1);
+
+      expect(state.units[0]?.speed).toBe(12);
+    });
+  });
+});
 
 describe('sim', () => {
   describe('negative cases', () => {

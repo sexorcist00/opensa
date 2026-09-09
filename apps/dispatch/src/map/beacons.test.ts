@@ -51,6 +51,7 @@ function unit(index: number, status: UnitStatus): Unit {
     incident: null,
     kind: 'patrol',
     model: 'copcarls',
+    speed: 0,
     status,
     target: null,
   };

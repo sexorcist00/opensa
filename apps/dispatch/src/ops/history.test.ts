@@ -40,6 +40,7 @@ function unit(id: string, at: [number, number], status: Unit['status'] = 'availa
     incident: null,
     kind: 'patrol',
     model: 'copcarls',
+    speed: 0,
     status,
     target: null,
   };

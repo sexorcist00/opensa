@@ -89,6 +89,19 @@ export interface Unit {
    * one does it where the build's own tables are.
    */
   readonly model: null | string;
+  /**
+   * How fast it is going, world units a second (the game's units are metres, so this is m/s).
+   *
+   * **A field of the domain rather than something the map derives**, on the user's call of 2026-09-09: the
+   * PCAD contract will publish speed alongside the position
+   * ([202 §4](../../../../docs/plans/202-pcad-dispatch/readme.md)), so deriving it between two fixes would
+   * be a stand-in that outlives its reason and disagrees with the feed the day the feed arrives. Until then
+   * the mockup sim fills it with the speed it actually applied.
+   *
+   * The audio layer is the first consumer: an engine is voiced by `speed / maxVelocity`, and a replayed
+   * fix that carried no speed would idle a car that is plainly moving.
+   */
+  readonly speed: number;
   readonly status: UnitStatus;
   /** Where it is currently driving; null means "pick a new patrol point". */
   readonly target: GtaGround | null;

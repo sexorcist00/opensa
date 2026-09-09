@@ -217,6 +217,20 @@ export class VoicePool {
     this.master.gain.value = Math.min(1, Math.max(0, value));
   }
 
+  /**
+   * Change a live voice's playback rate.
+   *
+   * **This is what pitching an engine IS**: one loop played faster, not a different sample chosen per speed
+   * ([the engine model](./vehicle-engine.ts)). Set outright rather than ramped — the caller moves it a
+   * little every tick, and a ramp under a ramp is a value nobody can predict.
+   */
+  setPitch(voice: Voice, pitch: number): void {
+    const live = this.voices.get(voice.id);
+    if (live) {
+      live.source.playbackRate.value = pitch;
+    }
+  }
+
   /** Move one sound. A car is a moving source; a siren that stayed where it was fired is a bug people hear. */
   setPosition(voice: Voice, position: null | Vec3): void {
     const live = this.voices.get(voice.id);

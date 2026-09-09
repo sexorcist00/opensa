@@ -36,6 +36,9 @@ import type { OsaudioIndex } from '@opensa/engine-formats';
 import type { AudioCacheReport } from '@opensa/loaders/audio-cache';
 import type { AudioSource } from '@opensa/loaders/audio-source';
 import type { AudioEventRow } from '@opensa/renderware/parsers/text/audio-events.parser';
+import type { HandlingEntry } from '@opensa/renderware/parsers/text/handling.parser';
+import type { VehicleAudioRow } from '@opensa/renderware/parsers/text/vehicle-audio.parser';
+import type { VehicleDef } from '@opensa/renderware/parsers/text/vehicle-defs.parser';
 
 import {
   Ambience,
@@ -45,10 +48,16 @@ import {
   AudioHost,
   audioZoneAt,
   browserClockHost,
+  VehicleVoiceTable,
   VoicePool,
 } from '@opensa/audio';
 import { AudioCache } from '@opensa/loaders/audio-cache';
 import { openAudioSource } from '@opensa/loaders/audio-source';
+
+import type { Unit } from '../ops/types';
+import type { UnitAudioReport } from './unit-audio';
+
+import { UnitAudio } from './unit-audio';
 
 /** Whether this run makes sound at all. `off` is `?audio=0`, spelled the way a filed row spells it. */
 export type AudioArm = 'off' | 'on';
@@ -71,6 +80,10 @@ export interface DispatchAudioReport {
   readonly events: number;
   /** Gestures the browser turned down. Non-zero with `waiting` means the wiring, not the operator. */
   readonly resumesRefused: number;
+  /** What the board's own cars sound like — engines running, sirens wailing, models this build cannot voice. */
+  readonly units: UnitAudioReport;
+  /** How many cars resolved against this build's index and its handling rows. */
+  readonly vehicles: number;
   /** `null` until there is a context to build voices on. */
   readonly voices: null | VoicePoolReport;
   /** The step the operator left the volume on, 0..1 — 0 being mute. Carried whether or not there is a pool. */
@@ -101,9 +114,12 @@ export class DispatchAudio {
   private readonly clock: AudioClock;
   private readonly host: AudioHost;
   private index: null | OsaudioIndex = null;
+  private readonly pending = new Set<number>();
   private readonly pool: null | VoicePool;
   private source: AudioSource | null = null;
   private table: AudioEventTable;
+  private readonly units: null | UnitAudio;
+  private vehicles: VehicleVoiceTable = VehicleVoiceTable.empty();
   private volume = 1;
 
   constructor(
@@ -131,6 +147,15 @@ export class DispatchAudio {
     this.buffers = new AudioCache<AudioBufferLike>({ bytesOf: (value): number => value.length * 4 });
     this.table = AudioEventTable.empty(this.absence);
     this.ambience = new Ambience(this.ambienceHost(options.random));
+    this.units =
+      this.pool === null
+        ? null
+        : new UnitAudio({
+            bufferFor: (soundIndex): AudioBufferLike | null => this.warm(soundIndex),
+            events: (): AudioEventTable => this.table,
+            pool: this.pool,
+            vehicles: (): VehicleVoiceTable => this.vehicles,
+          });
   }
 
   /** Wire the first touch. Anything that reaches the page wakes the context — no gate screen, ever. */
@@ -159,8 +184,22 @@ export class DispatchAudio {
    * Every part is optional and absence is a REPORTED state rather than an error — no index, no game dir, an
    * event table naming banks this build has not got. Called again, it replaces what was loaded.
    */
-  load(options: { gameDir: string; index: null | OsaudioIndex; rows: readonly AudioEventRow[] }): void {
+  load(options: {
+    defs?: ReadonlyMap<string, VehicleDef>;
+    gameDir: string;
+    handling?: ReadonlyMap<string, HandlingEntry>;
+    index: null | OsaudioIndex;
+    rows: readonly AudioEventRow[];
+    vehicles?: readonly VehicleAudioRow[];
+  }): void {
     this.table = AudioEventTable.resolve(options.rows, options.index, this.absence);
+    this.vehicles = VehicleVoiceTable.resolve(
+      options.vehicles ?? [],
+      options.defs ?? new Map(),
+      options.handling ?? new Map(),
+      options.index,
+      this.absence,
+    );
     this.source = options.index === null ? null : openAudioSource(options.gameDir, options.index);
     this.index = options.index;
     if (options.index !== null && this.source === null) {
@@ -213,6 +252,8 @@ export class DispatchAudio {
       clock: this.clock.report(),
       events: this.table.size,
       resumesRefused: this.host.state.resumesRefused,
+      units: this.units?.report() ?? { engines: 0, sirens: 0, unvoiced: 0 },
+      vehicles: this.vehicles.size,
       voices: this.pool?.report() ?? null,
       volume: this.volume,
     };
@@ -231,7 +272,7 @@ export class DispatchAudio {
    * Start the audio tick. `listenerOf` is read on the clock's schedule rather than the frame's, so a still
    * map keeps its ear where the camera is.
    */
-  start(listenerOf: () => AudioListener): void {
+  start(listenerOf: () => AudioListener, unitsOf: () => readonly Unit[] = (): readonly Unit[] => []): void {
     if (this.pool === null) {
       return;
     }
@@ -242,6 +283,7 @@ export class DispatchAudio {
       // The zone lookup is 155 point tests (203/4-01) and it runs on the AUDIO clock, ten a second — not on
       // the frame, which the render gate takes to zero at rest.
       this.ambience.update(audioZoneAt(this.index?.zones ?? [], listener.position), listener.position, gapSeconds);
+      this.units?.update(unitsOf(), listener.position, gapSeconds);
     });
   }
 
@@ -266,6 +308,7 @@ export class DispatchAudio {
   stop(): void {
     this.clock.stop();
     this.ambience.stop();
+    this.units?.stop();
     this.pool?.stopAll();
   }
 
@@ -334,6 +377,29 @@ export class DispatchAudio {
     this.buffers.set(soundIndex, buffer);
 
     return buffer;
+  }
+
+  /**
+   * The buffer for a sound if it is already decoded, and a fetch started if it is not.
+   *
+   * **The audio tick may not await.** A looping voice is wanted ten times a second and the first answer for
+   * a cold sound is `null`; the tick after the fetch lands starts it. `pending` is what stops those ten
+   * calls a second from each paying for a range request — the one place in this file where an in-flight
+   * guard earns its state, because unlike a one-shot the ask repeats until it is answered.
+   */
+  private warm(soundIndex: number): AudioBufferLike | null {
+    const kept = this.buffers.get(soundIndex);
+    if (kept) {
+      return kept;
+    }
+    const sound = this.index?.sounds[soundIndex];
+    if (!sound || this.pending.has(soundIndex)) {
+      return null;
+    }
+    this.pending.add(soundIndex);
+    void this.buffer(soundIndex, sound.sampleRate).finally(() => this.pending.delete(soundIndex));
+
+    return null;
   }
 }
 

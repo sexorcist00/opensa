@@ -121,6 +121,7 @@ function unit(id: string, patch: Partial<Unit> = {}): Unit {
     incident: null,
     kind: 'patrol',
     model: 'copcarls',
+    speed: 0,
     status: 'available',
     target: null,
     ...patch,

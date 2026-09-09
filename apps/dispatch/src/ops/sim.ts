@@ -141,24 +141,28 @@ function autoDispatch(state: Operations): Operations {
 /** One unit's movement for this tick: responding units drive to their call, free ones patrol. */
 function driveUnit(unit: Unit, state: Operations, input: StepInput): Unit {
   if (unit.status === 'busy' || unit.status === 'onScene') {
-    return unit;
+    return unit.speed === 0 ? unit : { ...unit, speed: 0 };
   }
   const target =
     unit.status === 'enRoute' ? (incidentOf(state, unit)?.at ?? null) : (unit.target ?? patrolPoint(input.random));
   if (!target) {
-    return { ...unit, incident: null, status: 'available', target: null };
+    return { ...unit, incident: null, speed: 0, status: 'available', target: null };
   }
   const speed = unit.status === 'enRoute' ? RESPONSE_SPEED : PATROL_SPEED;
   const moved = stepTowards(unit.at, target, speed * input.dtSeconds);
   const heading = gtaDistance(unit.at, moved) > 0.01 ? headingOf(unit.at, moved) : unit.heading;
   if (gtaDistance(moved, target) > ARRIVE_RADIUS) {
-    return { ...unit, at: moved, heading, target };
+    return { ...unit, at: moved, heading, speed, target };
   }
 
-  // Arrived: a responder goes on scene and stops, a patrol just picks a new corner to head for.
+  // Arrived: a responder goes on scene and stops, a patrol just picks a new corner to head for. The speed
+  // is what this tick ACTUALLY moved at, not the speed it was aiming for — the last step into a call is a
+  // fraction of one, and a car that arrives at full speed and stops dead is what a listener would hear.
+  const travelled = gtaDistance(unit.at, moved) / Math.max(input.dtSeconds, 1e-6);
+
   return unit.status === 'enRoute'
-    ? { ...unit, at: moved, heading, status: 'onScene', target }
-    : { ...unit, at: moved, heading, target: null };
+    ? { ...unit, at: moved, heading, speed: 0, status: 'onScene', target }
+    : { ...unit, at: moved, heading, speed: Math.min(speed, travelled), target: null };
 }
 
 function incidentOf(state: Operations, unit: Unit): Incident | undefined {

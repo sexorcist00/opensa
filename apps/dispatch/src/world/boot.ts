@@ -669,28 +669,36 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   const audio = new DispatchAudio(params);
   const detachAudioGestures = audio.attach(window);
   audio.load({
+    defs: opened?.audio.defs,
     gameDir: opened?.source.gameDir ?? '',
+    handling: opened?.audio.handling,
     index: opened?.audio.index ?? null,
     rows: opened?.audio.rows ?? [],
+    vehicles: opened?.audio.vehicles,
   });
   const camera = new MapCamera(poseFromQuery(params));
   // The audio tick starts HERE and not where the host is built, because its callback reads the camera —
   // and boot is async, so a clock armed before this line fires during the awaits and dies on a `camera`
   // that does not exist yet. It threw 79 times a page and the map still drew, which is why the webapp
   // smoke check is the thing that found it rather than an operator.
-  audio.start(() => {
-    const state = camera.state(canvasAspect(canvas));
-    // Engine space is x-right / y-UP / z-south; GTA is x-east / y-north / z-up, which is what every zone,
-    // unit and sound position in this app is stated in (`map/coords.ts`). One conversion, here, so the
-    // spatial model never sees two coordinate systems.
-    const ear = engineToGta3(state.eye);
-    const ahead = engineToGta3(state.target);
-    const forward = unit([ahead[0] - ear[0], ahead[1] - ear[1], ahead[2] - ear[2]]);
+  audio.start(
+    () => {
+      const state = camera.state(canvasAspect(canvas));
+      // Engine space is x-right / y-UP / z-south; GTA is x-east / y-north / z-up, which is what every zone,
+      // unit and sound position in this app is stated in (`map/coords.ts`). One conversion, here, so the
+      // spatial model never sees two coordinate systems.
+      const ear = engineToGta3(state.eye);
+      const ahead = engineToGta3(state.target);
+      const forward = unit([ahead[0] - ear[0], ahead[1] - ear[1], ahead[2] - ear[2]]);
 
-    // Right is forward × up with up = +Z, which for a unit forward is (fy, -fx, 0). Taken from the camera's
-    // own vectors rather than from its yaw, so this cannot drift from whatever north-up comes to mean.
-    return { forward, position: ear, right: unit([forward[1], -forward[0], 0]) };
-  });
+      // Right is forward × up with up = +Z, which for a unit forward is (fy, -fx, 0). Taken from the camera's
+      // own vectors rather than from its yaw, so this cannot drift from whatever north-up comes to mean.
+      return { forward, position: ear, right: unit([forward[1], -forward[0], 0]) };
+      // The board is read on the AUDIO clock too, and for the same reason the camera is: a car driving across
+      // a city nobody is panning still has an engine.
+    },
+    () => options.ops().units,
+  );
   // The bounds are the world's, not the camera's: how far it may zoom out and how shallow it may tilt both
   // come from how much world there is around the focus (201/7-02).
   camera.setStreamedReach(world.reach);

@@ -172,3 +172,50 @@ the settings are compiled into the executable and FLA exposes them.
 **`-1` is the trap and it is why this is written down.** It is `NONE` for a horn, `UNSET` for a door,
 `DISABLED` for a radio type, `INVALID` for a station and a plain *no bank* in columns C and D — while a radio
 switched **off** is the id **13**. A reader that took -1 as a number would fetch the bytes before the bank.
+
+---
+
+## 5. `VEH_SIREN_*` — the units' sirens
+
+**These are rows of `data/audio-events.dat`**, like the beds, and they are named by the KIND of unit rather
+than by the car:
+
+| Unit kind | The row the engine looks for |
+| --- | --- |
+| `patrol` | `VEH_SIREN_PATROL` |
+| `ambulance` | `VEH_SIREN_AMBULANCE` |
+| `fire` | `VEH_SIREN_FIRE` |
+
+**Why a kind and not a model**: San Andreas keeps which vehicle wails, and with what, in CODE — so
+[directive 1](../project-goals.md) makes the mapping ours, and a dispatch board's own vocabulary is the
+service rather than the car. A borrowed unmarked car in the patrol fleet should still sound like a patrol
+unit, and it does.
+
+**A siren runs while the unit's status is `enRoute`, and at no other time.** Not while it is on scene, not
+while it is available. Nothing configures that: it is what the status means.
+
+| The mistake | What happens | What says so |
+| --- | --- | --- |
+| No `VEH_SIREN_<KIND>` row | That service's units respond in silence | ONE line per name, `absence.names`; `audio.units.sirens` stays 0 while units are en route |
+| The row marked `once` | The siren plays through once and the unit is silent for the rest of the run | Nothing — `once` is a legal row |
+| A row for a kind the board never uses | Never played | Nothing |
+
+---
+
+## 6. The engine's two bank slots
+
+Not a name, but a NUMBER that carries behaviour, which is the same problem. A car's engine is read from the
+**dummy bank** its `gtasa_vehicleAudioSettings.cfg` row names (column D), and the two loops inside it are at
+fixed slots — the game's own `eDummyEngineSoundType`:
+
+| Slot | What it is |
+| --- | --- |
+| **0** | `AE_DUMMY_CRZ` — the REV loop |
+| **1** | `AE_DUMMY_ID` — the IDLE loop |
+
+**Nothing in any data file says so**; it is code, which is exactly why it is written down. A mod that
+replaces a bank must keep that order, and one that swaps them produces a car which idles when it accelerates
+— audible immediately, and impossible to find from the file.
+
+**A bank with fewer than two sounds cannot voice an engine**, and such a car is dropped at LOAD with its
+model named (`absence.reasons`) rather than falling silent the moment somebody drives past.

@@ -19,6 +19,7 @@ function board(now: number, units: readonly Partial<Unit>[]): Operations {
       incident: null,
       kind: 'patrol',
       model: 'copcarls',
+      speed: 0,
       status: 'available',
       target: null,
       ...unit,

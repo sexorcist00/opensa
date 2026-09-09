@@ -156,6 +156,7 @@ flowchart LR
 | --- | --- | --- |
 | Position publish rate | **every 4 s** | `cadui.lua`, the `sendPositionUpdate` thread |
 | Payload | `pos_x, pos_y, pos_z, heading, vehicleId` over `unit_update_position` | same |
+| **Speed is coming, and the map already expects it** | the user's call, 2026-09-09 — the contract will carry a unit's speed beside its position, so `Unit.speed` is a field of the dispatch domain rather than something the map derives between two fixes | `apps/dispatch/src/ops/types.ts`, [203/5-02](../203-audio/readme.md) |
 | **Sent only while the unit is in a vehicle** | `isCharInAnyCar` gates the whole function — **on foot, nothing is sent** | same |
 | Status broadcast | every 15 s | `broadcastUnitStatus` thread |
 | Heartbeat / stale handling | heartbeat 20 s; a unit goes stale after 300 s, swept every 120 s | `server.js` |
@@ -204,6 +205,12 @@ reads as a plausible car going somewhere else (`headingFromZAngle` exists for ex
 way in). And the `vehicleId` field: a slot id means different things in two builds
 ([assets-and-data](../../restrictions/assets-and-data.md)), so **what a unit drives reaches the map as a model
 NAME** — resolved wherever the build's own tables are, never guessed by the console.
+
+**And the speed is the same kind of seam as the heading.** A unit's engine is voiced by
+`speed / maxVelocity` ([203/5-02](../203-audio/readme.md)), so a field published in km/h and read as m/s is a
+car idling at 100 km/h — plausible, and audible only to somebody who knows what that car should sound like.
+The domain field is **metres a second**, which is the game's own unit, and the conversion belongs at the seam
+with the heading's.
 
 **Positions are claims, not facts.** They are self-reported by an authenticated client. The backend already
 attributes them to a JWT identity behind a Discord role gate; what it does not do is sanity-check them

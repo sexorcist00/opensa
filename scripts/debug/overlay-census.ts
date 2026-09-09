@@ -76,6 +76,7 @@ function board(units: number, calls: number): Operations {
         incident: null,
         kind: 'patrol',
         model: 'copcarls',
+        speed: 0,
         status: (['available', 'busy', 'enRoute', 'onScene'] as const)[i % 4],
         target: null,
       }),

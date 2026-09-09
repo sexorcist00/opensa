@@ -78,6 +78,7 @@ function unit(id: string, at: [number, number]): Unit {
     incident: null,
     kind: 'patrol',
     model: 'copcarls',
+    speed: 0,
     status: 'available',
     target: null,
   };

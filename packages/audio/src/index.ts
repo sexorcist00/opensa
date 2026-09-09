@@ -60,5 +60,13 @@ export {
   revProgress,
   VehicleEngine,
 } from './vehicle-engine';
+export {
+  DEFAULT_MAX_VELOCITY_KMH,
+  IDLE_SLOT,
+  MAX_VELOCITY_FIELD,
+  REV_SLOT,
+  type VehicleVoice,
+  VehicleVoiceTable,
+} from './vehicle-table';
 export { MAX_VOICES, type Voice, VoicePool, type VoicePoolReport, type VoiceRequest } from './voices';
 export { audioZoneAt, contains } from './zones';

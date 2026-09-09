@@ -203,6 +203,8 @@ describe('DispatchAudio', () => {
         clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
         events: 0,
         resumesRefused: 0,
+        units: { engines: 0, sirens: 0, unvoiced: 0 },
+        vehicles: 0,
         voices: null,
         volume: 1,
       });

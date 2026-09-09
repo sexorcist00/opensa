@@ -45,6 +45,13 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
   **SA itself plays no general ambience bed at all** — its street sound is emergent from traffic and peds,
   which a dispatch console has none of ([the recovered design](../gta-sa-original/audio-ambience.md)).
 
+- **The board's cars, heard** (203/5-02): an engine and a siren per unit
+  (`apps/dispatch/src/world/unit-audio.ts`). **An engine is TWO sounds** — an idle loop and a rev loop
+  crossfaded by speed, never restarted, which is SA's own dummy-engine model with every constant recovered
+  rather than fitted (`packages/audio/src/vehicle-engine.ts`). Speed is a field of the dispatch domain
+  because the PCAD contract will publish it. The siren is OURS — SA keeps which vehicle wails in code — so
+  it is a `VEH_SIREN_<KIND>` row keyed by service, running while a unit is `enRoute`. A unit past the
+  falloff's own reach is not given a voice at all: a car is two of them, and the budget is 64.
 - **A car's engine sound, as authored data** (203/5-02, the read layer):
   `parsers/text/vehicle-audio.parser.ts` reads FLA's `data/gtasa_vehicleAudioSettings.cfg` — the table that
   exists on our target only because the `sa` build always runs FLA, since in the stock game these settings
@@ -54,9 +61,8 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
 
 ## Not implemented
 
-- **The consumers**: vehicles, feet, impacts and weapons (203's chain 5) — the table can name them, nothing
-  calls them yet, and how a bank plus a pitch becomes a moving car's engine is an open question rather than
-  an unwritten function.
+- **Feet, impacts and weapons** (203/5-03) — the half of chain 5 with no authored data at all, so every row
+  is a decision and it needs its own questioning round first.
 - **The authored rows themselves.** No build ships an `audio-events.dat`, so every surface is silent by
   absence rather than by fault, and the report says which.
 - **Radio and ped speech are deliberately out of v1** — `audio/streams` is a different problem with a

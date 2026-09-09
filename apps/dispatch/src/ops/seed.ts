@@ -182,6 +182,7 @@ function fillUnit(index: number): Unit {
     incident: null,
     kind,
     model: demoModel(kind, index),
+    speed: 0,
     status: 'available',
     target: null,
   };
@@ -208,6 +209,7 @@ function unit(id: string, entry: (typeof ROSTER)[number], rosterIndex: number): 
     incident: null,
     kind: entry.kind,
     model: demoModel(entry.kind, rosterIndex),
+    speed: 0,
     status: 'available',
     target: null,
   };
