@@ -1,3 +1,11 @@
+export { AudioAbsence, type AudioAbsenceReport } from './absence';
+export {
+  AudioClock,
+  type AudioClockHost,
+  type AudioClockReport,
+  browserClockHost,
+  DEFAULT_TICK_HZ,
+} from './audio-clock';
 export { AudioHost } from './audio-host';
 export type {
   AudioAvailability,
@@ -23,3 +31,4 @@ export {
   type Vec3,
 } from './spatial';
 export { MAX_VOICES, type Voice, VoicePool, type VoicePoolReport, type VoiceRequest } from './voices';
+export { audioZoneAt, contains } from './zones';
