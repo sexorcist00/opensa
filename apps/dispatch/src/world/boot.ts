@@ -65,6 +65,7 @@ import {
   type WorldTimeAnchor,
 } from '../ops/world-clock';
 import { DispatchAudio, type DispatchAudioReport } from './audio';
+import { loadAudio, type LoadedAudio } from './audio-load';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
 import { captureAblation } from './capture-ablation';
@@ -384,6 +385,9 @@ interface DispatchWorld {
  * overlap either hid or did not.
  */
 interface OpenedWorld {
+  /** The audio index beside the pak and the event table from the game dir (203/6-01). Both may be absent,
+   *  which is a silent world rather than a broken one. */
+  readonly audio: LoadedAudio;
   /** What the world's places are called — a small loose JSON beside the pak (201/5-03). */
   readonly districts: DistrictLookup;
   readonly openMs: number;
@@ -664,6 +668,11 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // wired until sound is actually running, so the first touch AFTER this still wakes it.
   const audio = new DispatchAudio(params);
   const detachAudioGestures = audio.attach(window);
+  audio.load({
+    gameDir: opened?.source.gameDir ?? '',
+    index: opened?.audio.index ?? null,
+    rows: opened?.audio.rows ?? [],
+  });
   const camera = new MapCamera(poseFromQuery(params));
   // The audio tick starts HERE and not where the host is built, because its callback reads the camera —
   // and boot is async, so a clock armed before this line fires during the awaits and dies on a `camera`
@@ -1620,12 +1629,15 @@ async function openWorld(params: URLSearchParams, host: StreamingHost): Promise<
   // The second wave, and it could not have been in the first: both of these are loose files the MANIFEST
   // points at, so they are not knowable until it is read. Together, because they are two servers' answers to
   // two independent questions — and still inside the GPU's wait, which is the whole point.
-  const [water, districts] = await Promise.all([
+  const [water, districts, audio] = await Promise.all([
     fetchWater(source.base, pak.manifest.water),
     loadDistricts(source.base, pak.manifest.districts),
+    // The third loose file, and it is two: the index the manifest points at, and the event table from the
+    // game's own `data/` (203/6-01). Both absent is a silent world, which is a state and not a fault.
+    loadAudio(source.base, source.gameDir, pak.manifest.audio),
   ]);
 
-  return { districts, openMs: performance.now() - startedAt, pak, source, timecyc, water };
+  return { audio, districts, openMs: performance.now() - startedAt, pak, source, timecyc, water };
 }
 
 /**
