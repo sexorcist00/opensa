@@ -236,7 +236,14 @@ export class VoicePool {
     voice.panner.pan.value = voice.position === null ? 0 : panFor(this.listener, voice.position);
   }
 
-  /** Stop a voice and let its nodes go. Safe to call twice — `onended` fires after a `stop` as well. */
+  /**
+   * Stop a voice and let its nodes go. Safe to call twice — `onended` fires after a `stop` as well.
+   *
+   * **A stolen voice stops ABRUPTLY, and that is a click somebody will hear.** The honest fix is a few
+   * milliseconds of gain ramp before the stop, which needs `AudioParam`'s scheduling methods — deliberately
+   * not in this package's surface yet, because 4/02's crossfade is what brings them and one ramp API is
+   * better than two. Recorded rather than left to be discovered at the first steal.
+   */
   private release(id: number, reason: 'ended' | 'stolen' | 'stopped'): void {
     const voice = this.voices.get(id);
     if (!voice) {
@@ -261,16 +268,18 @@ export class VoicePool {
    */
   private steal(heard: number): boolean {
     let quietest: LiveVoice | null = null;
+    let quietestLevel = Number.POSITIVE_INFINITY;
     for (const voice of this.voices.values()) {
       const level = audibleGain(this.listener, voice.position, voice.gain, voice.falloff);
-      if (quietest === null || level < audibleGain(this.listener, quietest.position, quietest.gain, quietest.falloff)) {
+      if (level < quietestLevel) {
         quietest = voice;
+        quietestLevel = level;
       }
     }
     if (quietest === null) {
       return true;
     }
-    if (audibleGain(this.listener, quietest.position, quietest.gain, quietest.falloff) >= heard) {
+    if (quietestLevel >= heard) {
       return false;
     }
     this.release(quietest.id, 'stolen');

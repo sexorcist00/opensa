@@ -225,6 +225,10 @@ export class DispatchAudio {
     if (kept) {
       return kept;
     }
+    // Two plays of the same sound before the first fetch returns each pay for a range request. It is one
+    // wasted request on a cold sound and never more, so an in-flight map is not worth the state — recorded
+    // because a reader looking for it should find this line rather than assume it was missed.
+
     const context = this.host.audioContext;
     const samples = await this.source?.read(soundIndex);
     if (!context || !samples || samples.length === 0) {
