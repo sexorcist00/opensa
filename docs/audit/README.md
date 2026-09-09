@@ -5,6 +5,15 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`2026-09-09-audio-chain.md`](./2026-09-09-audio-chain.md) — plan 203 from *a gate nobody had passed* to *a
+  console with an ear* in one day: 29 commits, 3 702 lines across 26 files, 74 tests in `@opensa/audio`. Its
+  subject is that **five defects were caught by instruments rather than by ears**, and three of them would
+  have shipped silently — a bank header wrong by 720 bytes (every sound would have played from inside the
+  tail of the one before it), an `AudioContextState` only Apple reports, an audio tick armed before the
+  camera existed. Also states what is NOT done and why: ambience is blocked on a question only the operator
+  can answer, and **every number in the budget table is unmeasured** because the phone went offline
+  mid-session.
+
 - [`frame-path-vs-aaa.md`](./frame-path-vs-aaa.md) — the 2026-09-05 read of the whole frame path against
   published AAA and mobile-vendor practice, taken after 201/9 closed with the frame on the display's floor
   and the question became whether the SHAPE is right or only the constants. **The shape is right**: forward
