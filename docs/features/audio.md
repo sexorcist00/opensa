@@ -4,10 +4,11 @@
 (the SFX index), `parsers/text/ipl.parser.ts` → `parseIplAudioZones` (the map's audio zones),
 `scripts/debug/audio-census.ts` (the gate).
 
-**Nothing is audible yet, and that is the accurate state.** What exists is the read layer and the object that
-decides whether a page may make a sound at all. There is no sample fetch, no voice, no mixer and no
-consumer — [the chain](../plans/203-audio/readme.md) builds them in that order, and
-[the concept](../plans/203-audio/concept.md) carries the fourteen decisions they inherit.
+**The whole path exists now, and what is missing is AUTHORED DATA.** Index, range fetch, cache, voices,
+listener, ambience and the console's controls are all in; nothing is heard until a build's
+`data/audio-events.dat` carries rows ([the contract](../contracts/audio.md)), and no ear has judged any of it
+yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
+[the concept](../plans/203-audio/concept.md) carries the fourteen decisions it inherits.
 
 ## Implemented
 
@@ -32,12 +33,22 @@ consumer — [the chain](../plans/203-audio/readme.md) builds them in that order
   [`docs/contracts/audio.md`](../contracts/audio.md). A row that points at a bank this build has not got is
   dropped at LOAD and named, never at the moment somebody wanted the sound.
 - **The console can play a named event**: `DispatchAudio.load()` then `play(name, position)` — index →
-  table → one Range request → decode → the 64 MB cache → a voice. Nothing names anything yet.
+  table → one Range request → decode → the 64 MB cache → a voice.
+- **The ambience bed** (203/4-02): `packages/audio/src/ambience.ts`. A place's bed is `AMB_<ZONE>` rows in
+  the same event table, up to four layers, each played as a **twin loop** — two voices of one sound started a
+  third to two thirds apart, one audible, their volumes exchanged at a random 1.5–6 s interval so the loop's
+  own period never becomes a rhythm. That idiom is San Andreas' `CAETwinLoopSoundEntity`, taken by behaviour;
+  what is ours is the ramped exchange (SA's is a step, and a step is a click), the drawn-apart start points,
+  the 2 s crossfade between zones, and the height rule that keeps a console quiet at 900 m.
+  **SA itself plays no general ambience bed at all** — its street sound is emergent from traffic and peds,
+  which a dispatch console has none of ([the recovered design](../gta-sa-original/audio-ambience.md)).
 
 ## Not implemented
 
-- Everything audible: the baked index beside the pak, the range fetch, the cache, voices, the listener,
-  ambience, and every consumer (vehicles, feet, impacts, weapons).
+- **The consumers**: vehicles, feet, impacts and weapons (203's chain 5) — the table can name them, nothing
+  calls them yet.
+- **The authored rows themselves.** No build ships an `audio-events.dat`, so every surface is silent by
+  absence rather than by fault, and the report says which.
 - **Radio and ped speech are deliberately out of v1** — `audio/streams` is a different problem with a
   different licence and a browser question the SFX path does not have (Vorbis decoding is absent from Safari
   before 18.4).
@@ -67,3 +78,7 @@ numbers below are measurements rather than documentation:
 - **The budgets are named and unmeasured**: 64 concurrent voices, 2 ms of CPU a frame, 64 MB, and ≤ 200 ms
   from the gesture to the first sound. 64 voices each with a `PannerNode` is a number nobody here has
   measured on a Mali phone.
+- **No ear has heard any of it.** Every number in the ambience bed is arithmetic against the census —
+  the swap window, the exchange ramp, the crossfade and the height bounds are all
+  [a fitted bridge](../hacks/audio-twin-loop-swap.md) waiting on the operator's own verdict, which is what
+  203/4-02 asks for and 4/03 measures.

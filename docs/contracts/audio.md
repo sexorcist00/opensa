@@ -1,9 +1,10 @@
 # Audio contracts
 
 What a name has to be for the engine to make a sound, and what happens when it is spelled otherwise. Two
-files carry behaviour here — the table a mod author writes, and the index the build bakes — and neither one
-errors on a mistake: **the sound is simply silent**, which is why every rule below also says how the mistake
-is REPORTED.
+files carry behaviour here — the table a mod author writes, and the index the build bakes — plus one set of
+names inside the first that the engine derives from the MAP rather than being asked for. None of them errors
+on a mistake: **the sound is simply silent**, which is why every rule below also says how the mistake is
+REPORTED.
 
 Plan: [203 — audio](../plans/203-audio/readme.md).
 
@@ -63,7 +64,73 @@ game dir, a total conversion, or a console opened on a browser with no Web Audio
 
 ---
 
-## 2. `audio.osaudio` — the baked index
+## 2. `AMB_*` — the ambience beds
+
+**These are rows of the same `data/audio-events.dat`**, not a second file. What makes them a contract is that
+the engine looks them up **by NAME derived from the map**, so a name spelled otherwise is a place that has no
+sound and nothing that says which place.
+
+### How a zone's bed is named
+
+The name is the audio zone's own name — the `AUZO` row's first field — upper-cased, with every run of
+characters that is not `A-Z` or `0-9` folded to a single `_`, behind the prefix `AMB_`:
+
+| The zone's `AUZO` name | The row the engine looks for |
+| --- | --- |
+| `LS_BEACH` | `AMB_LS_BEACH` |
+| `ls beach` | `AMB_LS_BEACH` |
+| `VEGAS.CLUB1` | `AMB_VEGAS_CLUB1` |
+
+**`AMB_DEFAULT` is the open world**, and it is also the fallback for any zone that does not name a bed of its
+own — because a dispatch console has no traffic and no pedestrians to make an emergent ambience out of
+([the recovered design](../gta-sa-original/audio-ambience.md)), so a place with nothing authored inherits the
+outdoors rather than going silent.
+
+**A zone made deliberately SILENT is expressible**: author `AMB_<ZONE>` with a gain of `0`. It wins the
+lookup and is inaudible, which is how an interior says *not the outdoors, and not anything*.
+
+### Layers
+
+A bed may stack up to **four** rows, and they all play at once:
+
+```text
+AMB_LS_BEACH,        40, 2, 0.6, loop
+AMB_LS_BEACH_2,      40, 7, 0.3, loop
+AMB_LS_BEACH_4,      41, 1, 0.2, loop
+```
+
+The suffix is `_2`, `_3`, `_4` — the first layer has none. **Every slot is probed and a gap is skipped**, so
+the example above plays three layers: a typo that writes `_4` where `_3` was meant loses nothing, which is
+the opposite of stopping at the first gap.
+
+### What each row has to be
+
+**`loop`, always.** A bed is built out of the game's own looping sounds — the census found
+[351 of them, 172 at least a second](../benchmarks/opensa-engine/2026-09-09-phone-audio-census.json) — and a
+row marked `once` plays exactly once and then leaves that layer silent for as long as the listener stands
+there. Nothing rejects it; there is no way for the engine to know it was not meant.
+
+**`maxDistance` is ignored** for a bed. A bed has no position: it is where you are, and it is scaled by the
+listener's HEIGHT instead (full at 60 m and below, silent at 400 m and above — the numbers are
+[a fitted bridge](../hacks/audio-twin-loop-swap.md)).
+
+### What a misspelling does, precisely
+
+| The mistake | What happens | What says so |
+| --- | --- | --- |
+| A zone's row named for something other than the zone | That zone plays `AMB_DEFAULT` | Nothing — it is indistinguishable from a zone that meant to inherit |
+| No `AMB_` row anywhere | Every place is silent, and the console is silent at rest | ONE line per bed name, `absence.names`, and `ambience.layers` is 0 with `ambience.bed` naming what was wanted |
+| `once` where `loop` was meant | The layer plays through once and stops | Nothing. `ambience.starts` still counts it, and the pool's voice ends normally |
+| A second layer at `_5` or beyond | Ignored | Nothing — four is the ceiling |
+
+**Each bed is played as a TWIN**: two voices of the same sound, started a third to two thirds of the loop
+apart, one audible, their volumes exchanged at a random interval. That is San Andreas' own
+`CAETwinLoopSoundEntity` idiom and it means **a bed row costs two voices**, not one, against the 64-voice
+budget.
+
+---
+
+## 3. `audio.osaudio` — the baked index
 
 **Where it lives:** loose beside the pak, next to `manifest.json`, `water.bin` and `districts.json`. The pak
 build writes it; a game shipping no `audio/CONFIG/` produces no file and no manifest field, and a consumer

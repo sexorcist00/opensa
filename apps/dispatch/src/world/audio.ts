@@ -19,11 +19,14 @@
  * same thermal window. Unrecognised is the DEFAULT, like every arm in this family.
  */
 import type {
+  AmbienceHost,
+  AmbienceReport,
   AudioAbsenceReport,
   AudioAvailability,
   AudioBufferLike,
   AudioClockHost,
   AudioClockReport,
+  AudioContextLike,
   AudioListener,
   GestureTarget,
   Voice,
@@ -34,7 +37,16 @@ import type { AudioCacheReport } from '@opensa/loaders/audio-cache';
 import type { AudioSource } from '@opensa/loaders/audio-source';
 import type { AudioEventRow } from '@opensa/renderware/parsers/text/audio-events.parser';
 
-import { AudioAbsence, AudioClock, AudioEventTable, AudioHost, browserClockHost, VoicePool } from '@opensa/audio';
+import {
+  Ambience,
+  AudioAbsence,
+  AudioClock,
+  AudioEventTable,
+  AudioHost,
+  audioZoneAt,
+  browserClockHost,
+  VoicePool,
+} from '@opensa/audio';
 import { AudioCache } from '@opensa/loaders/audio-cache';
 import { openAudioSource } from '@opensa/loaders/audio-source';
 
@@ -45,6 +57,8 @@ export type AudioArm = 'off' | 'on';
 export interface DispatchAudioReport {
   /** What could not be heard, and why. Counts stay exact; the first reasons are named. */
   readonly absence: AudioAbsenceReport;
+  /** The ambience bed: which one, how far into its crossfade, and how many twins it is made of. */
+  readonly ambience: AmbienceReport;
   readonly arm: AudioArm;
   /** What a surface would draw an indicator from. */
   readonly availability: AudioAvailability;
@@ -81,6 +95,7 @@ export const VOLUME_STEPS = [1, 0.5, 0.2, 0] as const;
 /** Holds the console's audio for the life of the page. */
 export class DispatchAudio {
   private readonly absence: AudioAbsence;
+  private readonly ambience: Ambience;
   private readonly arm: AudioArm;
   private readonly buffers: AudioCache<AudioBufferLike>;
   private readonly clock: AudioClock;
@@ -91,18 +106,31 @@ export class DispatchAudio {
   private table: AudioEventTable;
   private volume = 1;
 
-  constructor(params: URLSearchParams, options: { clockHost?: AudioClockHost; log?: (message: string) => void } = {}) {
+  constructor(
+    params: URLSearchParams,
+    options: {
+      clockHost?: AudioClockHost;
+      /** How the context is made. Absent, the browser's own — a test hands a fake one. */
+      createContext?: () => AudioContextLike;
+      log?: (message: string) => void;
+      /** Where the ambience's randomness comes from. Absent, `Math.random`. */
+      random?: () => number;
+    } = {},
+  ) {
     this.arm = audioArm(params);
     const log = options.log ?? warn;
     this.absence = new AudioAbsence(log);
     // The arm removes the whole path rather than muting it, the way `?models=0` removes the fleet: a run
     // that still built a context and a pool would measure a silent console, not a console with no audio.
-    this.host = new AudioHost(this.arm === 'off' ? { createContext: refuseContext, log } : { log });
+    this.host = new AudioHost(
+      this.arm === 'off' ? { createContext: refuseContext, log } : { createContext: options.createContext, log },
+    );
     const context = this.host.audioContext;
     this.pool = context ? new VoicePool(context) : null;
     this.clock = new AudioClock(options.clockHost ?? browserClockHost());
     this.buffers = new AudioCache<AudioBufferLike>({ bytesOf: (value): number => value.length * 4 });
     this.table = AudioEventTable.empty(this.absence);
+    this.ambience = new Ambience(this.ambienceHost(options.random));
   }
 
   /** Wire the first touch. Anything that reaches the page wakes the context — no gate screen, ever. */
@@ -146,7 +174,11 @@ export class DispatchAudio {
    * The fetch is one Range request the first time and a cache hit afterwards; the decode is a copy and a
    * divide. Both happen OFF the audio clock — this returns a promise and the tick never waits for it.
    */
-  async play(name: string, position: [number, number, number] | null = null): Promise<null | Voice> {
+  async play(
+    name: string,
+    position: [number, number, number] | null = null,
+    options: { gainScale?: number; startFraction?: number } = {},
+  ): Promise<null | Voice> {
     const event = this.table.find(name);
     const sound = event === null || this.index === null ? null : this.index.sounds[event.soundIndex];
     if (!event || !sound || this.pool === null) {
@@ -160,17 +192,21 @@ export class DispatchAudio {
     return this.pool.play({
       buffer,
       falloff: event.falloff,
-      gain: event.gain,
+      gain: event.gain * (options.gainScale ?? 1),
       loop: event.loop,
       loopStartSeconds: event.loopStartSeconds,
       pitch: sound.sampleRate / Math.max(sound.sampleRate, MIN_BUFFER_RATE),
       position,
+      // A fraction of the BUFFER rather than of the source: the two differ only for the one sound below
+      // Web Audio's rate floor, and the offset a source takes is in the buffer's own time.
+      startOffsetSeconds: (options.startFraction ?? 0) * buffer.duration,
     });
   }
 
   report(): DispatchAudioReport {
     return {
       absence: this.absence.report(),
+      ambience: this.ambience.report(),
       arm: this.arm,
       availability: this.host.state.availability,
       buffers: this.buffers.report(),
@@ -200,8 +236,12 @@ export class DispatchAudio {
       return;
     }
     const pool = this.pool;
-    this.clock.start(() => {
-      pool.setListener(listenerOf());
+    this.clock.start((gapSeconds) => {
+      const listener = listenerOf();
+      pool.setListener(listener);
+      // The zone lookup is 155 point tests (203/4-01) and it runs on the AUDIO clock, ten a second — not on
+      // the frame, which the render gate takes to zero at rest.
+      this.ambience.update(audioZoneAt(this.index?.zones ?? [], listener.position), listener.position, gapSeconds);
     });
   }
 
@@ -225,7 +265,38 @@ export class DispatchAudio {
   /** Stop the tick and every voice. The context STAYS, so a resume is instant — see `dispose`. */
   stop(): void {
     this.clock.stop();
+    this.ambience.stop();
     this.pool?.stopAll();
+  }
+
+  /**
+   * What the ambience bed reaches the rest of this file through (203/4-02).
+   *
+   * Everything about HOW a bed behaves — the twin loop, the crossfade, the height rule — lives in
+   * `@opensa/audio`; this is only the four things it cannot know: what the table carries, what time it is,
+   * where the randomness comes from, and how to start a voice.
+   *
+   * @param random injected so a capture can be replayed. Absent, the platform's own.
+   */
+  private ambienceHost(random?: () => number): AmbienceHost {
+    return {
+      has: (name): boolean => this.table.has(name),
+      // A place with no `AMB_` row is the same absence as any other unknown name, said once. It is also the
+      // TRIGGER on `docs/in-reserve/audio-stream-tracks.md`: a bed that is missing — or one an ear calls
+      // thin against SA's own 44.4 MB `AMBIENCE` stream — is what turns that deferred path into work.
+      noLayers: (bed): void => {
+        this.absence.unknownName(bed);
+      },
+      // Monotonic on purpose: a wall clock that steps backwards over a swap deadline would fire a burst of
+      // exchanges, which is audible where a slightly-late swap is not.
+      nowMs: (): number => performance.now(),
+      random: random ?? ((): number => Math.random()),
+      setGain: (voice, gain, seconds): void => {
+        this.pool?.setGain(voice, gain, seconds);
+      },
+      startLoop: (name, startFraction, gain): Promise<null | Voice> =>
+        this.play(name, null, { gainScale: gain, startFraction }),
+    };
   }
 
   /**

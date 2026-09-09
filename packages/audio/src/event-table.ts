@@ -110,4 +110,14 @@ export class AudioEventTable {
 
     return found;
   }
+
+  /**
+   * Whether the table carries a name, WITHOUT reporting its absence.
+   *
+   * The ambience bed probes for layers that were never authored (`AMB_X_2`, `_3`, `_4`) on every zone
+   * change, and {@link find} would fill the report with names nobody meant to write.
+   */
+  has(name: string): boolean {
+    return this.events.has(name.toUpperCase());
+  }
 }

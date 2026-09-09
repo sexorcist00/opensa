@@ -56,8 +56,9 @@ packages/                          (tag type:engine)
   cell-weld/      @opensa/cell-weld       RW instances + TXDs → .oscell/.ostex bytes (weld, texture plan, alpha)
   math/           @opensa/math            dependency-free 3D math
   audio/          @opensa/audio           the world's own sound (plan 203): the context and its autoplay
-                                          lifecycle, and the voices and listener above it. ZERO runtime
-                                          dependencies — the console ships as an embeddable widget
+                                          lifecycle, the voices and listener above it, and the per-zone
+                                          ambience bed. ZERO runtime dependencies — the console ships as
+                                          an embeddable widget
   renderware/     @opensa/renderware      parsers (DFF/TXD/COL, IDE/IPL/DAT/GXT) + archive + map + mesh prep
   game/           @opensa/game            ECS, systems, adapters — renderer-agnostic
   loaders/        @opensa/loaders         asset loaders (fetch / local folder / http-dir) — framework-agnostic

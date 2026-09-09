@@ -1,5 +1,22 @@
 export { AudioAbsence, type AudioAbsenceReport } from './absence';
 export {
+  Ambience,
+  AMBIENCE_PREFIX,
+  type AmbienceHost,
+  type AmbienceReport,
+  BED_FULL_HEIGHT,
+  BED_SILENT_HEIGHT,
+  bedGainForHeight,
+  bedLayerNames,
+  bedNameFor,
+  CROSSFADE_SECONDS,
+  DEFAULT_BED,
+  MAX_BED_LAYERS,
+  TWIN_SWAP_MAX_MS,
+  TWIN_SWAP_MIN_MS,
+  TWIN_SWAP_SECONDS,
+} from './ambience';
+export {
   AudioClock,
   type AudioClockHost,
   type AudioClockReport,

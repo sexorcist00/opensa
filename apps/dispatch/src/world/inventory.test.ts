@@ -59,6 +59,7 @@ const CONTEXT = {
   app: 'test',
   audio: {
     absence: { names: 0, noIndex: false, noSource: false, packages: 0, reasons: [], sounds: 0 },
+    ambience: { bed: null, changes: 0, fading: 0, layers: 0, level: 0, pending: 0, starts: 0, swaps: 0 },
     arm: 'on' as const,
     availability: 'waiting' as const,
     buffers: { bytes: 0, ceilingBytes: 67_108_864, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },

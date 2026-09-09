@@ -1,19 +1,24 @@
 import type { AudioClockHost, AudioListener } from '@opensa/audio';
 
+import { FakeAudioContext } from '@opensa/audio/test/fake-context';
 import { describe, expect, it, vi } from 'vitest';
 
 import { audioArm, DispatchAudio } from './audio';
 
-/** Timers a test drives by hand. */
-function clockHost(): AudioClockHost & { fire(): void } {
+/** Timers a test drives by hand. `fire(ms)` moves the clock first, so the tick's gap is the test's own. */
+function clockHost(): AudioClockHost & { fire(afterMs?: number): void } {
   let scheduled: (() => void) | null = null;
+  let time = 0;
 
   return {
     cancel: () => {
       scheduled = null;
     },
-    fire: () => scheduled?.(),
-    now: () => 0,
+    fire: (afterMs = 0) => {
+      time += afterMs;
+      scheduled?.();
+    },
+    now: () => time,
     schedule: (callback) => {
       scheduled = callback;
 
@@ -23,6 +28,85 @@ function clockHost(): AudioClockHost & { fire(): void } {
 }
 
 const EAR: AudioListener = { forward: [0, 1, 0], position: [0, 0, 900], right: [1, 0, 0] };
+
+/** The ear on the ground, where the bed is at full volume, and a zone the listener is inside. */
+const STREET: AudioListener = { forward: [0, 1, 0], position: [1_480, -1_720, 12], right: [1, 0, 0] };
+
+/** An index with one sound, one bank and one audio zone around {@link STREET}. */
+const ZONED_INDEX = {
+  banks: [{ firstSound: 0, headerOffset: 0, packageIndex: 0, sizeBytes: 24, soundCount: 1 }],
+  packages: ['GENRL'],
+  sounds: [{ byteLength: 24, byteOffset: 0, durationSeconds: 0, headroom: 0, loopOffset: -1, sampleRate: 12_000 }],
+  zones: [
+    {
+      active: true,
+      id: 3,
+      max: [1_500, -1_700, 100] as const,
+      min: [1_450, -1_750, 0] as const,
+      name: 'ls beach',
+      shape: 'box' as const,
+    },
+  ],
+};
+
+describe('DispatchAudio ambience', () => {
+  describe('negative cases', () => {
+    it('never reaches the bed on a run with no context, so a silent surface stays a no-op', () => {
+      const clock = clockHost();
+      const audio = new DispatchAudio(new URLSearchParams(), { clockHost: clock, log: vi.fn() });
+
+      audio.start(() => STREET);
+      clock.fire();
+
+      expect(audio.report().ambience).toMatchObject({ bed: null, changes: 0 });
+    });
+  });
+
+  describe('positive cases', () => {
+    it('picks the bed from the zone the LISTENER is in, on the audio clock', () => {
+      const clock = clockHost();
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clock,
+        createContext: () => new FakeAudioContext(),
+        log: vi.fn(),
+      });
+      audio.load({
+        gameDir: '/game',
+        index: ZONED_INDEX,
+        rows: [{ bank: 0, gain: 1, loop: true, maxDistance: null, name: 'AMB_LS_BEACH', sound: 0 }],
+      });
+
+      audio.start(() => STREET);
+      clock.fire();
+
+      expect(audio.report().ambience).toMatchObject({ bed: 'AMB_LS_BEACH', changes: 1 });
+    });
+
+    it('falls back to the default bed once the listener leaves the zone', () => {
+      const clock = clockHost();
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clock,
+        createContext: () => new FakeAudioContext(),
+        log: vi.fn(),
+      });
+      audio.load({
+        gameDir: '/game',
+        index: ZONED_INDEX,
+        rows: [{ bank: 0, gain: 1, loop: true, maxDistance: null, name: 'AMB_LS_BEACH', sound: 0 }],
+      });
+      let ear = STREET;
+      audio.start(() => ear);
+      clock.fire();
+      // A full crossfade, so the zone bed is actually up before the listener leaves it.
+      clock.fire(2_000);
+
+      ear = EAR;
+      clock.fire();
+
+      expect(audio.report().ambience).toMatchObject({ bed: 'AMB_DEFAULT', changes: 2, fading: 1 });
+    });
+  });
+});
 
 describe('audioArm', () => {
   describe('negative cases', () => {
@@ -112,6 +196,7 @@ describe('DispatchAudio', () => {
 
       expect(audio.report()).toEqual({
         absence: { names: 0, noIndex: false, noSource: false, packages: 0, reasons: [], sounds: 0 },
+        ambience: { bed: null, changes: 0, fading: 0, layers: 0, level: 0, pending: 0, starts: 0, swaps: 0 },
         arm: 'on',
         availability: 'unsupported',
         buffers: { bytes: 0, ceilingBytes: 67_108_864, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },

@@ -68,6 +68,14 @@ export interface VoiceRequest {
   readonly pitch?: number;
   /** World position, or `null` for a sound with no place in the world (an alert in the chrome). */
   readonly position?: null | Vec3;
+  /**
+   * Where in the buffer to begin, in seconds.
+   *
+   * **This is what makes a twin loop work**: two voices of the SAME loop started at the same place are one
+   * voice, and swapping between them does nothing. SA starts its pair at random percentages of the sound
+   * for exactly this reason (`SOUND_START_PERCENTAGE`, `docs/gta-sa-original/audio-ambience.md`).
+   */
+  readonly startOffsetSeconds?: number;
 }
 
 /** The listener every voice is heard from: the camera (203's decision 2.3). */
@@ -166,6 +174,33 @@ export class VoicePool {
     };
   }
 
+  /**
+   * Change a live voice's authored gain, ramped rather than stepped.
+   *
+   * The twin-loop bed is the caller this exists for: its whole mechanism is moving volume between two
+   * voices of one sound, and a step there is the click every other path in this file avoids.
+   *
+   * @param seconds how long the ramp takes. Zero sets it outright, which is what a placement does.
+   */
+  setGain(voice: Voice, gain: number, seconds = 0): void {
+    const live = this.voices.get(voice.id);
+    if (!live) {
+      return;
+    }
+    live.gain = gain;
+    const target = audibleGain(this.listener, live.position, live.gain, live.falloff);
+    if (seconds <= 0) {
+      live.gainNode.gain.value = target;
+
+      return;
+    }
+    const now = this.context.currentTime;
+    const param = live.gainNode.gain;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(param.value, now);
+    param.linearRampToValueAtTime(target, now + seconds);
+  }
+
   /** Move the ear. Every live positional voice is re-gained and re-panned from where it stands. */
   setListener(listener: AudioListener): void {
     this.listener = listener;
@@ -235,7 +270,7 @@ export class VoicePool {
       this.release(id, 'ended');
     };
     this.place(live);
-    source.start();
+    source.start(0, request.startOffsetSeconds ?? 0);
 
     return live;
   }
