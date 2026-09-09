@@ -41,8 +41,14 @@ Newest first:
   a new `@opensa/audio` (`type:engine`, zero runtime dependencies) owns the context, which is what lets the
   dispatch console hear the city too; 64 voices, 2 ms, 64 MB, and the quietest voice at the listener is the
   one stolen. Six chains, and chain 1 is a parser with fixtures rather than a browser — SA picks ambience by
-  audio zone, and zones are the `AUZO` section our IPL parser skips on purpose today. **Gated on 1/01**: the
-  format numbers are documentation until the phone reads the real files.
+  audio zone, and zones are the `AUZO` section our IPL parser skips on purpose today. **The gate is PASSED**
+  (2026-09-09): the census read the real files, `LAYOUT AGREES`, and it caught a 720-byte error in the bank
+  header on its way through — 9 packages, 370 banks, 8 857 sounds, 364.1 MB of PCM, 103 distinct sample
+  rates, 155 audio zones all in one file. Chain 2 is complete, chain 3 is complete but for the device
+  measurement, and the console has an ear, a sound key and a `play(name)` that reaches a voice. **What is
+  left is one QUESTION and one DEVICE**: 4/02 needs the operator to say whether a zone's ambience is the
+  pre-mixed track SA streams or a bed assembled from SFX loops, and the 2 ms / 64 MB / battery figures have
+  never been on a phone.
 - **[202 — PCAD Dispatch](./202-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
   product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
   client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this

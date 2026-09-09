@@ -235,7 +235,14 @@ phases and risks: [docs/plans/202-pcad-dispatch/](docs/plans/202-pcad-dispatch/r
 - [ ] Trafficlights
 - [ ] Proper Fixes adaptation
 - [ ] GTA SA Like Camera
-- [ ] Sound
+- [ ] Sound — **[plan 203](docs/plans/203-audio/readme.md)**, opened 2026-09-08. The read layer, the baked
+      index, the range reader, the 64 MB cache, the voice pool and the console's ear are in; what is left is
+      what to PLAY (the event table's content) and every number on a device
+  - [x] The SFX index read off the real files — `LAYOUT AGREES`, 2026-09-09
+  - [x] `audio.osaudio` baked beside the pak, samples fetched by byte range
+  - [x] Voices, the 64-voice pool, and the quietest-at-the-listener steal
+  - [x] The console hears the world: camera as the listener, first-touch resume, volume and mute
+  - [ ] Ambience per audio zone — blocked on one question: a pre-mixed track or a bed of SFX loops
   - [ ] surfaud.dat support - different sounds in different surface
 - [ ] Swimming
 - [ ] Bicycles
