@@ -452,9 +452,6 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // there is no gate screen on either surface — and the ear is the CAMERA rather than the ground focus, so
   // altitude is quiet on purpose. It ticks on its own clock, because the render gate takes drawn frames to
   // zero at rest and a city that stops when you stop panning is not a city.
-  const audio = new DispatchAudio(params);
-  const detachAudioGestures = audio.attach(window);
-
   if (pinnedBox) {
     // The BOX, never the buffer: both canvases go on sizing their stores from what they are displayed in,
     // so the symbology is still drawn in its own coordinates and the pin costs it nothing. Absolute
@@ -659,6 +656,14 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
   // Installed before anything else this boot does, because the failures worth catching happen during it.
   const errorLog = createErrorLog();
+  // 203/6-01: the console hears the world. Built HERE rather than at the top of `boot`, and the position is
+  // the point: everything above this line can throw — a GPU that will not start, an overlay with no 2d
+  // context — and `map-canvas` catches that and falls back to plan mode. A context and two window listeners
+  // created before those throws would be orphaned on every non-WebGPU browser, silently, once per load.
+  // Nothing is lost by waiting: no sound can play before the world exists, and the gesture listeners stay
+  // wired until sound is actually running, so the first touch AFTER this still wakes it.
+  const audio = new DispatchAudio(params);
+  const detachAudioGestures = audio.attach(window);
   const camera = new MapCamera(poseFromQuery(params));
   // The audio tick starts HERE and not where the host is built, because its callback reads the camera —
   // and boot is async, so a clock armed before this line fires during the awaits and dies on a `camera`
