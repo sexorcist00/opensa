@@ -4,6 +4,7 @@ import { openGameDir } from '@opensa/opensa-pack/game-fs';
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { BED_PACKAGE, BED_SECONDS, bedTable, pickBedLayers } from '../lib/audio-bed';
 import { gameArg, gameDir } from '../lib/game';
 
 /**
@@ -22,17 +23,72 @@ import { gameArg, gameDir } from '../lib/game';
  * from `audio/streams`, which this chain's v1 excludes — is the question 4/02 is blocked on, and this is the
  * evidence for it.
  *
+ * **`--bed` is what turns the evidence into something an ear can judge.** 4/02 built the ambience bed and
+ * nothing can be heard through it, because no build ships the `AMB_` rows it reads
+ * ([the contract](../../docs/contracts/audio.md)). This drafts them — the RULE is `scripts/lib/audio-bed.ts`
+ * so it can be tested without a game tree — and `--write` puts the file in the tree a field run actually
+ * reads. Deleting it restores silence: the stock game ships no such file.
+ *
+ * **The pick is a DRAFT and it is meant to be argued with.** Nothing in the data says a sound is a city hum;
+ * hearing each layer alone (`--wav`) and swapping a row is the whole point of writing it as a table.
+ *
  * ```bash
  * npx tsx scripts/debug/audio-bank-probe.ts --loops            # every looping sound, longest first
  * npx tsx scripts/debug/audio-bank-probe.ts --bank 40          # one bank, slot by slot
  * npx tsx scripts/debug/audio-bank-probe.ts --wav 40 2 --out /tmp/hum.wav
+ * npx tsx scripts/debug/audio-bank-probe.ts --bed              # draft the AMB_ rows, print them
+ * npx tsx scripts/debug/audio-bank-probe.ts --bed --write      # …and put them in build/<game>/opensa/data
  * ```
  */
 
 /** How many rows a listing prints before it says how many more there were. */
 const LISTED = 40;
-/** Below this a sound is a click rather than a bed — the loop listing's own floor. */
-const BED_SECONDS = 1;
+/** How many layers a drafted bed stacks. The engine's ceiling is 4; three leaves room to add one by hand. */
+const BED_LAYERS = 3;
+/**
+ * The gain each drafted layer is written at, loudest first.
+ *
+ * A draft: the first layer carries the bed and the rest sit under it, which is the only thing that can be
+ * said before anyone has heard them.
+ */
+const BED_GAINS = [0.5, 0.3, 0.2];
+
+/**
+ * Draft the `AMB_` rows of a default bed, and optionally write them where a field run would read them.
+ *
+ * The rule itself is `scripts/lib/audio-bed.ts`; this is the CLI around it.
+ */
+function draftBed(index: OsaudioIndex, game: string): void {
+  const picked = pickBedLayers(index, BED_LAYERS);
+  if (picked.length === 0) {
+    console.log(`[bank-probe] no ${BED_PACKAGE} loop of at least ${BED_SECONDS}s — nothing to draft`);
+
+    return;
+  }
+  console.log(`[bank-probe] a ${picked.length}-layer draft bed from ${BED_PACKAGE}:`);
+  picked.forEach(({ bank, seconds, slot }, layer) => {
+    console.log(
+      `  layer ${layer + 1}: bank ${bank} slot ${slot} · ${seconds.toFixed(2)}s · hear it with ` +
+        `--wav ${bank} ${slot} --out /tmp/bed${layer + 1}.wav`,
+    );
+  });
+  const text = bedTable(picked, BED_GAINS);
+  console.log(text);
+  if (!has('--write')) {
+    console.log('[bank-probe] --write puts this in the built tree; without it nothing was written');
+
+    return;
+  }
+  const data = join(process.cwd(), 'build', game, 'opensa', 'data');
+  if (!existsSync(data)) {
+    console.log(`[bank-probe] no built tree at build/${game}/opensa/data — build one first, nothing written`);
+
+    return;
+  }
+  const out = join(data, 'audio-events.dat');
+  writeFileSync(out, text, 'utf8');
+  console.log(`[bank-probe] wrote ${out} — deleting it restores silence, the stock game ships no such file`);
+}
 
 function flag(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -137,6 +193,11 @@ function main(): void {
     }
     if (has('--loops')) {
       listLoops(index);
+
+      return;
+    }
+    if (has('--bed')) {
+      draftBed(index, game);
 
       return;
     }
