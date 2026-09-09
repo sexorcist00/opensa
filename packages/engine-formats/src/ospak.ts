@@ -87,6 +87,16 @@ export interface OspakManifest {
   /** Root `package.json` version of the app that built this pak (plan 086 phase 1) — the fetch client
    *  pairs it with `game` for cache keying. Absent on older paks or builds outside the repo. */
   appVersion?: string;
+  /**
+   * The audio index (203/2-01): a LOOSE `audio.osaudio` beside the manifest addressing every sound in the
+   * game by byte range, so a surface with no game dir never opens `audio/CONFIG/`.
+   *
+   * It indexes the samples rather than carrying them — the stock set is 364 MB of PCM against a 64 MB audio
+   * budget — so a consumer still needs the game's `audio/SFX/` reachable to hear anything. Absent when the
+   * game ships no `audio/CONFIG/` (a total conversion may not) or when the pak predates the field, and a
+   * consumer must have an answer for a world with no sound either way.
+   */
+  audio?: { banks: number; file: string; sounds: number; zones: number };
   /** Wall-clock build time stamped by opensa-pack (`HH:mm DD-MM-YYYY`, local) — shown in the debugger so the
    *  running pak version is visible at a glance. Absent for a pak built before the field existed. It makes
    *  `manifest.json` non-reproducible by design (the pak `world.ospak` stays byte-identical). */

@@ -25,6 +25,7 @@ import type { LodBakePromise } from './geometric-error';
 
 import { rewriteModelArchives } from './archive-edit';
 import { createAstcEncoder } from './astc-encode';
+import { AUDIO_INDEX_FILE, buildAudioIndex, openAudioRanges } from './audio-index';
 import { buildRecipe, readGitCommit } from './build-recipe';
 import { convertDistrict } from './convert';
 import { buildDistrictTable } from './districts';
@@ -236,6 +237,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
     );
   }
   writeDistricts(fs, products, manifest, log);
+  writeAudioIndex(fs, gameDir, products, manifest, log);
   writeFileSync(join(products, 'world.ospak'), pak);
   // Stamp the build time so the debugger can show which pak the runtime is on. This is the one intentionally
   // non-reproducible field in the output (the pak bytes stay byte-identical); it is set here in the CLI, not
@@ -595,6 +597,40 @@ function rewriteOptimizedArchives(
   log(`${bundles.size()} models bundled; archive rewrite done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 
   return { ...packed, rewrite };
+}
+
+/**
+ * Bake the audio index beside the pak (203/2-01): every sound in the game addressed by a byte range, so a
+ * surface with no game dir can fetch one without opening `audio/CONFIG/` — and without the 364 MB of PCM
+ * ever entering this build. Loose next to the manifest, like the water and the districts.
+ *
+ * **The range reader is `node:fs` rather than the game FS on purpose.** `openGameDir` reads a loose file
+ * whole, and `SCRIPT` alone is 304.9 MB; all this stage needs is 4 804 bytes a bank — 1.8 MB across the 370
+ * banks of stock SA.
+ */
+function writeAudioIndex(
+  fs: ReturnType<typeof openGameDir>,
+  gameDir: string,
+  products: string,
+  manifest: OspakManifest,
+  log: (message: string) => void,
+): void {
+  const ranges = openAudioRanges(gameDir);
+  try {
+    const bake = buildAudioIndex(fs, ranges.read);
+    if (bake === null) {
+      return;
+    }
+    writeFileSync(join(products, AUDIO_INDEX_FILE), bake.bytes);
+    manifest.audio = { ...bake.manifest };
+    log(
+      `audio: ${bake.manifest.sounds} sounds in ${bake.manifest.banks} banks · ${bake.manifest.zones} zones · ` +
+        `${(bake.bytes.byteLength / 1024).toFixed(0)} kB index` +
+        (bake.skipped.length > 0 ? ` · ${bake.skipped.length} bank(s) SKIPPED: ${bake.skipped[0]?.reason}` : ''),
+    );
+  } finally {
+    ranges.close();
+  }
 }
 
 /**
