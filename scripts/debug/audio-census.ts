@@ -66,11 +66,14 @@ function flag(name: string): string | undefined {
 
 function main(): void {
   const game = gameArg();
+  const asked = flag('--dir');
   const tree = resolveTree(game);
   if (!tree) {
     console.log(
-      `[audio-census] SKIPPED — no audio tree for '${game}'. Looked for audio/CONFIG/BankLkup.dat under ` +
-        `game-src/${game}, build/${game}/opensa and build/${game}/sa. Pass --dir <tree> to name one.`,
+      asked
+        ? `[audio-census] SKIPPED — '${asked}' carries no audio/CONFIG/BankLkup.dat, so there is nothing to read there.`
+        : `[audio-census] SKIPPED — no audio tree for '${game}'. Looked for audio/CONFIG/BankLkup.dat under ` +
+            `game-src/${game}, build/${game}/opensa and build/${game}/sa. Pass --dir <tree> to name one.`,
     );
     process.exit(0);
   }
@@ -178,18 +181,21 @@ function readPackage(
   return { disagreements, loops, rates, sounds };
 }
 
-/** The tree to read, or `null` when this machine carries none of the candidates. */
+/**
+ * The tree to read, or `null` when this machine carries none of the candidates.
+ *
+ * **An explicit `--dir` is checked the same way a default is**, and against the same file: it used to be
+ * accepted whenever the DIRECTORY existed, which let a tree with no `audio/` through to an unguarded
+ * `readFileSync` on `PakFiles.dat`. That is the exact class 2026-09-06 closed across four debug scripts — a
+ * tool that dies with a stack trace where it owes a sentence — and it had crept back in through the flag.
+ */
 function resolveTree(game: string): null | string {
   const asked = flag('--dir');
-  if (asked) {
-    return existsSync(asked) ? asked : null;
-  }
+  const candidates = asked
+    ? [asked]
+    : [gameDir(game), join(process.cwd(), 'build', game, 'opensa'), join(process.cwd(), 'build', game, 'sa')];
 
-  return (
-    [gameDir(game), join(process.cwd(), 'build', game, 'opensa'), join(process.cwd(), 'build', game, 'sa')].find(
-      (candidate) => existsSync(join(candidate, 'audio', 'CONFIG', 'BankLkup.dat')),
-    ) ?? null
-  );
+  return candidates.find((candidate) => existsSync(join(candidate, 'audio', 'CONFIG', 'BankLkup.dat'))) ?? null;
 }
 
 /** Percentiles a reader can act on, from an unsorted list. */
