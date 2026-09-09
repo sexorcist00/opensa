@@ -5,6 +5,7 @@ import {
   readBankLookup,
   readPakFiles,
   type SfxBank,
+  type SfxPackage,
   soundRange,
 } from '@opensa/renderware/audio/sfx-banks';
 import { parseGtaDat } from '@opensa/renderware/parsers/text/gta-dat.parser';
@@ -50,7 +51,8 @@ interface PackageReport {
   readonly name: string;
 }
 
-const RATE_BUCKETS = [8000, 11025, 16000, 22050, 32000, 44100] as const;
+/** How many distinct sample rates the summary prints before it starts counting the rest. */
+const RATES_SHOWN = 12;
 
 function bytesOf(file: string): ArrayBuffer {
   const bytes = readFileSync(file);
@@ -62,6 +64,35 @@ function flag(name: string): string | undefined {
   const index = process.argv.indexOf(name);
 
   return index >= 0 ? process.argv[index + 1] : undefined;
+}
+
+/**
+ * What the DISTANCE between consecutive bank headers says the header size really is.
+ *
+ * **This is the one number in the whole format nobody should take from documentation.** A bank is a header
+ * followed by its PCM, and `BankLkup` gives both the header's offset and the PCM's size — so the gap between
+ * one bank's offset and the next one's, minus that size, IS the header, measured off the file. A constant
+ * that is wrong here is SILENT in every other check this script makes: every sound's byte range shifts by the
+ * same amount, the derived lengths stay positive, and nothing runs past the end.
+ */
+function headerGaps(packages: readonly SfxPackage[], banks: readonly SfxBank[]): Map<number, number> {
+  const gaps = new Map<number, number>();
+  for (const entry of packages) {
+    const mine = banks
+      .filter((bank) => bank.packageIndex === entry.index)
+      .sort((a, b) => a.headerOffset - b.headerOffset);
+    for (let index = 0; index + 1 < mine.length; index += 1) {
+      const current = mine[index];
+      const next = mine[index + 1];
+      if (!current || !next) {
+        continue;
+      }
+      const gap = next.headerOffset - current.headerOffset - current.sizeBytes;
+      gaps.set(gap, (gaps.get(gap) ?? 0) + 1);
+    }
+  }
+
+  return gaps;
 }
 
 function main(): void {
@@ -112,9 +143,24 @@ function main(): void {
   }
   console.log(`  sounds ${rates.length} · per bank min ${perBank.min} / median ${perBank.median} / max ${perBank.max}`);
   console.log(`  looping ${loops} · PCM ${(pcmBytes / 1024 / 1024).toFixed(1)} MB across every bank`);
-  const histogram = RATE_BUCKETS.map((rate) => `${rate}:${rates.filter((value) => value === rate).length}`);
-  const other = rates.filter((rate) => !RATE_BUCKETS.includes(rate as (typeof RATE_BUCKETS)[number])).length;
-  console.log(`  rates ${histogram.join(' ')} other:${other}`);
+  const byRate = tally(rates);
+  const top = [...byRate.entries()].sort((a, b) => b[1] - a[1]).slice(0, RATES_SHOWN);
+  console.log(
+    `  rates ${byRate.size} distinct · ${top.map(([rate, count]) => `${rate}:${count}`).join(' ')}` +
+      (byRate.size > RATES_SHOWN ? ` · and ${byRate.size - RATES_SHOWN} more` : ''),
+  );
+  const implausible = rates.filter((rate) => rate < 4000 || rate > 48000).length;
+  if (implausible > 0) {
+    console.log(`  ${implausible} sound(s) claim a rate outside 4 000..48 000 — the smell of a wrong offset`);
+  }
+
+  const gaps = headerGaps(packages, banks);
+  console.log(
+    `  header size DERIVED from consecutive banks: ${[...gaps.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([size, count]) => `${size}×${count}`)
+      .join(' ')} (the constant in use is ${BANK_HEADER_BYTES})`,
+  );
 
   const zones = zoneCensus(tree);
   console.log(
@@ -134,7 +180,24 @@ function main(): void {
   if (out) {
     writeFileSync(
       out,
-      `${JSON.stringify({ banks: banks.length, disagreements, loops, packages: reports, pcmBytes, perBank, rates: rates.length, tree, zones }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          banks: banks.length,
+          disagreements,
+          headerBytesInUse: BANK_HEADER_BYTES,
+          headerBytesObserved: Object.fromEntries([...gaps].map(([size, count]) => [size, count])),
+          loops,
+          packages: reports,
+          pcmBytes,
+          perBank,
+          rateHistogram: Object.fromEntries([...byRate].sort((a, b) => b[1] - a[1])),
+          rates: rates.length,
+          tree,
+          zones,
+        },
+        null,
+        2,
+      )}\n`,
     );
     console.log(`  wrote ${out}`);
   }
@@ -156,7 +219,11 @@ function readPackage(
     try {
       header = readBankHeader(bytes, bank.headerOffset);
     } catch (error) {
-      disagreements.push({ bank: index, detail: error instanceof Error ? error.message : String(error) });
+      const declared = new DataView(bytes).getUint16(bank.headerOffset, true);
+      disagreements.push({
+        bank: index,
+        detail: `${error instanceof Error ? error.message : String(error)} — the header declares ${declared} sounds, which needs ${4 + declared * 12} bytes`,
+      });
       continue;
     }
     sounds.push(header.sounds.length);
@@ -207,6 +274,16 @@ function spread(values: readonly number[]): { max: number; median: number; min: 
     median: sorted[Math.floor(sorted.length / 2)] ?? 0,
     min: sorted[0] ?? 0,
   };
+}
+
+/** How many times each value occurs. */
+function tally(values: readonly number[]): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  return counts;
 }
 
 /** How many audio zones the map carries, by shape — 1/03's half of the run. */
