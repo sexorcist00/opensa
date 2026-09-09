@@ -30,6 +30,14 @@ export class ByteReader {
     return value;
   }
 
+  /** Signed 16-bit — an authored volume adjustment is negative more often than not (`.osaudio`). */
+  i16(): number {
+    const value = this.view.getInt16(this.position, true);
+    this.position += 2;
+
+    return value;
+  }
+
   /** Signed 32-bit — parent/bone indices use -1 for "none". */
   i32(): number {
     const value = this.view.getInt32(this.position, true);
@@ -129,6 +137,13 @@ export class ByteWriter {
     this.ensure(1);
     this.view.setInt8(this.length, value);
     this.length += 1;
+  }
+
+  /** Signed 16-bit — see the reader's note. */
+  i16(value: number): void {
+    this.ensure(2);
+    this.view.setInt16(this.length, value, true);
+    this.length += 2;
   }
 
   /** Signed 32-bit — parent/bone indices use -1 for "none". */

@@ -1,5 +1,18 @@
 export { ByteReader, ByteWriter, fnv1a } from './binary';
 export {
+  decodeOsaudio,
+  encodeOsaudio,
+  OSAUDIO_MAGIC,
+  OSAUDIO_VERSION_MAJOR,
+  OSAUDIO_VERSION_MINOR,
+  type OsaudioBank,
+  type OsaudioIndex,
+  type OsaudioSound,
+  type OsaudioZone,
+  type OsaudioZoneBox,
+  type OsaudioZoneSphere,
+} from './osaudio';
+export {
   decodeOscell,
   encodeOscell,
   type Oscell,
