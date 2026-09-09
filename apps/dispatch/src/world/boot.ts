@@ -1214,7 +1214,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       }
       unbind();
       detachAudioGestures();
-      audio.stop();
+      // The whole thing, context included: the console is rebuilt on a mode switch and a browser allows only
+      // a handful of `AudioContext`s per page (203/6-01).
+      void audio.dispose();
       errorLog.dispose();
       beacons.dispose();
       unitModels.dispose();

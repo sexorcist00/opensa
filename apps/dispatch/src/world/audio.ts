@@ -111,6 +111,20 @@ export class DispatchAudio {
   }
 
   /**
+   * Let the audio go entirely: the tick, the voices, the cached buffers and the CONTEXT.
+   *
+   * **Closing the context is the half that matters on a mode switch** (201/6-03). The console is torn down
+   * and rebuilt when the surface changes, and a browser allows only a handful of `AudioContext`s per page —
+   * so a host that kept its context would leak one per switch and go silent on the fourth or fifth with no
+   * error anyone could act on.
+   */
+  async dispose(): Promise<void> {
+    this.stop();
+    this.buffers.clear();
+    await this.host.dispose();
+  }
+
+  /**
    * Give the console something to play: the baked index, the author's event rows, and the game dir the
    * samples are fetched from.
    *
@@ -208,7 +222,7 @@ export class DispatchAudio {
     return next;
   }
 
-  /** Stop the tick and every voice. The context stays, so a resume is instant. */
+  /** Stop the tick and every voice. The context STAYS, so a resume is instant — see `dispose`. */
   stop(): void {
     this.clock.stop();
     this.pool?.stopAll();
