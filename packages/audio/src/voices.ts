@@ -76,6 +76,16 @@ const ORIGIN_LISTENER: AudioListener = { forward: [0, 1, 0], position: [0, 0, 0]
 /** The concurrent-voice budget named before the work (203). */
 export const MAX_VOICES = 64;
 
+/**
+ * How long a voice takes to get out of the way, in seconds.
+ *
+ * **A gain that jumps to zero is a click** — a step in the waveform is a broadband transient, and it is
+ * exactly what an operator would report the first time the pool steals. Eight milliseconds is under a frame
+ * at 60 Hz and far under anything an ear hears as a fade, so a stolen voice leaves without being noticed
+ * either way.
+ */
+const FADE_SECONDS = 0.008;
+
 /** The bookkeeping behind one {@link Voice}. */
 interface LiveVoice {
   falloff: Falloff;
@@ -230,6 +240,14 @@ export class VoicePool {
     return live;
   }
 
+  /** Let one voice's three nodes go. */
+  private disconnect(voice: LiveVoice): void {
+    voice.source.onended = null;
+    voice.source.disconnect();
+    voice.gainNode.disconnect();
+    voice.panner.disconnect();
+  }
+
   /** Set a voice's gain and pan from where it and the listener now are. */
   private place(voice: LiveVoice): void {
     voice.gainNode.gain.value = audibleGain(this.listener, voice.position, voice.gain, voice.falloff);
@@ -239,10 +257,11 @@ export class VoicePool {
   /**
    * Stop a voice and let its nodes go. Safe to call twice — `onended` fires after a `stop` as well.
    *
-   * **A stolen voice stops ABRUPTLY, and that is a click somebody will hear.** The honest fix is a few
-   * milliseconds of gain ramp before the stop, which needs `AudioParam`'s scheduling methods — deliberately
-   * not in this package's surface yet, because 4/02's crossfade is what brings them and one ramp API is
-   * better than two. Recorded rather than left to be discovered at the first steal.
+   * **A voice that is cut leaves through a ramp, not a step.** Zeroing a gain mid-waveform is a click, and
+   * it is what an operator would report the first time the pool steals. So the SLOT is freed immediately —
+   * the budget is about slots — while the nodes live eight more milliseconds and disconnect when the source
+   * actually ends. A handful of fading voices can therefore outlive the count for an instant, which is the
+   * price of not clicking.
    */
   private release(id: number, reason: 'ended' | 'stolen' | 'stopped'): void {
     const voice = this.voices.get(id);
@@ -251,13 +270,21 @@ export class VoicePool {
     }
     this.voices.delete(id);
     voice.handle.live = false;
-    voice.source.onended = null;
-    if (reason !== 'ended') {
-      voice.source.stop();
+    if (reason === 'ended') {
+      voice.source.onended = null;
+      this.disconnect(voice);
+
+      return;
     }
-    voice.source.disconnect();
-    voice.gainNode.disconnect();
-    voice.panner.disconnect();
+    const now = this.context.currentTime;
+    const gain = voice.gainNode.gain;
+    gain.cancelScheduledValues(now);
+    gain.setValueAtTime(gain.value, now);
+    gain.linearRampToValueAtTime(0, now + FADE_SECONDS);
+    voice.source.onended = (): void => {
+      this.disconnect(voice);
+    };
+    voice.source.stop(now + FADE_SECONDS);
   }
 
   /**

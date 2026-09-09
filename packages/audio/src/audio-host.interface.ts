@@ -103,8 +103,19 @@ export interface AudioNodeLike {
   disconnect(): void;
 }
 
-/** The one property of `AudioParam` this package sets. Ramps are 4/02's business, not the pool's. */
+/**
+ * The slice of `AudioParam` this package uses.
+ *
+ * **The ramp is here because a gain that JUMPS is a click.** Stopping a voice by cutting its gain to zero
+ * mid-waveform puts a step in the signal, and a step is a broadband transient — audible, and the first thing
+ * an operator would report when the pool starts stealing. Every scheduling method here exists to avoid one.
+ */
 export interface AudioParamLike {
+  /** Drop anything already scheduled — a voice stolen twice must not ramp twice. */
+  cancelScheduledValues(startTime: number): unknown;
+  linearRampToValueAtTime(value: number, endTime: number): unknown;
+  /** A ramp needs a starting point on the timeline, which is what this pins. */
+  setValueAtTime(value: number, startTime: number): unknown;
   value: number;
 }
 

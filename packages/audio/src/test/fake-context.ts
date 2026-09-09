@@ -14,6 +14,7 @@ import type {
   AudioBufferSourceLike,
   AudioContextLike,
   AudioNodeLike,
+  AudioParamLike,
   GainLike,
   StereoPannerLike,
 } from '../audio-host.interface';
@@ -55,6 +56,32 @@ export class FakeNode implements AudioNodeLike {
   }
 }
 
+/** A param that records what was scheduled on it, so a test can assert a RAMP rather than a jump. */
+export class FakeParam implements AudioParamLike {
+  cancelledAt: null | number = null;
+  readonly ramps: { time: number; value: number }[] = [];
+  readonly setAt: { time: number; value: number }[] = [];
+  value = 1;
+
+  cancelScheduledValues(startTime: number): unknown {
+    this.cancelledAt = startTime;
+
+    return this;
+  }
+
+  linearRampToValueAtTime(value: number, endTime: number): unknown {
+    this.ramps.push({ time: endTime, value });
+
+    return this;
+  }
+
+  setValueAtTime(value: number, startTime: number): unknown {
+    this.setAt.push({ time: startTime, value });
+
+    return this;
+  }
+}
+
 /** A source that records its whole life: started, stopped, and what it was told to loop. */
 export class FakeBufferSource extends FakeNode implements AudioBufferSourceLike {
   buffer: AudioBufferLike | null = null;
@@ -62,7 +89,7 @@ export class FakeBufferSource extends FakeNode implements AudioBufferSourceLike 
   loopEnd = 0;
   loopStart = 0;
   onended: ((event: Event) => void) | null = null;
-  readonly playbackRate = { value: 1 };
+  readonly playbackRate = new FakeParam();
   startedAt: null | number = null;
   startOffset = 0;
   stoppedAt: null | number = null;
@@ -83,11 +110,11 @@ export class FakeBufferSource extends FakeNode implements AudioBufferSourceLike 
 }
 
 export class FakeGain extends FakeNode implements GainLike {
-  readonly gain = { value: 1 };
+  readonly gain = new FakeParam();
 }
 
 export class FakeStereoPanner extends FakeNode implements StereoPannerLike {
-  readonly pan = { value: 0 };
+  readonly pan = new FakeParam();
 }
 
 /** The context itself. `refuseResume` is how a test plays the browser turning a gesture down. */

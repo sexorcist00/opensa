@@ -186,7 +186,7 @@ describe('VoicePool', () => {
       expect(context.panners[0]?.pan.value).toBe(0);
     });
 
-    it('stops everything on request, disconnecting the nodes it built', () => {
+    it('stops everything on request, and lets the nodes go when the fade has run', () => {
       const context = new FakeAudioContext();
       const pool = new VoicePool(context);
       pool.play({ buffer: buffer(context) });
@@ -194,10 +194,33 @@ describe('VoicePool', () => {
 
       pool.stopAll();
 
+      // The SLOT is free at once — the budget is about slots — while the nodes live out the fade.
       expect(pool.report().live).toBe(0);
-      expect(sourceOf(context, 0).stoppedAt).not.toBeNull();
+      expect(sourceOf(context, 0).stoppedAt).toBeGreaterThan(0);
+      expect(sourceOf(context, 0).disconnected).toBe(false);
+
+      sourceOf(context, 0).finish();
+      sourceOf(context, 1).finish();
+
       expect(sourceOf(context, 0).disconnected).toBe(true);
       expect(context.gains[2]?.disconnected).toBe(true);
+    });
+
+    it('RAMPS a cut voice to zero rather than stepping it — a step is a click', () => {
+      const context = new FakeAudioContext();
+      context.currentTime = 5;
+      const pool = new VoicePool(context, { maxVoices: 1 });
+      pool.setListener(AT_ORIGIN);
+      const first = pool.play({ buffer: buffer(context), gain: 0.02, position: [0, 200, 0] });
+
+      pool.play({ buffer: buffer(context), gain: 1, position: [0, 5, 0] });
+
+      const gain = context.gains[1];
+      expect(first?.live).toBe(false);
+      expect(gain?.gain.cancelledAt).toBe(5);
+      expect(gain?.gain.setAt[gain.gain.setAt.length - 1]?.time).toBe(5);
+      expect(gain?.gain.ramps[gain.gain.ramps.length - 1]).toEqual({ time: 5.008, value: 0 });
+      expect(sourceOf(context, 0).stoppedAt).toBeCloseTo(5.008, 6);
     });
 
     it('routes every voice through ONE master gain, which is what mute and volume set', () => {
