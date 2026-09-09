@@ -12,7 +12,7 @@ consumer — [the chain](../plans/203-audio/readme.md) builds them in that order
 ## Implemented
 
 - **The SFX index, read from the author's own files** (203/1-02): `PakFiles.dat` (52-byte names),
-  `BankLkup.dat` (12-byte entries) and the 4 084-byte bank header of 400 `SoundMeta`, plus `soundRange` —
+  `BankLkup.dat` (12-byte entries) and the 4 804-byte bank header of 400 `SoundMeta` (measured, not documented — it was 4 084 in the code until 2026-09-09), plus `soundRange` —
   (package, bank, slot) → a byte range, a rate and a loop point. **A sound's LENGTH is not stored anywhere**:
   a buffer runs until the next one begins and the last runs to the end of the bank, taken as the smallest
   offset ABOVE this one so the arithmetic does not assume ascending slots.

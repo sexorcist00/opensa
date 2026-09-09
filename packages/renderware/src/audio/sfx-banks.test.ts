@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { BANK_HEADER_BYTES, readBankHeader, readBankLookup, readPakFiles, soundRange } from './sfx-banks';
 
-/** A 4 084-byte bank header carrying `sounds`, written into a buffer of `size` at `offset`. */
+/** A 4 804-byte bank header carrying `sounds`, written into a buffer of `size` at `offset`. */
 function bankHeader(
   sounds: readonly { bufferOffset: number; headroom?: number; loopOffset?: number; sampleRate: number }[],
   { declared = sounds.length, offset = 0, size = BANK_HEADER_BYTES } = {},
@@ -98,10 +98,22 @@ describe('readBankLookup', () => {
   });
 });
 
+describe('BANK_HEADER_BYTES', () => {
+  describe('positive cases', () => {
+    it('holds exactly the 400 slots it claims room for — the arithmetic that did not close', () => {
+      // It was 4 084 until 2026-09-09, which is 340 slots and not 400, and nothing in the code disagreed:
+      // a short header shifts every sound's byte range by the same constant and every derived length stays
+      // positive. The file settled it (361 gaps between consecutive banks, all 4 804); this pins it.
+      expect(BANK_HEADER_BYTES).toBe(4 + 400 * 12);
+      expect((BANK_HEADER_BYTES - 4) / 12).toBe(400);
+    });
+  });
+});
+
 describe('readBankHeader', () => {
   describe('negative cases', () => {
     it('refuses a buffer too short to hold a header at the offset asked for', () => {
-      expect(() => readBankHeader(new ArrayBuffer(1_000))).toThrow(/needs 4084 bytes at offset 0/u);
+      expect(() => readBankHeader(new ArrayBuffer(1_000))).toThrow(/needs 4804 bytes at offset 0/u);
       expect(() => readBankHeader(bankHeader([]), 8)).toThrow(/at offset 8/u);
     });
 

@@ -47,7 +47,7 @@ this container has none**, so every number below is owed a verification pass on 
 | --- | --- |
 | `PakFiles.dat` | package names, **52 bytes each**, null-terminated and `0xCD`-padded. Nine stock packages: `FEET`, `GENRL`, `PAIN_A`, `SCRIPT`, `SPC_EA`, `SPC_FA`, `SPC_GA`, `SPC_NA`, `SPC_PA` |
 | `BankLkup.dat` | an array of **12-byte** entries: `PackageIndex` u8 · 3 bytes padding · `BankHeaderOffset` u32 · `BankSize` u32 |
-| bank header (inside a package) | **4 084 bytes**: `NumSounds` u16 · u16 padding · 400 × `SoundMeta` |
+| bank header (inside a package) | **4 804 bytes**: `NumSounds` u16 · u16 padding · 400 × `SoundMeta`. **This table said 4 084 until the census measured it on 2026-09-09** — the arithmetic never closed, and 361 gaps between consecutive banks all read 4 804 |
 | `SoundMeta` | **12 bytes**: `BufferOffset` u32 (from the end of the header) · `LoopOffset` i32 (in SAMPLES, `-1` = no loop) · `SampleRate` u16 · `Headroom` i16 |
 | the samples | **signed 16-bit mono PCM**, no encryption anywhere on this path |
 | `BankSlot.dat` | 45 fixed slots × 12 824 bytes — the original's RAM budget for banks, which is a 2004 machine's answer and not ours ([directive 2](../../project-goals.md)) |

@@ -19,7 +19,7 @@ import { gameArg, gameDir } from '../lib/game';
  * The audio census (plan 203/1-01): what the game's own SFX index actually contains, read off the real files.
  *
  * **This is the gate of the whole audio chain.** Every number the concept states — 12-byte `BankLkup`
- * entries, a 4 084-byte bank header of 400 `SoundMeta`, signed 16-bit mono PCM, no encryption — comes from
+ * entries, a 4 804-byte bank header of 400 `SoundMeta`, signed 16-bit mono PCM, no encryption — comes from
  * format documentation rather than from a file, because the machine the plan was written on has no game
  * data. Until this run agrees with them, nothing downstream may be built on them:
  * `packages/renderware/src/audio/sfx-banks.ts` therefore REFUSES a buffer that cannot be what it claims,

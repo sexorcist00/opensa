@@ -9,7 +9,7 @@
  * ```text
  * PakFiles.dat   52 bytes a name          → audio/SFX/<name>
  * BankLkup.dat   12 bytes an entry        → which package, and the bank header's offset in it
- * <package>      4 084 bytes a header     → 400 × SoundMeta, of which the first `numSounds` are real
+ * <package>      4 804 bytes a header     → 400 × SoundMeta, of which the first `numSounds` are real
  *                then the PCM buffers     → signed 16-bit mono, no encryption
  * ```
  *
@@ -28,7 +28,7 @@ import { BinaryStream } from '../parsers/binary/binary-stream';
 
 /** One entry of `BankLkup.dat`: where a bank's header lives, and how many bytes of PCM follow it. */
 export interface SfxBank {
-  /** Byte offset of the bank's 4 084-byte header inside its package. */
+  /** Byte offset of the bank's 4 804-byte header inside its package. */
   readonly headerOffset: number;
   /** Index into {@link SfxPackage}. */
   readonly packageIndex: number;
@@ -77,8 +77,21 @@ export interface SfxSoundRange {
 const PACKAGE_NAME_BYTES = 52;
 /** `PackageIndex` u8 · 3 padding · `BankHeaderOffset` u32 · `BankSize` u32. */
 const BANK_ENTRY_BYTES = 12;
-/** `NumSounds` u16 · u16 padding · 400 × 12. */
-export const BANK_HEADER_BYTES = 4084;
+/**
+ * `NumSounds` u16 · u16 padding · 400 × 12 — which is 4 804, and it is MEASURED rather than documented.
+ *
+ * **It was 4 084 here until 2026-09-09, and that was wrong by 720 bytes**: the arithmetic does not close
+ * (4 + 400 × 12 = 4 804), and the census settled it off the real files rather than off a document. A bank is
+ * a header followed by its PCM and `BankLkup` gives both the offset and the PCM size, so the gap between
+ * consecutive bank offsets minus that size IS the header: **361 gaps in the stock game, every one of them
+ * 4 804, none anything else.**
+ *
+ * **A wrong value here is SILENT in every direction that looks like a check.** Each sound's byte range
+ * shifts by the same constant, so lengths stay positive, nothing runs past the end of its package, and every
+ * offset is still plausible — the only thing that gives it away is a bank declaring more sounds than the
+ * short header has room for, which is exactly how it surfaced (bank 366 declares 380, needing 4 564).
+ */
+export const BANK_HEADER_BYTES = 4804;
 /** The header has room for exactly this many, whatever `NumSounds` says. */
 const MAX_SOUNDS_PER_BANK = 400;
 /** Signed 16-bit mono. */
