@@ -145,3 +145,30 @@ packages, which stay where they are and are fetched one range at a time.
 documented — [the census](../benchmarks/opensa-engine/2026-09-09-phone-audio-census.json) derived it from
 361 consecutive-bank gaps after the code had carried 4 084 for a day. The index stores ABSOLUTE offsets so
 no consumer ever needs the constant again.
+
+---
+
+## 4. `data/gtasa_vehicleAudioSettings.cfg` — a car's engine sound
+
+**Where it lives:** in the built game's `data/`, written by fastman92's Limit Adjuster's vehicle audio
+loader. A mod author does not usually edit it directly — they ship `audio.txt` in the car's folder and
+`vehicle-installer` merges the row ([vehicles.md](./vehicles.md)).
+
+**What the columns MEAN is a fact about the original game**, not a rule of ours, so it is recorded where the
+other such facts are: [gta-sa-original/vehicle-audio-settings.md](../gta-sa-original/vehicle-audio-settings.md)
+carries the fifteen columns, every enum, and the finding that in the stock game this is not a file at all —
+the settings are compiled into the executable and FLA exposes them.
+
+**What the ENGINE promises about reading it**, which is the contract half:
+
+| The mistake | What happens | What says so |
+| --- | --- | --- |
+| A row without exactly 15 columns | Dropped — the loader would read it past its end into the next line's fields | `problems`, with the LINE, the text and both counts |
+| A column that is not a number | The whole row is dropped | `problems`, naming the COLUMN and what it said |
+| A sound type the game has no name for | The row is **kept**, its `soundType` reads `unknown`, and the banks and pitches are still usable | `problems`, naming the number |
+| A model set twice | The LAST row wins, the way an appended row wins in the file itself | `problems`, naming the model |
+| `-1` in a bank, horn or station column | Read as ABSENT, never as an id | nothing — it is the file's own spelling for *there is none* |
+
+**`-1` is the trap and it is why this is written down.** It is `NONE` for a horn, `UNSET` for a door,
+`DISABLED` for a radio type, `INVALID` for a station and a plain *no bank* in columns C and D — while a radio
+switched **off** is the id **13**. A reader that took -1 as a number would fetch the bytes before the bank.

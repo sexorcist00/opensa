@@ -1,7 +1,9 @@
 # Audio (plan 203)
 
-`packages/audio/src/audio-host.ts` (the context and its lifecycle), `packages/renderware/src/audio/sfx-banks.ts`
-(the SFX index), `parsers/text/ipl.parser.ts` → `parseIplAudioZones` (the map's audio zones),
+`packages/audio/` (the context and its lifecycle, voices, the spatial model, the zone lookup and the
+ambience bed), `packages/renderware/src/audio/sfx-banks.ts` (the SFX index),
+`parsers/text/ipl.parser.ts` → `parseIplAudioZones` (the map's audio zones),
+`parsers/text/audio-events.parser.ts` and `parsers/text/vehicle-audio.parser.ts` (the two authored tables),
 `scripts/debug/audio-census.ts` (the gate).
 
 **The whole path exists now, and what is missing is AUTHORED DATA.** Index, range fetch, cache, voices,
@@ -43,10 +45,18 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
   **SA itself plays no general ambience bed at all** — its street sound is emergent from traffic and peds,
   which a dispatch console has none of ([the recovered design](../gta-sa-original/audio-ambience.md)).
 
+- **A car's engine sound, as authored data** (203/5-02, the read layer):
+  `parsers/text/vehicle-audio.parser.ts` reads FLA's `data/gtasa_vehicleAudioSettings.cfg` — the table that
+  exists on our target only because the `sa` build always runs FLA, since in the stock game these settings
+  are compiled into the executable. Fifteen columns, `-1` read as absent everywhere the file means it that
+  way, a row that is not fifteen columns DROPPED rather than read past its end. The column meanings are
+  [a fact about the original](../gta-sa-original/vehicle-audio-settings.md).
+
 ## Not implemented
 
 - **The consumers**: vehicles, feet, impacts and weapons (203's chain 5) — the table can name them, nothing
-  calls them yet.
+  calls them yet, and how a bank plus a pitch becomes a moving car's engine is an open question rather than
+  an unwritten function.
 - **The authored rows themselves.** No build ships an `audio-events.dat`, so every surface is silent by
   absence rather than by fault, and the report says which.
 - **Radio and ped speech are deliberately out of v1** — `audio/streams` is a different problem with a
