@@ -83,8 +83,11 @@ export async function bridgeRpc(request, { env, post }) {
     return error?.plain === true
       ? fail(why)
       : fail(
-          `the phone is not answering at ${url} (${why}) — the tunnel address changes on every restart, ` +
-            'so re-run `npm run panel:tunnel` and paste the new one.',
+          `the phone is not answering at ${url} (${why}) — re-run \`npm run panel:tunnel\` on the phone, ` +
+            'then RETRY THIS SAME URL before concluding a new session is needed: a RESERVED ngrok domain ' +
+            'comes back at the address already in this environment — measured 2026-09-09, when this URL ' +
+            'refused at session start and answered later in the SAME session with nothing in the ' +
+            'environment changed. Only a RANDOM address needs the two values pasted in and a new session.',
         );
   }
 }
