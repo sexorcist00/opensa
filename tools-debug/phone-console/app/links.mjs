@@ -19,6 +19,7 @@ export const LINK_NAMES = [
   'engine',
   'board',
   'nomodels',
+  'silent',
   'nosprites',
   'boxed',
   'msaa1',
@@ -243,6 +244,12 @@ export function consoleUrls(state = {}) {
     scale75: `${app}?${empty}&scale=0.75`,
     // The share artifact is served as a plain file out of the repo, wherever the static server is.
     share: `http://localhost:${staticPort}/dist-share/dispatch.html?${query}&inventory=1`,
+    // AUDIO'S OWN BASELINE (203/4-03): `field` with the sound removed rather than muted — no context, no
+    // voice pool, no tick. Audio runs on its OWN clock precisely so a still map still sounds like a city,
+    // which means it spends some of what render-on-demand bought; `field` − `silent` is that bill, and it
+    // cannot be read any other way. Take the pair on one charge, in one thermal window, and read
+    // `power.charging` in both halves before believing either.
+    silent: `${app}?${empty}&audio=0`,
   };
 }
 
