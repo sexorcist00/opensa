@@ -35,12 +35,25 @@ consumer — [the chain](../plans/203-audio/readme.md) builds them in that order
   different licence and a browser question the SFX path does not have (Vorbis decoding is absent from Safari
   before 18.4).
 
+## Measured on the real files (2026-09-09)
+
+[The census row](../benchmarks/opensa-engine/2026-09-09-phone-audio-census.json) — `LAYOUT AGREES`, so the
+numbers below are measurements rather than documentation:
+
+- **9 packages · 370 banks · 8 857 sounds · 351 looping · 364.1 MB of PCM**, per bank 1 / 5 / 380.
+- **103 distinct sample rates**, and not the ones anybody would guess: 12 000 Hz carries 59 % of every sound,
+  15 000 another 22 %, 8 000 a further 11 %, while 22 050 + 44 100 + 11 025 together are 1.5 %. One sound is
+  authored at 2 021 Hz. At 12 kHz a second of 16-bit mono is **24 kB**, not the 44 the concept assumed.
+- **The bank header is 4 804 bytes** — derived, not documented, from 361 consecutive-bank gaps that all read
+  the same. It was 4 084 in this code until the census said otherwise.
+- **155 audio zones, all in `audiozon.ipl`** — 152 box, 3 sphere, 151 active. No other IPL carries an `AUZO`
+  section, so the zone lookup is a single load.
+- **Where the bytes are**: SCRIPT 304.9 MB across 218 banks (83.7 %), the five `SPC_*` 32.0 MB, and
+  FEET + GENRL + PAIN_A 28.9 MB. Against the chain's 64 MB budget the whole set is 5.7x over, which is why a
+  sound is fetched by byte range and nothing loads a package.
+
 ## Known gaps
 
-- **The format numbers are still DOCUMENTATION.** Every constant above comes from format documentation
-  rather than from a file: the census that turns them into measurements has run and reported a named skip,
-  because the phone's game copy carries no `audio/` folder. Until it says `LAYOUT AGREES`, nothing
-  downstream may be built on those numbers.
 - **No fixture.** 1/02's tests run on synthetic bytes the test itself writes. A cached fixture under
   `fixtures-src/` (per the fixture rule: one manifest line, never a file dropped by hand) is owed once a real
   bank is reachable.
