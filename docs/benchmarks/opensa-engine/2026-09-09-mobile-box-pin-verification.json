@@ -1,0 +1,152 @@
+{
+  "note": "THE CSS-BOX PIN, FLOWN — AND THE PREMISE IT WAS BUILT ON IS WRONG. `?box=WxH` shipped 2026-09-08 as the last of 201 §6's four instruments, and the handoff called it a VERIFICATION arm rather than a member of the circuit, on this reasoning: `360x320 is the box every existing row was taken at, so boxed and field should read the SAME on a device whose chrome is already there`. Both halves of that are false, and the second is falsified by the filed record without flying anything. THE BOX WAS NEVER CONSTANT: across the 28 rows in this folder that state one, the console has been measured at ELEVEN distinct CSS boxes -- 360 wide at heights 320, 364, 373, 377, 432, 444, 491, 550, 570 and 609, plus 403x334 twice -- and single rows span up to six of them (2026-09-04's attachment ladder saw 320/373/491/550/570/609; 2026-09-05's board decomposition alternated 570 and 609 between its four windows). And THE DEVICE'S NATURAL BOX IS NOW 360x654, a twelfth value, because the 2026-09-08 fix took the calls/units sheet out of the grid and gave the map the whole column. So `boxed` is not a null arm: it is a 2.04x change in the CSS box's area, and it was flown as an A/B.\n\nWHAT THE PIN DOES, PROVEN ON THE DEVICE. `device.css` read back 360x320 with `surface.boxPinned: true` and min == max on both axes; the `field` half read 360x654 with `boxPinned: false` and min == max as well, so neither window mixed two boxes and neither carries the warning that names them. The pin holds.\n\nWHAT IT DOES NOT TOUCH, WHICH IS THE POINT OF HAVING IT SEPARATE FROM `?surface=`. `?surface=720x640` pinned the scene's drawing buffer in BOTH arms, and every number that follows from the buffer is byte-identical across the pair: 112 draws, 277 970 triangles, 66.61 MB resident with the same five-category split, `renderScale` 1, `sampleCount` 4, `rgba16float`, `probeFaces` 0. The GPU was asked for exactly the same picture twice.\n\nWHAT IT CHANGES IS TWO THINGS, ONE MEASURABLE HERE AND ONE NOT. (1) The 2D overlay canvas is sized from the CSS box, so its pixel count doubles with it. (2) PRESENTATION: 720x640 device pixels into a 360x320 CSS box at DPR 2 is 720x640 -- a 1:1 blit -- while the same buffer into 360x654 is a 720x1308 target and the compositor UPSCALES by 2.04x vertically. Nothing in this capture can time a compositor, and that is the honest limit of the pair.\n\nTHE CPU SEGMENTS SAY THE BOX COST NOTHING, AND THEY SAY IT BY A CONTROL THAT WAS ALREADY IN THE CAPTURE. `field` ran hotter than `boxed` on EVERY segment, including the two that cannot depend on the CSS box at all: `engine-frame` (which records into the pinned buffer) 1.306 against 1.170 -- a ratio of 1.116 -- and `stream` (blob I/O and uploads) 0.360 against 0.311, 1.155. `overlay:clear`, the one line whose work IS the box's area, moved 0.131 against 0.117: a ratio of 1.114, indistinguishable from `engine-frame`'s, on twice the pixels. And `overlay-2d` is flat at 0.066 against 0.066 (0.996), because an empty board draws nothing into the canvas whatever size it is. So the whole CPU difference is a uniform ~11 % offset that the box does not explain and thermal drift does -- `boxed` was flown first at 00:21:00, `field` 34 s later -- and there is no box cost in the CPU body to report at this size.\n\nWHAT MAY NOT BE CLAIMED. dtMean 17.83 against 17.34 is 0.49 ms, against a null-arm floor of 2.47 ms measured on this device (2026-09-05): below the floor, a sample rather than a measurement. The MISS RATE moved more -- 24.1 % of frames past 16 ms against 15.7 %, p95 26 against 20, paceChangeRate 0.171 against 0.093 -- and an upscaling composite is exactly where such a difference would land if it is real. But this is ONE window an arm, unbracketed, flown in the order that makes drift and effect point the same way, and the CPU control above shows drift of the right size. NOT ESTABLISHED. A bracketed boxed/field/boxed re-flight is what would settle it, and it is only worth flying if the presentation path becomes a question.\n\nTHE RUNG ARITHMETIC, per this folder's standing check: predicted from each window's own rung mix, `field` 16.89 against 17.83 measured (+0.94) and `boxed` 16.42 against 17.34 (+0.92). The SAME offset both sides -- the sub-interval frames the render gate lets through -- so the difference between the arms lives entirely in the rung mix and there is no remainder to attribute.\n\nAND `visibility` EARNED ITS PLACE ONE DAY AFTER IT WAS BUILT. The first `field` window of the session was discarded on one field: 195 s, 10 136 frames, `warnings: []`, `errors: []`, every number plausible -- and `visibility.hiddenMs: 7732.5` over one spell, because the page sat behind the panel for most of it. Before 2026-09-08 nothing in a capture said so, and that window would have been filed.\n\nBoth windows are FRESH PAGES and each carries its own boot ramp (`cellsCreated: 4`, a first frame with `frame:sky-lut` at 48.8 / 35.6 ms, `dtMax` 122.2 / 91.4). Symmetric between the arms, but neither is a steady-state window.",
+  "app": "ea5dc22",
+  "build": "19:23 28-08-2026",
+  "district": "los-santos-centre",
+  "date": "2026-09-09",
+  "device": {
+    "adapter": "arm bifrost",
+    "dpr": 2,
+    "missing": ["texture-compression-bc", "timestamp-query"],
+    "hasShaderF16": true,
+    "charging": true,
+    "batteryLevel": 1.0
+  },
+  "surfacePin": {
+    "deviceWidth": 720,
+    "deviceHeight": 640,
+    "pinned": true,
+    "note": "identical in both arms -- the scene buffer is what `?surface=` pins, and it is not what this pair varies"
+  },
+  "route": "one fly-to per arm, then a settled window: at [1500,-1500], height 900, pitch -1.15, yaw pi, perspective. Board EMPTY (`units=0&calls=0`), overlay on.",
+  "howRun": "phone panel MCP: map_open <view> -> map_goto -> map_snapshot, one window an arm, back to back on one charge",
+  "arms": [
+    {
+      "order": 1,
+      "arm": "boxed",
+      "query": "units=0&calls=0&inventory=1&surface=720x640&box=360x320",
+      "takenAt": "00:21:00Z",
+      "css": "360x320",
+      "boxPinned": true,
+      "cssRange": { "widthMin": 360, "widthMax": 360, "heightMin": 320, "heightMax": 320 },
+      "presentedScale": "1:1 (720x640 buffer into 720x640 device px)",
+      "frames": 913,
+      "windowMs": 15802.7,
+      "framesSkipped": 0,
+      "dtMeanMs": 17.341,
+      "dtP50Ms": 16,
+      "dtP95Ms": 20,
+      "dtMaxMs": 91.4,
+      "binShare": { "under16Pct": 27.9, "at16Pct": 56.4, "over16Pct": 15.7 },
+      "predictedFromRungMixMs": 16.42,
+      "paceChanges": 85,
+      "paceChangeRate": 0.0932,
+      "paceWorstRatio": 7.44,
+      "cpu": {
+        "bodyMeanMs": 2.506,
+        "bodyMaxMs": 47.0,
+        "outsideMeanMs": 14.834,
+        "shareOfFrame": 0.1445,
+        "segmentsMs": {
+          "engine-frame": 1.17,
+          "other": 0.4932,
+          "stream": 0.3114,
+          "sym:scale": 0.2056,
+          "overlay:clear": 0.1174,
+          "overlay:symbols": 0.0692,
+          "overlay-2d": 0.0662,
+          "overlay:sketches": 0.0333
+        }
+      },
+      "submitMeanMs": 1.107,
+      "bootGpuMs": 469.7,
+      "visibility": { "hiddenMs": 0, "hiddenSpells": 0 },
+      "warnings": [],
+      "errors": []
+    },
+    {
+      "order": 2,
+      "arm": "field",
+      "query": "units=0&calls=0&inventory=1&surface=720x640",
+      "takenAt": "00:21:34Z",
+      "css": "360x654",
+      "boxPinned": false,
+      "cssRange": { "widthMin": 360, "widthMax": 360, "heightMin": 654, "heightMax": 654 },
+      "presentedScale": "2.04x vertical upscale (720x640 buffer into 720x1308 device px)",
+      "frames": 891,
+      "windowMs": 15837.0,
+      "framesSkipped": 0,
+      "dtMeanMs": 17.83,
+      "dtP50Ms": 16,
+      "dtP95Ms": 26,
+      "dtMaxMs": 122.2,
+      "binShare": { "under16Pct": 28.4, "at16Pct": 47.5, "over16Pct": 24.1 },
+      "predictedFromRungMixMs": 16.89,
+      "paceChanges": 152,
+      "paceChangeRate": 0.1708,
+      "paceWorstRatio": 9.43,
+      "cpu": {
+        "bodyMeanMs": 2.768,
+        "bodyMaxMs": 73.0,
+        "outsideMeanMs": 15.063,
+        "shareOfFrame": 0.1552,
+        "segmentsMs": {
+          "engine-frame": 1.3056,
+          "other": 0.5274,
+          "stream": 0.3596,
+          "sym:scale": 0.223,
+          "overlay:clear": 0.1308,
+          "overlay:symbols": 0.0791,
+          "overlay-2d": 0.0659,
+          "overlay:sketches": 0.0313
+        }
+      },
+      "submitMeanMs": 1.212,
+      "bootGpuMs": 425.8,
+      "visibility": { "hiddenMs": 0, "hiddenSpells": 0 },
+      "warnings": [],
+      "errors": []
+    }
+  ],
+  "identicalAcrossThePair": {
+    "draws": 112,
+    "triangles": 277970,
+    "residencyMb": 66.6117696762085,
+    "cellsVisible": "4 of 4",
+    "renderScale": 1,
+    "sampleCount": 4,
+    "sceneFormat": "rgba16float",
+    "deviceBuffer": "720x640",
+    "pose": "at [1500,-1500] h900 pitch -1.15 yaw pi",
+    "bytesFetched": 21734003
+  },
+  "segmentRatios": {
+    "what": "field / boxed, per CPU segment. The box is 2.04x the area in `field`; only `overlay:clear` and `overlay-2d` can depend on that, and neither separates from the segments that cannot.",
+    "engine-frame": 1.116,
+    "stream": 1.155,
+    "sym:scale": 1.085,
+    "overlay:clear": 1.114,
+    "overlay-2d": 0.996,
+    "bodyMean": 1.105
+  },
+  "discardedWindow": {
+    "arm": "field",
+    "frames": 10136,
+    "windowMs": 195356.5,
+    "dtMeanMs": 19.193,
+    "whyDiscarded": "visibility.hiddenMs 7732.5 over one spell -- the page was behind the panel. `warnings` and `errors` were both empty and every other number was plausible; before 2026-09-08 nothing would have said so.",
+    "keptForTheRecord": "the first capture in this repository ever rejected on a `visibility` field"
+  },
+  "verdict": {
+    "pinWorks": "yes -- device-confirmed, min == max on both axes, no mixed-box warning in either window",
+    "isBoxedANullArm": "NO. It halves the CSS box against this device's natural 360x654 and changes the presented scale from an upscale to 1:1. The handoff's `every existing row was taken at 360x320` is refuted by the filed record itself: eleven distinct boxes across 28 rows.",
+    "boxCostInTheCpuBody": "none measurable at this size -- `overlay:clear` moved by the same ratio as segments that cannot depend on the box, and `overlay-2d` is flat because an empty board draws nothing",
+    "boxCostInTheMissRate": "NOT ESTABLISHED. 24.1 % against 15.7 % is the largest difference in the pair and points the way an upscaling composite would, but it is one unbracketed window an arm flown in drift's own direction.",
+    "continuityArm": "`boxed`. Every row before 2026-09-08 was taken through chrome that took height from the map; `field` today is the full column and a box no earlier row was flown at. Comparing today's `field` with a pre-09-08 `field` crosses a presentation change; `boxed` does not.",
+    "owed": [
+      "a bracketed boxed/field/boxed re-flight, ONLY if the presentation path becomes a question worth a session",
+      "the `nomodels` arm, which still needs a pak carrying the board's own vehicle models",
+      "a row with a die temperature in it (`termux-battery-status` via the panel), which no capture yet has"
+    ]
+  }
+}

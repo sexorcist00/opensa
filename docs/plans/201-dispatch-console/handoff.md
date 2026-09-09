@@ -36,7 +36,7 @@ looked up, and only DECISIONS reach them.
 | **The 62 game-data tools have never been run** | they became reachable today and nobody has looked. `ide-flag-histogram` says which authored IDE bits exist to honour; `dat-order-check` is a correctness question about the shipped data | minutes each, on the phone |
 | **The remaining chain-9 rungs** | the graphics ladder is a bloom switch and a prefilter scale; the user asked for a real optimisation ↔ quality axis (§5a) | a measurement before it is a UI task |
 | **Audio** | never planned, nothing exists, and the user has asked twice (§5e) | a bank parser, then Web Audio |
-| **The four §6 instruments are BUILT and owed a flight** | since 2026-09-08 a capture records the battery and the charging state, the time the page spent backgrounded, and the extremes the CSS box reached; `?models=0` prices the fleet and `?box=` pins the box. None of it has been on a device yet, and two of them decide how earlier rows may be read (§6) | one circuit: `board`/`nomodels`, then `field`/`boxed` |
+| **THREE of the four §6 instruments have FLOWN; `?models=0` has not** | 2026-09-09 ([the row](../../benchmarks/opensa-engine/2026-09-09-mobile-box-pin-verification.json)). `?box=` is device-proven and its *verification arm* framing is dead — see the bullet below; `power` filed its first `charging` and `visibility` REJECTED a window on its first day of use. **`?models=0` is the one left**, and it is gated on a pak carrying the board's own vehicles rather than on code (§6) | one circuit: `board`/`nomodels`, on a fleet pak |
 
 **What is NOT open, so nobody spends a session re-deciding it:** the post chain (§3.1, 2.4 ms, closed),
 whether bloom ships (the operator released it at night — Smooth is the default), and the frame-rate budget
@@ -511,25 +511,30 @@ spatial panning → volume and mute.
 
 ## 6. Still unpaid, by everyone
 
-**Four of the six lines here were built on 2026-09-08 and are now owed a FLIGHT rather than code.** What
-each one records is in [query-parameters](../../development/query-parameters.md); what none of them has is a
-row taken with it on.
+**Four of the six lines here were built on 2026-09-08, and three of them FLEW on 2026-09-09**
+([the row](../../benchmarks/opensa-engine/2026-09-09-mobile-box-pin-verification.json)). What each one
+records is in [query-parameters](../../development/query-parameters.md); the one still owed a device is
+`?models=0`, and it is gated on a pak that carries the board's own vehicles.
 
-- **Battery, charging state and die temperature — RECORDED since 2026-09-08, never yet captured.** The
-  report carries `power.charging`, `power.chargingChanged` and the level at both ends of the window
-  (`world/power.ts`), and the panel stamps the DIE TEMPERATURE onto the note from `termux-battery-status`,
-  since no browser exposes it. **Two things the next device session must check**: whether Termux:API is
-  installed at all — an absent binary is a named skip in the note (*"battery not read (termux-api absent)"*),
-  which is the sentence that says how to make the next row carry a temperature — and whether the phone was
-  on the charger for the rows already filed, which nothing can answer retroactively. Every thermal argument
-  in this chain still rests on a re-flown baseline; the first row with `charging` in it is the first one that
-  does not have to.
+- **Battery and charging state — CAPTURED 2026-09-09; the DIE TEMPERATURE still is not.** The report
+  carries `power.charging`, `power.chargingChanged` and the level at both ends of the window
+  (`world/power.ts`), and the box-pin pair is the first row in this repository to state them: **`charging:
+  true`, level 1.00 at both ends, `chargingChanged: false` in both halves** — so that pair's thermal
+  argument does not rest on a promise about the cable. What is STILL missing is the temperature: the panel
+  stamps it onto the note from `termux-battery-status` and no browser exposes it, and that path has not been
+  exercised (whether Termux:API is even installed is unchecked — an absent binary is a named skip reading
+  *"battery not read (termux-api absent)"*). **And nothing can answer retroactively** whether the phone was
+  on the charger for the rows filed before 09-09, so every thermal argument older than that still rests on a
+  re-flown baseline.
 - **How many browser tabs compete with a capture CANNOT be measured, and that line is closed as such.** No
   web API names another tab and Termux on an unrooted phone cannot see another app's processes. What was
   built instead is the half that can be: `visibility.hiddenMs` / `hiddenSpells` — the time this page spent
   out of the FOREGROUND, which is the failure that actually cost this chain a measurement (Android suspends
   a backgrounded tab; the 2026-08-31 run lost the one flight with the world resident to it, and nothing in
-  the capture said so).
+  the capture said so). **It paid for itself on its first day out**: the box-pin session's opening window —
+  195 s, 10 136 frames, `warnings` and `errors` both empty, every number plausible — was discarded on
+  `hiddenMs: 7732.5` alone, because the page had sat behind the panel. That is the first capture in this
+  repository ever rejected on a `visibility` field, and before 09-08 it would have been filed.
 - **Upstream has never been merged.** `AlexSergey/opensa` cannot be fetched from the web container (no
   credentials; `add_repo` refuses a cross-owner repository — re-tested 2026-09-08), so the fork's divergence
   is unmeasured. Do it from a checkout that can. **Left owed deliberately on 2026-09-08** (the user's call).
@@ -541,13 +546,29 @@ row taken with it on.
   requested and nothing is ever marked, so the answer was permanent and the unit got no chevron, no beacon
   and no car. **Every patrolling unit in the shareable demo was invisible from 2026-09-05**, silently: the
   roster still said 150. Fixed, with the red test that proved it.
-- **The CSS box — RECORDED and PINNABLE since 2026-09-08; the pin is owed a flight.** `surface.cssWidthMin/Max`
-  and `cssHeightMin/Max` are the extremes the window actually reached (off the resize observer, so a frame
-  pays nothing), and a window that mixed two boxes now carries a warning naming both. `?box=WxH` pins the box
-  itself, and the panel's `boxed` link is a **VERIFICATION arm rather than a member of the circuit**: 360x320
-  is the box every existing row was taken at, so `boxed` and `field` should read the SAME on a device whose
-  chrome is already there. **Fly that pair before any arm adopts the pin** — a knob that moved every filed
-  row without a verification is exactly what this chain keeps paying for.
+- **The CSS box — RECORDED and PINNABLE since 2026-09-08, FLOWN 2026-09-09, and the premise it was built on
+  was wrong** ([the row](../../benchmarks/opensa-engine/2026-09-09-mobile-box-pin-verification.json)).
+  `surface.cssWidthMin/Max` and `cssHeightMin/Max` are the extremes the window actually reached (off the
+  resize observer, so a frame pays nothing), and a window that mixed two boxes now carries a warning naming
+  both. `?box=WxH` pins the box itself, and **the pin works**: `device.css` read back 360x320 with
+  `boxPinned: true` and min == max on both axes.
+  **What is dead is the framing.** This paragraph used to call `boxed` a verification arm on the grounds that
+  *360x320 is the box every existing row was taken at* — and the filed record refutes that without flying
+  anything: **eleven distinct CSS boxes across the 28 rows in `docs/benchmarks/opensa-engine/` that state
+  one** (360 wide at 320, 364, 373, 377, 432, 444, 491, 550, 570 and 609, plus 403x334 twice), with single
+  rows spanning up to six of them. **The box was never constant, which is why the pin was worth building and
+  why it is not a null arm.** This device's natural box is now **360x654** — a twelfth value, and one no
+  earlier row was ever flown at, because 09-08's sheet fix gave the map the whole column.
+  **What the pair measured.** `?surface=` pinned the scene buffer in both halves, so the GPU was asked for an
+  identical picture (112 draws, 277 970 triangles, 66.61 MB) and only the overlay canvas and the
+  COMPOSITOR's scale differ — 1:1 at 360x320 against a 2.04x vertical upscale at 360x654. **There is no box
+  cost in the CPU body**: `overlay:clear` moved 0.131/0.117, a ratio of 1.114 on twice the pixels, which is
+  the same ratio `engine-frame` moved by (1.116) and it cannot depend on the box at all — the whole
+  difference is a uniform ~11 % offset in the direction of the thermal drift the flight order predicts.
+  **The miss rate moved further and MAY NOT be claimed** (24.1 % of frames past 16 ms against 15.7 %, dtMean
+  17.83/17.34 under the 2.47 ms null-arm floor): one unbracketed window an arm. **The consequence for
+  reading the record is the part to keep**: `boxed` is the CONTINUITY arm — today's `field` crosses a
+  presentation change that every pre-09-08 row sits on the other side of.
   **And the OPERATOR's half of the same seam is fixed**: the phone's calls/units sheet was a grid row, so
   every open and close took height from the map and moved the box under a running measurement. It floats
   over the map now (the user's report and call, 2026-09-08), measured to hold 696 px through the whole
