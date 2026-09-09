@@ -16,12 +16,23 @@ Diagrams live in [assets/](./assets/) and are **generated** — `npm run arch:re
 `%%| <name>` mermaid block in this folder to `assets/<name>.svg`). Edit the mermaid source in the doc,
 re-render, commit both.
 
-**`packages.svg` and `runtime-packages.svg` are one node stale**: they predate `packages/audio` (2026-09-09),
-which the text map below carries. The web container's Chromium is pinned two builds below the one this
-repository's Playwright asks for, and rendering with the one it has rewrites **the whole 206 kB file** — a
-baseline render with no source change came back 229 kB — so re-rendering there would have committed the
-renderer's churn to buy one isolated node. **Re-render both on a machine with the pinned browser** and the
-gap closes in one command.
+**Rendering in the web container needs one line of setup, and it is not `npx playwright install`.** The
+image there ships Chromium build **1194** while this repository's Playwright asks for **1223**, so every
+script that opens a page — this render, and `scripts/debug/webapp-smoke.ts` — dies with *Executable doesn't
+exist*. The fix is to point the expected path at the build that IS installed, once per container:
+
+```bash
+mkdir -p /opt/pw-browsers/chromium_headless_shell-1223/chrome-headless-shell-linux64
+ln -sfn /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell \
+  /opt/pw-browsers/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell
+for f in /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/*; do
+  ln -sfn "$f" /opt/pw-browsers/chromium_headless_shell-1223/chrome-headless-shell-linux64/"$(basename "$f")"
+done
+```
+
+**Re-rendering rewrites the whole file** (206 kB → 233 kB on 2026-09-09) because the renderer's version moved,
+not because the graph did — so a diff of these assets is not a diff of the architecture, and reading one that
+way wastes a session.
 
 ## Repository layout
 

@@ -62,6 +62,17 @@ tar -czf prebuilt/opensa-webapp.tar.gz -C dist .
 `/build/webapp/` — the path the phone uses — and fails if the page is still on `starting…` or any asset 404s.
 That is the exact failure below, and it reached the device once because nothing checked.
 
+**It catches more than 404s, and it proved that on 2026-09-09.** The audio wiring armed its 10 Hz tick where
+the host is built, which is BEFORE `boot` awaits the world and therefore before the camera exists — so the
+first tick read a `const` in its temporal dead zone and threw. The map still drew, React carried on, and the
+page looked correct while the console filled with 79 identical errors a load. Nothing in `tsc`, `eslint` or
+the unit suite sees an ordering bug inside one async function; this check does, because it loads the page.
+
+**In the web container the browser needs one line of setup first** — its Chromium is build 1194 and this
+repository's Playwright asks for 1223, so the launch fails with _Executable doesn't exist_ until the expected
+path is pointed at the installed one. The three commands are in
+[`docs/architecture/README.md`](../docs/architecture/README.md).
+
 **`--base=./` is not optional**: without it the asset paths are absolute (`/assets/…`) and every one of them
 404s when the app is served from a subfolder.
 

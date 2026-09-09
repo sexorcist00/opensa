@@ -454,19 +454,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // zero at rest and a city that stops when you stop panning is not a city.
   const audio = new DispatchAudio(params);
   const detachAudioGestures = audio.attach(window);
-  audio.start(() => {
-    const state = camera.state(canvasAspect(canvas));
-    // Engine space is x-right / y-UP / z-south; GTA is x-east / y-north / z-up, which is what every zone,
-    // unit and sound position in this app is stated in (`map/coords.ts`). One conversion, here, so the
-    // spatial model never sees two coordinate systems.
-    const ear = engineToGta3(state.eye);
-    const ahead = engineToGta3(state.target);
-    const forward = unit([ahead[0] - ear[0], ahead[1] - ear[1], ahead[2] - ear[2]]);
 
-    // Right is forward × up with up = +Z, which for a unit forward is (fy, -fx, 0). Taken from the camera's
-    // own vectors rather than from its yaw, so this cannot drift from whatever north-up comes to mean.
-    return { forward, position: ear, right: unit([forward[1], -forward[0], 0]) };
-  });
   if (pinnedBox) {
     // The BOX, never the buffer: both canvases go on sizing their stores from what they are displayed in,
     // so the symbology is still drawn in its own coordinates and the pin costs it nothing. Absolute
@@ -672,6 +660,23 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // Installed before anything else this boot does, because the failures worth catching happen during it.
   const errorLog = createErrorLog();
   const camera = new MapCamera(poseFromQuery(params));
+  // The audio tick starts HERE and not where the host is built, because its callback reads the camera —
+  // and boot is async, so a clock armed before this line fires during the awaits and dies on a `camera`
+  // that does not exist yet. It threw 79 times a page and the map still drew, which is why the webapp
+  // smoke check is the thing that found it rather than an operator.
+  audio.start(() => {
+    const state = camera.state(canvasAspect(canvas));
+    // Engine space is x-right / y-UP / z-south; GTA is x-east / y-north / z-up, which is what every zone,
+    // unit and sound position in this app is stated in (`map/coords.ts`). One conversion, here, so the
+    // spatial model never sees two coordinate systems.
+    const ear = engineToGta3(state.eye);
+    const ahead = engineToGta3(state.target);
+    const forward = unit([ahead[0] - ear[0], ahead[1] - ear[1], ahead[2] - ear[2]]);
+
+    // Right is forward × up with up = +Z, which for a unit forward is (fy, -fx, 0). Taken from the camera's
+    // own vectors rather than from its yaw, so this cannot drift from whatever north-up comes to mean.
+    return { forward, position: ear, right: unit([forward[1], -forward[0], 0]) };
+  });
   // The bounds are the world's, not the camera's: how far it may zoom out and how shallow it may tilt both
   // come from how much world there is around the focus (201/7-02).
   camera.setStreamedReach(world.reach);
