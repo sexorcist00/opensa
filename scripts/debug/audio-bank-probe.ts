@@ -1,7 +1,7 @@
 import { decodeOsaudio, type OsaudioIndex } from '@opensa/engine-formats';
 import { buildAudioIndex, openAudioRanges } from '@opensa/opensa-pack/audio-index';
 import { openGameDir } from '@opensa/opensa-pack/game-fs';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { BED_PACKAGE, BED_SECONDS, bedTable, pickBedLayers } from '../lib/audio-bed';
@@ -38,6 +38,7 @@ import { gameArg, gameDir } from '../lib/game';
  * npx tsx scripts/debug/audio-bank-probe.ts --wav 40 2 --out /tmp/hum.wav
  * npx tsx scripts/debug/audio-bank-probe.ts --bed              # draft the AMB_ rows, print them
  * npx tsx scripts/debug/audio-bank-probe.ts --bed --write      # …and put them in build/<game>/opensa/data
+ * npx tsx scripts/debug/audio-bank-probe.ts --bed --write --out build/phone   # …or beside another pak
  * ```
  */
 
@@ -79,12 +80,17 @@ function draftBed(index: OsaudioIndex, game: string): void {
 
     return;
   }
-  const data = join(process.cwd(), 'build', game, 'opensa', 'data');
-  if (!existsSync(data)) {
-    console.log(`[bank-probe] no built tree at build/${game}/opensa/data — build one first, nothing written`);
+  // `--out` here is the GAME DIR the console reads, which is not one fixed path: `?src=build/original`
+  // resolves its game dir beside the pak, and a phone build routinely lives at `build/phone`. Default to
+  // the field-run layout and let the operator name the other one rather than guess.
+  const tree = flag('--out') ?? join('build', game, 'opensa');
+  if (!existsSync(tree)) {
+    console.log(`[bank-probe] no tree at '${tree}' — pass --out <game dir>, nothing written`);
 
     return;
   }
+  const data = join(tree, 'data');
+  mkdirSync(data, { recursive: true });
   const out = join(data, 'audio-events.dat');
   writeFileSync(out, text, 'utf8');
   console.log(`[bank-probe] wrote ${out} — deleting it restores silence, the stock game ships no such file`);

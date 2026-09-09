@@ -1,7 +1,7 @@
 import { decodeOsaudio } from '@opensa/engine-formats';
 import { buildAudioIndex, openAudioRanges } from '@opensa/opensa-pack/audio-index';
 import { openGameDir } from '@opensa/opensa-pack/game-fs';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { gameArg, gameDir } from '../lib/game';
@@ -17,7 +17,13 @@ import { gameArg, gameDir } from '../lib/game';
  * It reads 4 804 bytes a bank and never opens a package — `SCRIPT` alone is 304.9 MB — and it decodes what
  * it wrote, because an index that encodes and cannot be read back is the one failure a byte count hides.
  *
- * Run: `npx tsx scripts/debug/audio-index-bake.ts [--game original] [--dir <tree>] [--out <file>]`
+ * **`--pak <dir>` puts the result into a pak that was built without one**, which is the whole reason this
+ * flag exists: a pak from before the audio stage carries no `audio.osaudio` and no `audio` field in its
+ * manifest, so the console loads nothing however good the event table is — and the honest fix, a rebuild,
+ * is ten minutes to an hour on the device that has the game. This writes the same two things the pack
+ * writes, from the same function, and the pack's next run overwrites them identically.
+ *
+ * Run: `npx tsx scripts/debug/audio-index-bake.ts [--game original] [--dir <tree>] [--out <file>] [--pak <dir>]`
  */
 
 function flag(name: string): string | undefined {
@@ -72,11 +78,38 @@ function main(): void {
     console.log(`  longest sound ${longest.durationSeconds.toFixed(1)}s at ${longest.sampleRate} Hz`);
   }
 
+  const pak = flag('--pak');
+  if (pak !== undefined) {
+    patchPak(pak, bake);
+  }
   const out = flag('--out');
   if (out) {
     writeFileSync(out, bake.bytes);
     console.log(`  wrote ${out}`);
   }
+}
+
+/**
+ * Put an index into an existing pak: the file beside the manifest, and the manifest's own `audio` field.
+ *
+ * Both halves are needed and the second is the one that is easy to forget — `loadAudio` reads the manifest
+ * FIRST and answers "this build has no audio" without ever looking for the file.
+ */
+function patchPak(pak: string, bake: { bytes: Uint8Array; manifest: Record<string, unknown> }): void {
+  const manifestPath = join(pak, 'manifest.json');
+  if (!existsSync(manifestPath)) {
+    console.log(`[audio-index] no manifest.json in '${pak}' — nothing patched`);
+
+    return;
+  }
+  writeFileSync(join(pak, String(bake.manifest.file)), bake.bytes);
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
+  manifest.audio = { ...bake.manifest };
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  console.log(
+    `[audio-index] patched ${pak}: ${String(bake.manifest.file)} written and manifest.audio set — ` +
+      `the pack's next run writes exactly the same two things`,
+  );
 }
 
 main();
