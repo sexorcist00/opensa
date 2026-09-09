@@ -57,6 +57,14 @@ function stats(overrides: Partial<EngineStats> = {}): EngineStats {
 
 const CONTEXT = {
   app: 'test',
+  audio: {
+    absence: { names: 0, noIndex: false, noSource: false, packages: 0, reasons: [], sounds: 0 },
+    arm: 'on' as const,
+    availability: 'waiting' as const,
+    clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
+    resumesRefused: 0,
+    voices: null,
+  },
   boot: { gpuMs: 0, openMs: 0, overlapMs: 0, phases: [] },
   build: 'original@test',
   byCategory: {},

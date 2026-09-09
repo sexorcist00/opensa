@@ -31,6 +31,17 @@ export function engineToGta(point: EnginePoint): [number, number] {
   return [point[0], -point[2]];
 }
 
+/**
+ * Engine point → the full GTA point, HEIGHT KEPT.
+ *
+ * {@link engineToGta} drops it because everything drawn on a map lives on the ground. The audio listener does
+ * not: it is the camera, and its altitude is exactly what makes a city quiet from 900 m up (203's decision
+ * 2.3). Same conversion, one axis more.
+ */
+export function engineToGta3(point: EnginePoint): [number, number, number] {
+  return [point[0], -point[2], point[1]];
+}
+
 /** Ground distance between two GTA points, in world units (≈ metres in SA). */
 export function gtaDistance(a: GtaGround, b: GtaGround): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1]);

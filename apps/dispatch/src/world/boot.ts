@@ -34,7 +34,7 @@ import type { HistoryStats } from '../ops/history';
 import type { Operations, Selection } from '../ops/types';
 
 import { Beacons } from '../map/beacons';
-import { engineToGta, gtaToEngine } from '../map/coords';
+import { engineToGta, engineToGta3, gtaToEngine } from '../map/coords';
 import { bindGestures } from '../map/gestures';
 import { bindKeys, type KeyboardInput } from '../map/keys';
 import {
@@ -63,6 +63,7 @@ import {
   type WorldClockSource,
   type WorldTimeAnchor,
 } from '../ops/world-clock';
+import { DispatchAudio } from './audio';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
 import { captureAblation } from './capture-ablation';
@@ -435,6 +436,25 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   // A backgrounded tab is suspended by Android, and a window that lost the foreground files exactly like one
   // that did not — which is what cost 2026-08-31 the only flight with the world resident (201/9, §6).
   const visibility = new VisibilityWatch(document, () => performance.now());
+  // 203/6-01: the console hears the world. The context is built suspended and woken by ANY first touch —
+  // there is no gate screen on either surface — and the ear is the CAMERA rather than the ground focus, so
+  // altitude is quiet on purpose. It ticks on its own clock, because the render gate takes drawn frames to
+  // zero at rest and a city that stops when you stop panning is not a city.
+  const audio = new DispatchAudio(params);
+  const detachAudioGestures = audio.attach(window);
+  audio.start(() => {
+    const state = camera.state(canvasAspect(canvas));
+    // Engine space is x-right / y-UP / z-south; GTA is x-east / y-north / z-up, which is what every zone,
+    // unit and sound position in this app is stated in (`map/coords.ts`). One conversion, here, so the
+    // spatial model never sees two coordinate systems.
+    const ear = engineToGta3(state.eye);
+    const ahead = engineToGta3(state.target);
+    const forward = unit([ahead[0] - ear[0], ahead[1] - ear[1], ahead[2] - ear[2]]);
+
+    // Right is forward × up with up = +Z, which for a unit forward is (fy, -fx, 0). Taken from the camera's
+    // own vectors rather than from its yaw, so this cannot drift from whatever north-up comes to mean.
+    return { forward, position: ear, right: unit([forward[1], -forward[0], 0]) };
+  });
   if (pinnedBox) {
     // The BOX, never the buffer: both canvases go on sizing their stores from what they are displayed in,
     // so the symbology is still drawn in its own coordinates and the pin costs it nothing. Absolute
@@ -1155,6 +1175,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
         idleTimer = null;
       }
       unbind();
+      detachAudioGestures();
+      audio.stop();
       errorLog.dispose();
       beacons.dispose();
       unitModels.dispose();
@@ -1192,6 +1214,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
 
       return inventory.report({
         app: appBuild(),
+        audio: audio.report(),
         boot: { gpuMs, openMs, overlapMs, phases: engine.bootPhases.byName },
         build: world.label,
         byCategory: engine.ledger(),
@@ -1630,11 +1653,6 @@ async function readTimecyc(gameDir: string): Promise<null | TimecycSource> {
   });
 }
 
-/**
- * Walk the open calls in the order the queue shows them, selecting and flying to each. The step is taken
- * from the CURRENT selection, so an operator working a call and pressing "next" gets the one after it
- * rather than the one after wherever they last looked.
- */
 function stepCall(
   host: { camera: MapCamera; options: BootOptions; zoomLevel: (level: ZoomLevel) => void },
   step: number,
@@ -1678,4 +1696,16 @@ async function streamedWorld(engine: Engine, params: URLSearchParams, opened: Op
     label: setup.buildTime ?? 'unknown',
     reach: numberParam(params, 'lod', DEFAULT_LOD_RADIUS),
   };
+}
+
+/**
+ * Walk the open calls in the order the queue shows them, selecting and flying to each. The step is taken
+ * from the CURRENT selection, so an operator working a call and pressing "next" gets the one after it
+ * rather than the one after wherever they last looked.
+ */
+/** A unit vector, or the zero vector unchanged — a listener at its own target has no direction to face. */
+function unit(vector: [number, number, number]): [number, number, number] {
+  const length = Math.hypot(vector[0], vector[1], vector[2]);
+
+  return length === 0 ? vector : [vector[0] / length, vector[1] / length, vector[2] / length];
 }

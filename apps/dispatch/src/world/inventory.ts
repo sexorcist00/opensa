@@ -31,6 +31,7 @@
 import type { EngineStats, FrameSpanTotals, PakTrafficKind, StreamStats } from '@opensa/engine';
 
 import type { MapProjection } from '../map/map-camera';
+import type { DispatchAudioReport } from './audio';
 import type { CssBoxExtremes } from './capture-box';
 import type { VisibilityReport } from './capture-visibility';
 import type { FrameIntervalKind } from './frame-clock';
@@ -99,6 +100,17 @@ export interface InventoryReport {
    *  running": three captures on 2026-08-26 were taken of an app the device had never updated to, and only
    *  a missing field gave it away. A trailing `+` means the tree was dirty when it was built. */
   readonly app: string;
+  /** Between-frame named work, mean ms per sampled frame, descending. Empty means nothing was wrapped. */
+  /**
+   * What could be HEARD, and what could not (203/3-04, 6-01).
+   *
+   * **A silent world and a broken one look identical from outside**, which is the defect class that cost
+   * three days in September when every unit in the demo was drawn by nothing. So the report states the arm,
+   * what the browser allows (`waiting` until a touch, `running` after one), the audio tick's own cost
+   * against its 2 ms budget, the voices in flight, and every absence — counted exactly and the first ones
+   * named.
+   */
+  readonly audio: DispatchAudioReport;
   /** What the BOOT cost, before a frame existed. `gpuMs` is `engine.init` end to end; `phases` is its own
    *  split — device / canvas / pipelines / resources / sky-lut / targets (201/4-03). `openMs` is the pak's
    *  engine-free half (the `?src=` probe, the manifest, the worker's IO probe), which runs BESIDE the GPU,
@@ -235,7 +247,6 @@ export interface InventoryReport {
    * the capture's note from `termux-battery-status`, which is the only reader on that device that has it.
    */
   readonly power: PowerReport;
-  /** Between-frame named work, mean ms per sampled frame, descending. Empty means nothing was wrapped. */
   /**
    * The half of the drawn frames whose interval was NOT a frame time (201/3-05): the previous loop pass was
    * skipped, so the gap is mostly the render gate's 100 ms idle wait. Reported rather than dropped, because
@@ -596,6 +607,8 @@ export class FrameInventory {
   report(context: {
     /** `__APP_BUILD__` — which commit this bundle is. */
     app: string;
+    /** What could be heard and what could not — `DispatchAudio.report()` (203/6-01). */
+    audio: DispatchAudioReport;
     /** `performance.now()` around `engine.init`, plus the engine's own phase split of it — and what the
      *  pak open beside it cost and hid. */
     boot: { gpuMs: number; openMs: number; overlapMs: number; phases: readonly (readonly [string, number])[] };
@@ -657,6 +670,7 @@ export class FrameInventory {
 
     return {
       app: context.app,
+      audio: context.audio,
       boot: context.boot,
       build: context.build,
       bytes: context.bytes,
