@@ -21,6 +21,28 @@ export type AudioAvailability =
   /** The context exists and is asleep. **A touch anywhere wakes it**, and the chrome should say so. */
   | 'waiting';
 
+/** One channel of samples, as the context holds them. */
+export interface AudioBufferLike {
+  copyToChannel(source: Float32Array, channelNumber: number): void;
+  readonly duration: number;
+  readonly length: number;
+  readonly numberOfChannels: number;
+  readonly sampleRate: number;
+}
+
+/** A playing sample. Single-use by the API's own rule: a stopped source is never started again. */
+export interface AudioBufferSourceLike extends AudioNodeLike {
+  buffer: AudioBufferLike | null;
+  loop: boolean;
+  loopEnd: number;
+  loopStart: number;
+  /** Typed to the DOM's own shape rather than `() => void`, so a real `AudioBufferSourceNode` satisfies it. */
+  onended: ((event: Event) => void) | null;
+  readonly playbackRate: AudioParamLike;
+  start(when?: number, offset?: number): void;
+  stop(when?: number): void;
+}
+
 /**
  * The slice of `AudioContext` this package uses, and nothing wider.
  *
@@ -31,11 +53,23 @@ export type AudioAvailability =
 export interface AudioContextLike {
   addEventListener(type: 'statechange', listener: () => void): void;
   close(): Promise<void>;
+  createBuffer(numberOfChannels: number, length: number, sampleRate: number): AudioBufferLike;
+  createBufferSource(): AudioBufferSourceLike;
+  createGain(): GainLike;
+  createStereoPanner(): StereoPannerLike;
   readonly currentTime: number;
+  /** Where a voice's chain ends. */
+  readonly destination: AudioNodeLike;
   removeEventListener(type: 'statechange', listener: () => void): void;
   resume(): Promise<void>;
   readonly sampleRate: number;
-  readonly state: 'closed' | 'running' | 'suspended';
+  /**
+   * **`interrupted` is not a typo and not ours** — it is a real `AudioContextState` on Apple's platforms,
+   * entered when a phone call or Siri takes the audio hardware away, and the conformance test is what found
+   * it missing here. A host that did not know the state would have read an interrupted context as a
+   * suspended one by luck rather than by rule.
+   */
+  readonly state: 'closed' | 'interrupted' | 'running' | 'suspended';
   suspend(): Promise<void>;
 }
 
@@ -63,8 +97,29 @@ export interface AudioHostState {
   readonly sampleRate: number;
 }
 
+/** Anything a voice can connect to. */
+export interface AudioNodeLike {
+  connect(destination: AudioNodeLike): unknown;
+  disconnect(): void;
+}
+
+/** The one property of `AudioParam` this package sets. Ramps are 4/02's business, not the pool's. */
+export interface AudioParamLike {
+  value: number;
+}
+
+/** A volume control. */
+export interface GainLike extends AudioNodeLike {
+  readonly gain: AudioParamLike;
+}
+
 /** What a first touch can be wired to — `window`, the console's root element, the game's canvas. */
 export interface GestureTarget {
   addEventListener(type: string, listener: () => void, options?: { passive?: boolean }): void;
   removeEventListener(type: string, listener: () => void): void;
+}
+
+/** Left/right placement, -1..1 — the only direction two ears can hear, and the cheap node that gives it. */
+export interface StereoPannerLike extends AudioNodeLike {
+  readonly pan: AudioParamLike;
 }

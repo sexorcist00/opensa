@@ -3,51 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AudioContextLike, GestureTarget } from './audio-host.interface';
 
 import { AudioHost } from './audio-host';
-
-/** A context under the test's control, driven through the same lifecycle a browser drives. */
-class FakeContext implements AudioContextLike {
-  currentTime = 0;
-  refuseResume = false;
-  sampleRate = 48_000;
-  state: 'closed' | 'running' | 'suspended' = 'suspended';
-  private readonly listeners = new Set<() => void>();
-
-  addEventListener(_type: 'statechange', listener: () => void): void {
-    this.listeners.add(listener);
-  }
-
-  close(): Promise<void> {
-    this.moveTo('closed');
-
-    return Promise.resolve();
-  }
-
-  removeEventListener(_type: 'statechange', listener: () => void): void {
-    this.listeners.delete(listener);
-  }
-
-  resume(): Promise<void> {
-    if (this.refuseResume) {
-      return Promise.reject(new Error('play() failed because the user did not interact with the document first'));
-    }
-    this.moveTo('running');
-
-    return Promise.resolve();
-  }
-
-  suspend(): Promise<void> {
-    this.moveTo('suspended');
-
-    return Promise.resolve();
-  }
-
-  private moveTo(state: 'closed' | 'running' | 'suspended'): void {
-    this.state = state;
-    for (const listener of [...this.listeners]) {
-      listener();
-    }
-  }
-}
+import { FakeAudioContext } from './test/fake-context';
 
 /** A gesture target that counts what is listening to it, so "attached once" is assertable. */
 class FakeTarget implements GestureTarget {
@@ -121,7 +77,7 @@ describe('AudioHost', () => {
     it('COUNTS a refused resume and keeps the gesture wired, since the page can still be woken', async (): Promise<void> => {
       // The failure this separates: a browser that turned the gesture down looks exactly like a page nobody
       // has touched, and a host that unsubscribed on the first attempt could never be woken again.
-      const context = new FakeContext();
+      const context = new FakeAudioContext();
       context.refuseResume = true;
       const log = vi.fn();
       const host = new AudioHost({ createContext: (): AudioContextLike => context, log });
@@ -139,7 +95,7 @@ describe('AudioHost', () => {
     });
 
     it('refuses to resume once disposed, and disposing twice is not an error', async (): Promise<void> => {
-      const context = new FakeContext();
+      const context = new FakeAudioContext();
       const host = new AudioHost({ createContext: (): AudioContextLike => context });
 
       await host.dispose();
@@ -151,7 +107,7 @@ describe('AudioHost', () => {
     });
 
     it('survives a context that refuses to close', async (): Promise<void> => {
-      const context = new FakeContext();
+      const context = new FakeAudioContext();
       context.close = (): Promise<void> => Promise.reject(new Error('already torn down'));
       const host = new AudioHost({ createContext: (): AudioContextLike => context });
 
@@ -162,7 +118,7 @@ describe('AudioHost', () => {
 
   describe('positive cases', () => {
     it('starts suspended and says it is waiting for a touch, carrying the rate', () => {
-      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeContext() });
+      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeAudioContext() });
 
       expect(host.state).toEqual({
         availability: 'waiting',
@@ -173,7 +129,7 @@ describe('AudioHost', () => {
     });
 
     it('READS a context that is already running rather than assuming it is not', () => {
-      const context = new FakeContext();
+      const context = new FakeAudioContext();
       context.state = 'running';
 
       const host = new AudioHost({ createContext: (): AudioContextLike => context });
@@ -182,7 +138,7 @@ describe('AudioHost', () => {
     });
 
     it('wakes on the first pointer gesture and drops the listeners once sound is on', async (): Promise<void> => {
-      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeContext() });
+      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeAudioContext() });
       const target = new FakeTarget();
       host.attachGestures(target);
 
@@ -195,7 +151,7 @@ describe('AudioHost', () => {
     });
 
     it('wakes on a key too — the keyboard half of the cross-platform rule', async (): Promise<void> => {
-      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeContext() });
+      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeAudioContext() });
       const target = new FakeTarget();
       host.attachGestures(target);
 
@@ -206,7 +162,7 @@ describe('AudioHost', () => {
     });
 
     it('attaches once however many times it is asked, so a remount cannot double the wiring', async (): Promise<void> => {
-      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeContext() });
+      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeAudioContext() });
       const target = new FakeTarget();
 
       host.attachGestures(target);
@@ -219,7 +175,7 @@ describe('AudioHost', () => {
     });
 
     it('tells `suspended` from `waiting` — one ran and stopped, the other never started', async (): Promise<void> => {
-      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeContext() });
+      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeAudioContext() });
 
       await host.resume();
       await host.suspend();
@@ -228,7 +184,7 @@ describe('AudioHost', () => {
     });
 
     it('notifies a subscriber when the state moves, and not when it does not', async (): Promise<void> => {
-      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeContext() });
+      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeAudioContext() });
       const seen: string[] = [];
       const stop = host.subscribe((state) => seen.push(state.availability));
 
@@ -243,7 +199,7 @@ describe('AudioHost', () => {
     });
 
     it('detaches on request, and a detached target no longer wakes it', async (): Promise<void> => {
-      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeContext() });
+      const host = new AudioHost({ createContext: (): AudioContextLike => new FakeAudioContext() });
       const target = new FakeTarget();
 
       const detach = host.attachGestures(target);

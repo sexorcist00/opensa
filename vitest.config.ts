@@ -14,6 +14,7 @@ export default defineConfig({
         'packages/**/*.interface.ts',
         'packages/renderware/src/test-utils.ts',
         'packages/engine/src/test/**', // the fake GPUDevice — test infrastructure, not product code (plan 077)
+        'packages/audio/src/test/**', // the fake AudioContext — the same, for plan 203
         'apps/web/src/standalone/**', // dev-only viewer entry scripts
 
         // === COVERED BY THE PLAYWRIGHT E2E LANE (not by headless node units) ===

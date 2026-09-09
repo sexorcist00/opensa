@@ -169,6 +169,12 @@ export class AudioHost {
     if (this.context.state === 'running') {
       return 'running';
     }
+    // `interrupted` (Apple only) is a context the hardware was taken from mid-play — a phone call, Siri. It
+    // ran and stopped, which is exactly `suspended` to a surface drawing an indicator, and the resume that
+    // fixes it is the same one.
+    if (this.context.state === 'interrupted') {
+      return 'suspended';
+    }
 
     return this.everRan ? 'suspended' : 'waiting';
   }
