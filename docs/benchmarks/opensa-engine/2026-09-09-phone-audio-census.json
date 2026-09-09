@@ -189,5 +189,25 @@
     "pcmAgainstBudget": "364.1 MB total against the chain 64 MB audio budget (5.7x) — range fetching is not optional",
     "whereThePcmIs": "SCRIPT 304.9 MB / 218 banks (83.7%) · SPC_* 32.0 MB / 5 banks · FEET+GENRL+PAIN_A 28.9 MB / 147 banks",
     "zonesAreOneFile": "all 155 AUZO zones live in audiozon.ipl; no other IPL in gta.dat carries the section"
+  },
+  "indexBake": {
+    "what": "What `audio.osaudio` COSTS, measured on the same tree the census read (203/2-01) — `scripts/debug/audio-index-bake.ts`.",
+    "bytes": 154228,
+    "kB": 150.6,
+    "bakeSeconds": 2.3,
+    "bytesPerSound": 17.4,
+    "addresses": "364.1 MB of PCM · 255.2 minutes of sound",
+    "shareOfWhatItAddresses": "0.040 %",
+    "longestSound": "7.0 s at 8 000 Hz",
+    "predictionCheck": "the plan predicted ~154 kB from the arithmetic (28 + strings + 9x4 + 370x16 + 8857x16 + 155x36) before the run; it came back 154 228 bytes"
+  },
+  "loopCensus": {
+    "what": "Every looping sound at least a second long — the evidence 4/02's blocked question needs (`audio-bank-probe --loops`).",
+    "looping": 351,
+    "atLeastOneSecond": 172,
+    "longest": "5.25 s (SCRIPT bank 255 slot 0, 12 000 Hz)",
+    "longestInGENRL": "4.97 s x8 (bank 82, 32 000 Hz — eight loops of identical length, which reads as a set)",
+    "whatItSettles": "The SFX banks DO carry enough loops to assemble a bed. What they do NOT carry is a long pre-mixed track: nothing loops longer than 5.25 s, so an assembled ambience is short loops layered and crossfaded rather than an authored mix played back.",
+    "exported": "Four candidates written as WAVs to the phone for the operator to hear: banks 82/0, 84/0, 137/0, 65/0."
   }
 }
