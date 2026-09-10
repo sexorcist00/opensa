@@ -255,20 +255,42 @@ Directive 6 again: the claim is measurable or it is a mood.
 
 ---
 
-## 6. The design tree — what only the operator can answer
+## 6. The rounds, and what they settled
 
-Everything above is research. These are the decisions, and they go to the Ask Menu:
+**Asked and answered 2026-09-10** through the Ask Menu, in four rounds worked as a design tree. This is the
+record of record; the reasoning behind each recommendation is above.
 
-1. **The asset source.** Synthesis-only, synthesis + an authored overlay, or authored files from the start?
-2. **The console-only set.** All three of §2b, only `MAP_LIMIT`, or none — a console silent about itself?
-3. **Where the vocabulary lives.** A contract doc both repositories are built against (and PCAD implements
-   it), or a console-side table for now with the contract written when phase 3 arrives?
-4. **Default on or off.** An audio system nobody enables protects nobody; one that surprises an operator on a
-   shared voice channel is worse. G8's redundancy is what makes "on" defensible — but it is a product call.
-5. **How much of §4 is in scope now**, and in what order. G1–G3 are small and structural; G4–G7 are a chain of
-   their own.
+| # | Decision | The answer |
+| --- | --- | --- |
+| 1.1 | Where panel sounds come from | **Our own set, most of it reused from PCAD's.** Not synthesis-only — the two surfaces must sound like one product |
+| 1.2 | Where the vocabulary lives | **A contract both repositories are built against, AND PCAD is fixed now** rather than at phase 3 |
+| 1.3 | Default state | **Everything on.** Both buses audible from the first load |
+| 2.1 | Who raises an event | **Each CATEGORY has exactly one owner and one source of truth.** Either side may forward an event to the other, and the receiver DISPLAYS it. This is better than the three options offered — it removes deduplication as a problem rather than solving it, because no event ever has two sources |
+| 2.2 | Delivery | **In the app bundle.** The set is small and belongs to the APP rather than to a world build, so 4.1's argument does not reach it — and it answers G5 (latency) and the reliability half at once |
+| 2.3 | The PCAD fix, in full | **All three**: the explicit sound field instead of title-matching, the four missing events, and splitting the priority tones |
+| 2.4 | Build order | **One chain**, mixer and panel together — against the recommendation, which was to ship the mixer first because G1 is a live defect. The trade accepted is a longer stretch before anything is shippable |
+| 3.1 | The categories | **Three: `world` / `map` / `cad`** — three buses, three levels, three owners, and ducking gets a clear meaning (`cad` ducks `world`, never the reverse) |
+| 3.2 | Both surfaces open on one machine | **The category's OWNER makes the sound.** A forwarded event is displayed and not voiced, so an operator with the game and the browser open never hears one alert twice with two different delays |
+| 3.3 | Before phase 3 | **The mock plays PCAD's part** — `stepOperations` raises `cad` events through the same seam PCAD will, since 202 already calls it a fake implementation of the real interface. At phase 3 the mock switches off and no audio code changes |
+| 3.4 | Is anything unmutable | **A FLOOR, not an exemption.** Taking `cad` to zero makes the panic button and the lost link quiet rather than silent, and the interface says so rather than surprising anyone |
+| 3.5 | Provenance of PCAD's 27 files | **The user's own or commissioned — publishable.** To be recorded in `docs/contracts/` in the same change, because it is written nowhere today and in six months there is nobody left to ask |
+| 3.6 | How the PCAD fix lands | **A branch and a pull request** in `sexorcist00/pcad`, reviewed and merged by the user. Changes to somebody's running system do not arrive silently in `main` |
+| 4.1 | What is in `map` | **Units and incidents** — see the reading below |
 
----
+### The category split, as read back rather than quoted
+
+**This one is an interpretation and it needs confirming**, because the question was asked twice and answered
+both times with *units and incidents* — which the first framing had put in `cad`. Asking a third time would
+be deafness rather than diligence, so here is the reading the three answers actually support:
+
+| Category | Owner | What it is | Why it owns it |
+| --- | --- | --- | --- |
+| **`world`** | us | engines, sirens, the ambience bed | Derived from the pak and from positions. Already built |
+| **`map`** | us | **the lifecycle of units and incidents AS THE MAP SEES IT** — an incident appears, a unit arrives on scene, a unit stops reporting, a call closes | The console holds the whole board and renders it, so it OBSERVES these transitions. PCAD does not necessarily raise them at all — nothing in `interface_sound_triggers` marks an arrival or a clearance |
+| **`cad`** | PCAD | **what only the plugin can know** — the panic press, an ALPR hit, the simplex handshake, radio keying, a direct message, the link state | None of it is visible in `Operations`; the console could not derive one of these if it tried |
+
+The line between the last two is *can the console see it in the board it already holds*. That is a test with
+an answer rather than a taste, which is what makes it safe to hand to the next agent.
 
 ## 7. The go/no-go
 
