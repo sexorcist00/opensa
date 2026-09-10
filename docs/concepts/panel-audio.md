@@ -76,21 +76,64 @@ Split by **who owns the event**, which is the split that survives phase 3.
 
 ### 2a. Shared with PCAD — the work
 
-Grounded in what PCAD's backend already publishes (202 §1: Unit, TacticalAssist, RMS, Radio services; status
-broadcast every 15 s; heartbeat 20 s; a unit stale at 300 s).
+**This section was a guess until 2026-09-10 and is now a reading.** `sexorcist00/pcad` was cloned and its
+client read: **PCAD already has a panel-sound system**, with files, a volume, a settings key and a nine-entry
+event vocabulary. Nothing here needs inventing — it needs adopting.
 
-| Name | The event | Why it earns a sound |
-| --- | --- | --- |
-| `CAD_CALL_NEW_P1` / `_P2` / `_P3` | a call arrives | **Priority-coded, three distinct tones.** [DESIGN.md](../../apps/dispatch/DESIGN.md) already encodes priority three ways in the visuals and says *"this is the rule for any state the console adds later"* — a single chime for all three would be the one channel that throws the priority away |
-| `CAD_UNIT_PANIC` | a unit hits the panic button | The one sound that must never be missed, never stolen, and audible over everything |
-| `CAD_CALL_ASSIGNED` | a unit is committed to a call | Confirms an action whose effect is off-screen |
-| `CAD_CALL_CLEARED` | a call closes | Closes the loop the arrival opened |
-| `CAD_UNIT_STATUS` | a status change | The board's steady heartbeat; the quietest thing here |
-| `CAD_UNIT_STALE` | a unit stops reporting (300 s) | A silent unit looks identical to a parked one |
-| `CAD_BOLO_NEW` | a BOLO is posted | Board-wide, everyone's business |
-| `CAD_RADIO_TX` / `_RX` | the key-up / key-down click | **Not voice.** 202 §7 says the console does not become a radio; a click is not voice, and it is what makes a radio feel like a radio |
-| `CAD_MESSAGE` | a direct message to this dispatcher | |
-| `CAD_LINK_LOST` / `CAD_LINK_BACK` | the WebSocket dropped or came back | **The sharpest reliability requirement in the product.** A dispatcher working a frozen board that looks live is the worst failure this system has, and it is the one alert that should sound even when everything else is muted |
+#### What PCAD actually has
+
+`client/moonloader/cad_system/cadui.lua` carries a **two-level indirection that is the same shape as ours**:
+a trigger name resolves to a sound id, and a sound id resolves to a file. `audio-events.dat` maps a name to a
+bank and a slot the same way. The two designs met independently, which is the signal 202 already trusts about
+the map seam.
+
+```lua
+local interface_sound_triggers = {
+    notification     = "insert_07",        alpr_hit         = "outro_01",
+    panic_button     = "panic_button",     assist_request   = "priority_start",
+    simplex_request  = "insert_07",        simplex_accepted = "simplex_accept",
+    simplex_declined = "simplex_decline",  call_created     = "dispatch_intro_02",
+    incident_created = "insert_02",
+}
+```
+
+Twenty-seven files under `cad_system/resource/sound/` (~2.9 MB): `DISPATCH_INTRO_01/02`, `INSERT_01..07`,
+`INTRO_01/02`, `OUTRO_01..03`, `IN_01/02`, `OFFICER_INTRO_01/02`, `SIMPLEX_ACCEPT/DECLINE`,
+`SirenSwitch`, `SirenToggle`, `PANIC_BUTTON.mp4`, and **`priority_start` / `priority_middle` / `priority_end`**
+— the classic three-part priority-tone structure. A separate `_cadparserradio.lua` loads an *Immersive Radio*
+RTO/CPD voice library (`AI_OFFICER_REQUEST_BACKUP`, `ATTENTION_THIS_IS_DISPATCH_HIGH`, `ROGER`, `TRAFFIC_STOP`
+…) from the player's own MoonLoader tree.
+
+There is already a master volume (`settings.set('audio_settings', 'master_volume', …)`) and a mute icon in the
+UI, so **G7's persistence is solved on that side and not on ours**.
+
+#### Three things the reading found that a guess would not have
+
+1. **`alpr_hit` and the `simplex_*` handshake exist and were not in the guessed list.** An automatic
+   licence-plate hit and a request/accept/decline exchange are real dispatch events with real sounds already
+   assigned.
+2. **The priority tones are ASSETS but not a priority.** `priority_start` is wired to `assist_request`;
+   `priority_middle` and `priority_end` are loaded and never played. The three-part structure a dispatch
+   console wants is sitting there unused.
+3. **The trigger is resolved by string-matching the notification TITLE**, and that is fragile in a way worth
+   fixing rather than copying:
+
+   ```lua
+   if title_lc:find("assistance request", 1, true) then return "assist_request" end
+   ```
+
+   Reword a title, translate it, or fix a typo in it, and the sound stops — silently, with the notification
+   still appearing. A shared contract that names the event explicitly is the fix, and it is a reason for the
+   contract that has nothing to do with our map.
+
+#### What PCAD does NOT have, and a dispatcher needs
+
+| Missing | Why it matters |
+| --- | --- |
+| **`link_lost` / `link_back`** | A dispatcher working a frozen board that looks live is the worst failure this product has. Nothing sounds when the WebSocket drops |
+| **`unit_stale`** | The backend marks a unit stale at 300 s; a silent unit looks identical to a parked one |
+| **call priority** | `call_created` is one sound for P1 and P3 alike, while [DESIGN.md](../../apps/dispatch/DESIGN.md)'s rule is that priority is carried by every channel that carries anything. The assets for it are already on disk |
+| **`bolo_new`** | 202 lists BOLO as a module; no trigger for it |
 
 ### 2b. Console-only — the map
 
@@ -106,28 +149,24 @@ protects nobody. AAA restraint here means being loud about the WORK and nearly s
 
 ---
 
-## 3. Where panel sounds come from — the question with a surprising answer
+## 3. Where panel sounds come from — the question the reading reopened
 
-Three candidates, and this is where the reliability argument and the quality argument point the same way.
+The concept's first draft recommended **synthesis**, on a reliability argument: a tone that is computed cannot
+be missing, and every other failure in this chain takes a sound away. That argument still holds. What the
+reading adds is that **the other side of the shared vocabulary is not synthesised** — PCAD plays 2.9 MB of
+authored `.wav`, including voiced dispatch lines.
 
 | Source | For | Against |
 | --- | --- | --- |
-| **Synthesised in code** — oscillator + envelope | **Zero bytes, zero licence, zero fetch, zero decode, cannot 404, sample-rate independent, deterministic, and audible within one audio quantum.** It is also exactly the right timbre: a dispatch console's alert vocabulary IS tones | A tone is a tone. No radio-click character, no foley, no voice |
-| **Authored files shipped with the app** | Real character; a designer can make it feel like equipment | Licence provenance for every file; bytes in the bundle; a fetch that can fail; a new asset path in the build; and it must be resident to hit a UI latency budget |
-| **The game's own banks** | Free, already delivered, already addressed by `audio.osaudio` | **San Andreas has no dispatch tones.** Repurposing a car horn as a P1 alert is a joke, not a design |
+| **Synthesised in code** | Zero bytes, zero licence, no fetch, no decode, **cannot 404**, sample-rate independent, deterministic, audible within one audio quantum. Exactly the right timbre for tones | A tone is a tone — no voice, no equipment character. **And the console would not sound like PCAD**, which is the opposite of a shared vocabulary |
+| **PCAD's own files, served to the browser** | The two surfaces sound like ONE product. The set already exists, is already named, and is already what operators know | They live in the player's MoonLoader tree, not on a web server, so delivery is new work. **Provenance is a real question**: the RTO/CPD lines come from a third-party *Immersive Radio* pack, and a Lua script reading files a user installed is not the same act as a server distributing them |
+| **The game's own banks** | Free, already delivered, already addressed | **San Andreas has no dispatch tones.** A car horn as a P1 alert is a joke, not a design |
 
-**The recommendation is synthesis as the FLOOR, with an authored overlay as an option a deployment may ship.**
-
-That is not a compromise, it is the reliability answer: a synthesised alert **cannot be missing**. Every other
-failure mode in this repository's audio chain — no index, no game dir, a 404 on a package, a table built for
-another build — takes a sound away, and [203's own decision 4.3](../plans/203-audio/concept.md) accepts
-silence as the normal case for all of them. **A panic alert may not inherit that.** A tone that is computed
-rather than fetched has no failure mode to inherit.
-
-It is also directive 3's default: San Andreas has no panel, so there is nothing to port and nothing to match —
-the bar is simply whether it is good.
-
----
+**The recommendation is now a layered one**: synthesis as the FLOOR that cannot fail, PCAD's files as the
+VOICE where they can be delivered and their provenance is clear. That is not fence-sitting — it is the same
+shape `audio-events.dat` already has, where a name resolves to whatever this build carries and absence is a
+reported state rather than an error. A deployment that can ship the files sounds like PCAD; one that cannot
+still alerts, and says so in its report.
 
 ## 4. The eight gaps between here and AAA
 
