@@ -31,6 +31,10 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
   plays on. The stealing rule ranks WITHIN a bus, and a bus below its reserve may take a slot from one above
   its own — which is what makes *a panel alert is never refused* true rather than likely. Before this, a
   positionless alert was ranked by its bare gain against sixty-four car engines and lost.
+- **A limiter on the master** (204/1-02): hard knee, ratio 20, -6 dBFS, after the master rather than before
+  it so the operator's own volume makes it work less. Clipping is the most recognisable *not-AAA* artefact
+  there is and nothing else in the chain prevented it; `limiter.reduction` is reported because how hard the
+  mix pushes is a fact about the content.
 - **Absence is a reported state, never a throw**: no Web Audio in the environment is `unsupported`, one line
   in the log, and a host every caller can go on using.
 

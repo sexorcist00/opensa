@@ -34,6 +34,7 @@ export type {
   AudioHostState,
   AudioNodeLike,
   AudioParamLike,
+  DynamicsCompressorLike,
   GainLike,
   GestureTarget,
   StereoPannerLike,
@@ -72,6 +73,8 @@ export {
 export {
   type AudioBus,
   CAD_RESERVE,
+  LIMITER_RATIO,
+  LIMITER_THRESHOLD_DB,
   MAP_RESERVE,
   MAX_VOICES,
   type Voice,

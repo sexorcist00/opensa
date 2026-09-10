@@ -15,6 +15,7 @@ import type {
   AudioContextLike,
   AudioNodeLike,
   AudioParamLike,
+  DynamicsCompressorLike,
   GainLike,
   StereoPannerLike,
 } from '../audio-host.interface';
@@ -109,6 +110,16 @@ export class FakeBufferSource extends FakeNode implements AudioBufferSourceLike 
   }
 }
 
+/** The limiter. `reduction` is settable here so a test can play a mix that is pushing hard. */
+export class FakeCompressor extends FakeNode implements DynamicsCompressorLike {
+  readonly attack = new FakeParam();
+  readonly knee = new FakeParam();
+  readonly ratio = new FakeParam();
+  reduction = 0;
+  readonly release = new FakeParam();
+  readonly threshold = new FakeParam();
+}
+
 export class FakeGain extends FakeNode implements GainLike {
   readonly gain = new FakeParam();
 }
@@ -119,6 +130,8 @@ export class FakeStereoPanner extends FakeNode implements StereoPannerLike {
 
 /** The context itself. `refuseResume` is how a test plays the browser turning a gesture down. */
 export class FakeAudioContext implements AudioContextLike {
+  /** Every limiter ever built. The pool builds exactly one. */
+  readonly compressors: FakeCompressor[] = [];
   currentTime = 0;
   readonly destination: AudioNodeLike = { connect: () => undefined, disconnect: () => undefined };
   readonly gains: FakeGain[] = [];
@@ -148,6 +161,13 @@ export class FakeAudioContext implements AudioContextLike {
     this.sources.push(source);
 
     return source;
+  }
+
+  createDynamicsCompressor(): DynamicsCompressorLike {
+    const compressor = new FakeCompressor();
+    this.compressors.push(compressor);
+
+    return compressor;
   }
 
   createGain(): GainLike {

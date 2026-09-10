@@ -55,6 +55,7 @@ export interface AudioContextLike {
   close(): Promise<void>;
   createBuffer(numberOfChannels: number, length: number, sampleRate: number): AudioBufferLike;
   createBufferSource(): AudioBufferSourceLike;
+  createDynamicsCompressor(): DynamicsCompressorLike;
   createGain(): GainLike;
   createStereoPanner(): StereoPannerLike;
   readonly currentTime: number;
@@ -117,6 +118,26 @@ export interface AudioParamLike {
   /** A ramp needs a starting point on the timeline, which is what this pins. */
   setValueAtTime(value: number, startTime: number): unknown;
   value: number;
+}
+
+/**
+ * The limiter on the master (204/1-02).
+ *
+ * **Used as a LIMITER rather than as a musical compressor**: a hard knee, the highest ratio the API allows,
+ * and a fast attack. Its job is that a busy world plus an alert cannot produce a sample above full scale —
+ * clipping is the most recognisable *not-AAA* artefact there is, and nothing else in the chain prevents it.
+ *
+ * `reduction` is read-only and free, and it is worth reporting: it says how hard the mix is pushing, which
+ * is a number about the CONTENT rather than about the limiter.
+ */
+export interface DynamicsCompressorLike extends AudioNodeLike {
+  readonly attack: AudioParamLike;
+  readonly knee: AudioParamLike;
+  readonly ratio: AudioParamLike;
+  /** How many dB the limiter is currently taking off. Zero means it is not working. */
+  readonly reduction: number;
+  readonly release: AudioParamLike;
+  readonly threshold: AudioParamLike;
 }
 
 /** A volume control. */

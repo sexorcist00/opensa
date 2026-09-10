@@ -21,6 +21,7 @@ import type {
   AudioBufferLike,
   AudioBufferSourceLike,
   AudioContextLike,
+  DynamicsCompressorLike,
   GainLike,
   StereoPannerLike,
 } from './audio-host.interface';
@@ -56,6 +57,8 @@ export interface VoicePoolReport {
   readonly busGain: Readonly<Record<AudioBus, number>>;
   /** How many voices the pool may hold at once. */
   readonly ceiling: number;
+  /** The ceiling, and how hard the mix is pushing against it. */
+  readonly limiter: { readonly reduction: number; readonly thresholdDb: number };
   /** Playing right now. */
   readonly live: number;
   /** Playing right now, per bus — what says whether a reserve is doing anything. */
@@ -133,6 +136,27 @@ export const CAD_RESERVE = 4;
  */
 export const MAP_RESERVE = 2;
 
+/**
+ * Where the limiter starts working, in dBFS.
+ *
+ * **The arithmetic, and its honest limit.** Sixty-four uncorrelated voices sum as roughly `sqrt(64)` = 8x,
+ * which is +18 dBFS; at 24 dB over a -6 threshold and a 20:1 ratio that lands at about **-4.8 dBFS**, well
+ * under the ceiling. Sixty-four voices IN PHASE at full scale would be +36 dBFS and would still come out
+ * over — but that is not a signal, it is an arithmetic worst case, and pretending otherwise would mean
+ * squashing every real mix to protect against one that cannot occur. **204/5-01 measures the real peak on
+ * the device**, which is what decides this number rather than this comment.
+ */
+export const LIMITER_THRESHOLD_DB = -6;
+
+/** The highest ratio Web Audio allows. A limiter wants a wall, not a slope. */
+export const LIMITER_RATIO = 20;
+
+/** Fast enough to catch a transient, slow enough not to distort a bass note. */
+const LIMITER_ATTACK_SECONDS = 0.003;
+
+/** Long enough that the ceiling does not pump on every siren cycle. */
+const LIMITER_RELEASE_SECONDS = 0.25;
+
 /** The world takes what is left: it is the loudest, the most numerous, and the most replaceable. */
 const RESERVE: Readonly<Record<AudioBus, number>> = { cad: CAD_RESERVE, map: MAP_RESERVE, world: 0 };
 
@@ -175,6 +199,8 @@ export class VoicePool {
   private readonly buses: Readonly<Record<AudioBus, GainLike>>;
   private readonly ceiling: number;
   private readonly context: AudioContextLike;
+  /** The ceiling, between the master and the speakers. */
+  private readonly limiter: DynamicsCompressorLike;
   private listener: AudioListener = ORIGIN_LISTENER;
   /** Every voice passes through this one node, which is what makes volume and mute a single value. */
   private readonly master: GainLike;
@@ -190,7 +216,16 @@ export class VoicePool {
     this.context = context;
     this.ceiling = options.maxVoices ?? MAX_VOICES;
     this.master = context.createGain();
-    this.master.connect(context.destination);
+    // AFTER the master, not before: the volume an operator sets should make the limiter work LESS, and a
+    // limiter upstream of a gain is a ceiling the gain can lift the signal straight back through.
+    this.limiter = context.createDynamicsCompressor();
+    this.limiter.threshold.value = LIMITER_THRESHOLD_DB;
+    this.limiter.knee.value = 0;
+    this.limiter.ratio.value = LIMITER_RATIO;
+    this.limiter.attack.value = LIMITER_ATTACK_SECONDS;
+    this.limiter.release.value = LIMITER_RELEASE_SECONDS;
+    this.master.connect(this.limiter);
+    this.limiter.connect(context.destination);
     // Built here rather than on demand so a bus always exists to be ducked or levelled, even before anything
     // has ever played on it — 1/03 and 1/04 both reach for one that may still be empty.
     const buses = {} as Record<AudioBus, GainLike>;
@@ -236,6 +271,7 @@ export class VoicePool {
     return {
       busGain: { cad: this.buses.cad.gain.value, map: this.buses.map.gain.value, world: this.buses.world.gain.value },
       ceiling: this.ceiling,
+      limiter: { reduction: this.limiter.reduction, thresholdDb: LIMITER_THRESHOLD_DB },
       live: this.voices.size,
       liveByBus: { cad: this.countOn('cad'), map: this.countOn('map'), world: this.countOn('world') },
       masterGain: this.master.gain.value,

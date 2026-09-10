@@ -5,7 +5,7 @@ import type { FakeAudioBuffer } from './test/fake-context';
 
 import { audibleGain } from './spatial';
 import { FakeAudioContext, type FakeBufferSource, type FakeGain } from './test/fake-context';
-import { CAD_RESERVE, MAX_VOICES, VoicePool } from './voices';
+import { CAD_RESERVE, LIMITER_THRESHOLD_DB, MAX_VOICES, VoicePool } from './voices';
 
 /** A listener at the origin looking down +Y with +X to its right. */
 const AT_ORIGIN: AudioListener = { forward: [0, 1, 0], position: [0, 0, 0], right: [1, 0, 0] };
@@ -256,7 +256,9 @@ describe('VoicePool', () => {
 
       pool.setMasterGain(0.25);
 
-      expect(masterGain(context)?.connectedTo[0]).toBe(context.destination);
+      // The master reaches the speakers THROUGH the limiter (204/1-02), which is the last node in the chain.
+      expect(masterGain(context)?.connectedTo[0]).toBe(context.compressors[0]);
+      expect(context.compressors[0]?.connectedTo[0]).toBe(context.destination);
       // Every bus lands on the ONE master, so mute and volume are still a single value.
       for (const bus of ['cad', 'map', 'world'] as const) {
         expect(busGain(context, bus)?.connectedTo[0]).toBe(masterGain(context));
@@ -383,6 +385,65 @@ describe('VoicePool buses', () => {
       pool.play({ buffer: buffer(context), gain: 1, position: null });
 
       expect(pool.report().liveByBus.world).toBe(1);
+    });
+  });
+});
+
+describe('VoicePool limiter', () => {
+  describe('negative cases', () => {
+    it('sits AFTER the master, so turning the volume down really does limit less', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+
+      // Before the master, a master at 1.0 could push a limited signal back over full scale — the order is
+      // what makes the ceiling a ceiling.
+      expect(masterGain(context)?.connectedTo[0]).toBe(context.compressors[0]);
+      expect(context.compressors[0]?.connectedTo[0]).toBe(context.destination);
+      expect(pool.report().limiter.reduction).toBe(0);
+    });
+
+    it('is set as a LIMITER rather than as a musical compressor', () => {
+      const context = new FakeAudioContext();
+      new VoicePool(context);
+      const limiter = context.compressors[0];
+
+      // Values rather than the constants they came from: comparing a constant with itself passes whatever
+      // it is set to, which is how a ratio of 4 — a musical compressor, not a ceiling — would slip through.
+      expect(limiter?.knee.value).toBe(0);
+      // 20 is the highest Web Audio allows, and a limiter wants a wall rather than a slope.
+      expect(limiter?.ratio.value).toBe(20);
+      // A ceiling near the top, not a squash: below about -12 dB every real mix is being flattened.
+      expect(limiter?.threshold.value).toBeLessThan(0);
+      expect(limiter?.threshold.value).toBeGreaterThan(-12);
+      expect(limiter?.attack.value).toBeLessThanOrEqual(0.005);
+      expect(limiter?.release.value).toBeGreaterThanOrEqual(0.1);
+    });
+
+    it('builds exactly one, however many voices come and go', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      for (let at = 0; at < 10; at += 1) {
+        pool.play({ buffer: buffer(context), position: null });
+      }
+
+      expect(context.compressors).toHaveLength(1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports how hard the mix is pushing, which is a number about the CONTENT', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+
+      // `reduction` is the browser's own read-only measurement; a rising one says the world is too hot for
+      // the ceiling, which is a mixing verdict rather than a limiter fault.
+      const limiter = context.compressors[0];
+      if (limiter) {
+        limiter.reduction = -4.5;
+      }
+
+      expect(pool.report().limiter.reduction).toBe(-4.5);
+      expect(pool.report().limiter.thresholdDb).toBe(LIMITER_THRESHOLD_DB);
     });
   });
 });
