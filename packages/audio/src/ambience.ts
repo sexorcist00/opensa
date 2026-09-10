@@ -70,6 +70,9 @@ export interface AmbienceHost {
    * `startFraction` is how far through the buffer it begins, 0..1. `level` is where the bed's envelope
    * currently is; the host multiplies it by the row's own gain and hands that gain back. `null` when this
    * build cannot play the name.
+   *
+   * The bed belongs to the `world` bus, which the host names — a place's sound is the city's, not the
+   * panel's, and it is the bus an alert ducks.
    */
   startLoop(name: string, startFraction: number, level: number): Promise<AmbienceLoop | null>;
 }

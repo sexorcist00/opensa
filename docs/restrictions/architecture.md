@@ -1153,3 +1153,20 @@ ahead of a tree that never arrives.
 occurrences above look like an agent misreading a menu rather than a menu that is wrong. The only signal is
 arithmetic a reader has to do by hand — comparing what the surface offers against what the checkout contains
 — which is why it took a second occurrence to write this down.
+
+## An alert is not ranked against the world
+
+**A voice names its BUS, and a voice that names none is `world`.** The pool's stealing rule — *the quietest
+voice at the listener gives way* ([203's decision 4.2](../plans/203-audio/concept.md)) — is the right question
+to ask of the city's own sounds and the wrong one to ask across a panel alert and sixty-four car engines. So
+the rule ranks WITHIN a bus, and a bus below its reserve may take a slot from one above its own
+([204/1-01](../plans/204-panel-audio/readme.md)).
+
+**What breaks when it is violated**: a panel sound played without `bus` lands on `world` and is ranked against
+traffic. A panic alert authored below the loudest engines is then refused, and `play` answers `null`.
+
+**SILENT, and in the shape that costs most.** It is not an error, not an exception and not a dropped frame:
+`refused` goes up by one and everything else about the run is ordinary. It shipped in `main` between
+2026-09-09 and 2026-09-10 and was invisible for exactly one reason — nothing yet played a panel alert, so the
+defect had no way to happen. **A budget is what catches it**: `refusedByBus.cad` is zero, always, and a
+capture that says otherwise is a report of the bug rather than of the shift.

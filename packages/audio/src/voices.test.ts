@@ -4,8 +4,8 @@ import type { AudioListener } from './spatial';
 import type { FakeAudioBuffer } from './test/fake-context';
 
 import { audibleGain } from './spatial';
-import { FakeAudioContext, type FakeBufferSource } from './test/fake-context';
-import { MAX_VOICES, VoicePool } from './voices';
+import { FakeAudioContext, type FakeBufferSource, type FakeGain } from './test/fake-context';
+import { CAD_RESERVE, MAX_VOICES, VoicePool } from './voices';
 
 /** A listener at the origin looking down +Y with +X to its right. */
 const AT_ORIGIN: AudioListener = { forward: [0, 1, 0], position: [0, 0, 0], right: [1, 0, 0] };
@@ -25,9 +25,32 @@ function sourceOf(context: FakeAudioContext, index: number): FakeBufferSource {
   return source;
 }
 
-/** The gain of the n-th voice. The pool builds its MASTER gain first, so a voice's own is one along. */
+/**
+ * How many gain nodes the pool builds before any voice does: the master, then one a bus.
+ *
+ * Named rather than counted at each call site, because these tests reach into the graph by INDEX and the
+ * indices all moved the day the buses landed — which is the sort of brittleness worth paying once.
+ */
+const FIXED_GAINS = 1 + 3;
+
+/** One bus's gain, in the order the pool builds them. */
+function busGain(context: FakeAudioContext, bus: 'cad' | 'map' | 'world'): FakeGain | undefined {
+  return context.gains[1 + ['cad', 'map', 'world'].indexOf(bus)];
+}
+
+/** The master gain: the first node the pool ever builds. */
+function masterGain(context: FakeAudioContext): FakeGain | undefined {
+  return context.gains[0];
+}
+
+/** The gain of the n-th voice. */
 function voiceGain(context: FakeAudioContext, index: number): number {
-  return context.gains[index + 1]?.gain.value ?? Number.NaN;
+  return voiceGainNode(context, index)?.gain.value ?? Number.NaN;
+}
+
+/** The n-th voice's own gain node. */
+function voiceGainNode(context: FakeAudioContext, index: number): FakeGain | undefined {
+  return context.gains[index + FIXED_GAINS];
 }
 
 describe('VoicePool', () => {
@@ -107,9 +130,11 @@ describe('VoicePool', () => {
 
       pool.play({ buffer: buffer(context), position: [10, 0, 0] });
 
-      expect(sourceOf(context, 0).connectedTo[0]).toBe(context.gains[1]);
-      expect(context.gains[1]?.connectedTo[0]).toBe(context.panners[0]);
-      expect(context.panners[0]?.connectedTo[0]).toBe(context.gains[0]);
+      expect(sourceOf(context, 0).connectedTo[0]).toBe(voiceGainNode(context, 0));
+      expect(voiceGainNode(context, 0)?.connectedTo[0]).toBe(context.panners[0]);
+      // …and the pan reaches the master through its BUS, which is what makes a level and a duck possible.
+      expect(context.panners[0]?.connectedTo[0]).toBe(busGain(context, 'world'));
+      expect(busGain(context, 'world')?.connectedTo[0]).toBe(masterGain(context));
       expect(sourceOf(context, 0).startedAt).not.toBeNull();
       expect(context.panners[0]?.pan.value).toBe(1);
     });
@@ -203,7 +228,7 @@ describe('VoicePool', () => {
       sourceOf(context, 1).finish();
 
       expect(sourceOf(context, 0).disconnected).toBe(true);
-      expect(context.gains[2]?.disconnected).toBe(true);
+      expect(voiceGainNode(context, 1)?.disconnected).toBe(true);
     });
 
     it('RAMPS a cut voice to zero rather than stepping it — a step is a click', () => {
@@ -215,7 +240,7 @@ describe('VoicePool', () => {
 
       pool.play({ buffer: buffer(context), gain: 1, position: [0, 5, 0] });
 
-      const gain = context.gains[1];
+      const gain = voiceGainNode(context, 0);
       expect(first?.live).toBe(false);
       expect(gain?.gain.cancelledAt).toBe(5);
       expect(gain?.gain.setAt[gain.gain.setAt.length - 1]?.time).toBe(5);
@@ -231,9 +256,13 @@ describe('VoicePool', () => {
 
       pool.setMasterGain(0.25);
 
-      expect(context.gains[0]?.connectedTo[0]).toBe(context.destination);
-      expect(context.panners[0]?.connectedTo[0]).toBe(context.gains[0]);
-      expect(context.panners[1]?.connectedTo[0]).toBe(context.gains[0]);
+      expect(masterGain(context)?.connectedTo[0]).toBe(context.destination);
+      // Every bus lands on the ONE master, so mute and volume are still a single value.
+      for (const bus of ['cad', 'map', 'world'] as const) {
+        expect(busGain(context, bus)?.connectedTo[0]).toBe(masterGain(context));
+      }
+      expect(context.panners[0]?.connectedTo[0]).toBe(busGain(context, 'world'));
+      expect(context.panners[1]?.connectedTo[0]).toBe(busGain(context, 'world'));
       expect(pool.report().masterGain).toBe(0.25);
     });
 
@@ -255,6 +284,105 @@ describe('VoicePool', () => {
     it('states the budget it was built with', () => {
       expect(new VoicePool(new FakeAudioContext()).report().ceiling).toBe(MAX_VOICES);
       expect(MAX_VOICES).toBe(64);
+    });
+  });
+});
+
+describe('VoicePool buses', () => {
+  describe('negative cases', () => {
+    it('never refuses an alert, however full the world has made the pool', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      // Sixty-four engines at full scale, every one of them louder than the alert about to arrive.
+      for (let at = 0; at < MAX_VOICES; at += 1) {
+        pool.play({ buffer: buffer(context), gain: 1, position: null });
+      }
+      expect(pool.report().live).toBe(MAX_VOICES);
+
+      const alert = pool.play({ buffer: buffer(context), bus: 'cad', gain: 0.8, position: null });
+
+      // The defect this plan opened on: ranked by `audibleGain` alone, 0.8 loses to sixty-four 1.0s and
+      // `play` answers null. A dispatcher's panic button may not lose to traffic.
+      expect(alert).not.toBeNull();
+      expect(pool.report().refusedByBus.cad).toBe(0);
+    });
+
+    it('refuses a world voice quieter than every other rather than growing past the ceiling', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      for (let at = 0; at < MAX_VOICES; at += 1) {
+        pool.play({ buffer: buffer(context), gain: 1, position: null });
+      }
+
+      // Decision 4.2 is untouched INSIDE a bus: the quietest at the listener still decides.
+      expect(pool.play({ buffer: buffer(context), gain: 0.1, position: null })).toBeNull();
+      expect(pool.report().live).toBe(MAX_VOICES);
+      expect(pool.report().refusedByBus.world).toBe(1);
+    });
+
+    it('does not let one bus take another bus below its reserve', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context, { maxVoices: 8 });
+      for (let at = 0; at < CAD_RESERVE; at += 1) {
+        pool.play({ buffer: buffer(context), bus: 'cad', gain: 0.5, position: null });
+      }
+      while (pool.report().live < 8) {
+        pool.play({ buffer: buffer(context), gain: 1, position: null });
+      }
+
+      // The world is full and loud, and every cad voice is quieter — but they are its reserve.
+      expect(pool.play({ buffer: buffer(context), gain: 1, position: null })).toBeNull();
+      expect(pool.report().liveByBus.cad).toBe(CAD_RESERVE);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('puts every voice through its own bus and then the master', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.setBusGain('world', 0.5);
+
+      pool.play({ buffer: buffer(context), gain: 1, position: null });
+
+      expect(pool.report().busGain.world).toBe(0.5);
+      expect(pool.report().busGain.cad).toBe(1);
+    });
+
+    it('steals within a bus before it reaches for another one', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context, { maxVoices: 4 });
+      // The globally quietest voice is in the WORLD, and the arriving cad voice is louder than both of its
+      // own. A rule that ranked across all buses at once would take the world's 0.05; the rule tidies its
+      // own house first and takes its own 0.6.
+      pool.play({ buffer: buffer(context), gain: 0.05, position: null });
+      pool.play({ buffer: buffer(context), gain: 0.9, position: null });
+      pool.play({ buffer: buffer(context), bus: 'cad', gain: 0.6, position: null });
+      pool.play({ buffer: buffer(context), bus: 'cad', gain: 0.7, position: null });
+
+      pool.play({ buffer: buffer(context), bus: 'cad', gain: 0.8, position: null });
+
+      expect(pool.report().liveByBus).toMatchObject({ cad: 2, world: 2 });
+    });
+
+    it('counts a bus that is over its reserve as fair game for one that is under', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context, { maxVoices: 4 });
+      for (let at = 0; at < 4; at += 1) {
+        pool.play({ buffer: buffer(context), gain: 1, position: null });
+      }
+
+      expect(pool.play({ buffer: buffer(context), bus: 'cad', gain: 0.01, position: null })).not.toBeNull();
+      expect(pool.report().liveByBus).toMatchObject({ cad: 1, world: 3 });
+      expect(pool.report().steals).toBeGreaterThan(0);
+    });
+
+    it('defaults a voice that names no bus to the world, which is where the city is', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+
+      pool.play({ buffer: buffer(context), gain: 1, position: null });
+
+      expect(pool.report().liveByBus.world).toBe(1);
     });
   });
 });

@@ -27,6 +27,10 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
   RUNNING because a gesture the browser did not trust leaves the page silent. `waiting` and `suspended` are
   different states (nothing has touched the page, against it ran and stopped) and `resumesRefused` separates
   a refusal from an untouched page inside `waiting`.
+- **Three mixer buses** (204/1-01): `master → { cad, map, world }`, one gain each, and a voice names which it
+  plays on. The stealing rule ranks WITHIN a bus, and a bus below its reserve may take a slot from one above
+  its own — which is what makes *a panel alert is never refused* true rather than likely. Before this, a
+  positionless alert was ranked by its bare gain against sixty-four car engines and lost.
 - **Absence is a reported state, never a throw**: no Web Audio in the environment is `unsupported`, one line
   in the log, and a host every caller can go on using.
 

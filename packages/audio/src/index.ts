@@ -69,5 +69,14 @@ export {
   type VehicleVoice,
   VehicleVoiceTable,
 } from './vehicle-table';
-export { MAX_VOICES, type Voice, VoicePool, type VoicePoolReport, type VoiceRequest } from './voices';
+export {
+  type AudioBus,
+  CAD_RESERVE,
+  MAP_RESERVE,
+  MAX_VOICES,
+  type Voice,
+  VoicePool,
+  type VoicePoolReport,
+  type VoiceRequest,
+} from './voices';
 export { audioZoneAt, contains } from './zones';

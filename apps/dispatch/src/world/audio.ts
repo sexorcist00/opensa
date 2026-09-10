@@ -232,6 +232,9 @@ export class DispatchAudio {
 
     return this.pool.play({
       buffer,
+      // Everything reached through the event table is the CITY: the ambience bed, a unit's engine, a horn.
+      // The panel's own categories arrive on their own buses (204/2-03), never through here.
+      bus: 'world',
       falloff: event.falloff,
       gain: event.gain * (options.gainScale ?? 1),
       loop: event.loop,

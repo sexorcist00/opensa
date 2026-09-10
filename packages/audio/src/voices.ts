@@ -28,6 +28,20 @@ import type { AudioListener, Falloff, Vec3 } from './spatial';
 
 import { audibleGain, DEFAULT_FALLOFF, panFor } from './spatial';
 
+/**
+ * Which mixer bus a voice belongs to, and it is also who OWNS the event (204's decision 3.1).
+ *
+ * - `world` — the city: engines, sirens, the ambience bed. Ours, derived from the pak and from positions.
+ * - `map` — what the console SEES on the board: an incident appears, a unit arrives, a unit goes quiet.
+ * - `cad` — what only PCAD can know: the panic press, an ALPR hit, the link state.
+ *
+ * **Three buses exist so that the stealing rule can stay what decision 4.2 made it.** *The quietest voice at
+ * the listener is stolen* is the right rule among the WORLD's own sounds, which is what it was written about;
+ * applying it across a panel alert and sixty-four car engines is not a harsher version of that rule, it is a
+ * different question being asked of it.
+ */
+export type AudioBus = 'cad' | 'map' | 'world';
+
 /** A playing sound, and the only thing a caller can do to it. */
 export interface Voice {
   readonly id: number;
@@ -38,16 +52,28 @@ export interface Voice {
 
 /** What a capture states about the voice pool — the fields 3/03 and 4/03 file. */
 export interface VoicePoolReport {
+  /** Each bus's own level, 0..1. */
+  readonly busGain: Readonly<Record<AudioBus, number>>;
   /** How many voices the pool may hold at once. */
   readonly ceiling: number;
   /** Playing right now. */
   readonly live: number;
+  /** Playing right now, per bus — what says whether a reserve is doing anything. */
+  readonly liveByBus: Readonly<Record<AudioBus, number>>;
   /** The master volume every voice passes through, 0..1. Zero is mute, and a muted world still counts. */
   readonly masterGain: number;
   /** The most that were ever live at once — the number that says whether the ceiling is near. */
   readonly peak: number;
   /** Sounds turned away because every live voice was already louder. */
   readonly refused: number;
+  /**
+   * The same, per bus.
+   *
+   * **`refusedByBus.cad` is a BUDGET and its value is zero** (204): an alert that was not played is the one
+   * failure this whole chain exists to prevent, and a total that mixes it with a refused car engine cannot
+   * say whether it happened.
+   */
+  readonly refusedByBus: Readonly<Record<AudioBus, number>>;
   /** Sounds started, ever. */
   readonly started: number;
   /** Voices stopped early to make room. A rising count is a world asking for more than 64 things. */
@@ -57,6 +83,8 @@ export interface VoicePoolReport {
 /** What a caller asks the pool to play. */
 export interface VoiceRequest {
   readonly buffer: AudioBufferLike;
+  /** Which bus it plays on. Absent, `world` — where the city is, and where most voices live. */
+  readonly bus?: AudioBus;
   /** Distance model. Absent, {@link DEFAULT_FALLOFF} — a fitted bridge, see `docs/hacks/`. */
   readonly falloff?: Falloff;
   /** Authored gain, 0..1, before distance. */
@@ -85,6 +113,33 @@ const ORIGIN_LISTENER: AudioListener = { forward: [0, 1, 0], position: [0, 0, 0]
 export const MAX_VOICES = 64;
 
 /**
+ * Slots the `cad` bus can always have, whatever the world is doing (204's budget).
+ *
+ * **This is what makes *an alert is never refused* true rather than likely.** A bus below its reserve may
+ * take a slot from a bus above its own; the world's reserve is zero, so sixty-four engines are all fair game
+ * for the first four panel alerts. Four rather than one because a panic, a link drop and a call arriving
+ * inside the same second is an ordinary bad minute on a busy board.
+ */
+export const CAD_RESERVE = 4;
+
+/**
+ * The same for `map`.
+ *
+ * **An ASSUMPTION, and it goes beyond the budget the plan named** — 204 states `cad`'s four and is silent on
+ * this one. Two, because the map's own events are the board's lifecycle and losing *a unit arrived* is a
+ * smaller failure than losing a panic but is still a lost event; and because a reserve mechanism that only
+ * one bus uses is a special case pretending to be a rule. What would settle it is a capture where
+ * `refusedByBus.map` is non-zero on a real shift.
+ */
+export const MAP_RESERVE = 2;
+
+/** The world takes what is left: it is the loudest, the most numerous, and the most replaceable. */
+const RESERVE: Readonly<Record<AudioBus, number>> = { cad: CAD_RESERVE, map: MAP_RESERVE, world: 0 };
+
+/** Every bus, in one place, so a report and a loop cannot disagree about how many there are. */
+const BUSES: readonly AudioBus[] = ['cad', 'map', 'world'];
+
+/**
  * How long a voice takes to get out of the way, in seconds.
  *
  * **A gain that jumps to zero is a click** — a step in the waveform is a broadband transient, and it is
@@ -96,6 +151,7 @@ const FADE_SECONDS = 0.008;
 
 /** The bookkeeping behind one {@link Voice}. */
 interface LiveVoice {
+  bus: AudioBus;
   falloff: Falloff;
   gain: number;
   gainNode: GainLike;
@@ -115,6 +171,8 @@ interface MutableVoice {
 
 /** Holds the live voices and decides who keeps a slot. */
 export class VoicePool {
+  /** One gain a bus, between every voice on it and the master. */
+  private readonly buses: Readonly<Record<AudioBus, GainLike>>;
   private readonly ceiling: number;
   private readonly context: AudioContextLike;
   private listener: AudioListener = ORIGIN_LISTENER;
@@ -123,6 +181,7 @@ export class VoicePool {
   private nextId = 1;
   private peak = 0;
   private refused = 0;
+  private readonly refusedPerBus: Record<AudioBus, number> = { cad: 0, map: 0, world: 0 };
   private started = 0;
   private steals = 0;
   private readonly voices = new Map<number, LiveVoice>();
@@ -132,6 +191,15 @@ export class VoicePool {
     this.ceiling = options.maxVoices ?? MAX_VOICES;
     this.master = context.createGain();
     this.master.connect(context.destination);
+    // Built here rather than on demand so a bus always exists to be ducked or levelled, even before anything
+    // has ever played on it — 1/03 and 1/04 both reach for one that may still be empty.
+    const buses = {} as Record<AudioBus, GainLike>;
+    for (const bus of BUSES) {
+      const gain = context.createGain();
+      gain.connect(this.master);
+      buses[bus] = gain;
+    }
+    this.buses = buses;
   }
 
   /**
@@ -144,17 +212,19 @@ export class VoicePool {
     const position = request.position ?? null;
     const gain = request.gain ?? 1;
     const falloff = request.falloff ?? DEFAULT_FALLOFF;
+    const bus = request.bus ?? 'world';
     const heard = audibleGain(this.listener, position, gain, falloff);
 
-    if (this.voices.size >= this.ceiling && !this.steal(heard)) {
+    if (this.voices.size >= this.ceiling && !this.makeRoom(bus, heard)) {
       this.refused += 1;
+      this.refusedPerBus[bus] += 1;
 
       return null;
     }
 
     const id = this.nextId;
     this.nextId += 1;
-    const live = this.build(id, request, heard, position, gain, falloff);
+    const live = this.build(id, request, heard, position, gain, falloff, bus);
     this.voices.set(id, live);
     this.started += 1;
     this.peak = Math.max(this.peak, this.voices.size);
@@ -164,14 +234,27 @@ export class VoicePool {
 
   report(): VoicePoolReport {
     return {
+      busGain: { cad: this.buses.cad.gain.value, map: this.buses.map.gain.value, world: this.buses.world.gain.value },
       ceiling: this.ceiling,
       live: this.voices.size,
+      liveByBus: { cad: this.countOn('cad'), map: this.countOn('map'), world: this.countOn('world') },
       masterGain: this.master.gain.value,
       peak: this.peak,
       refused: this.refused,
+      refusedByBus: { ...this.refusedPerBus },
       started: this.started,
       steals: this.steals,
     };
+  }
+
+  /**
+   * One bus's own level, 0..1 — the city quieter than the alerts, which is the whole reason for three.
+   *
+   * Set outright rather than ramped: a level is a preference an operator sets, not a move made during a
+   * sound. 1/03's ducking ramps this same node and does its own scheduling.
+   */
+  setBusGain(bus: AudioBus, value: number): void {
+    this.buses[bus].gain.value = Math.min(1, Math.max(0, value));
   }
 
   /**
@@ -254,6 +337,7 @@ export class VoicePool {
     position: null | Vec3,
     gain: number,
     falloff: Falloff,
+    bus: AudioBus,
   ): LiveVoice {
     const source = this.context.createBufferSource();
     const gainNode = this.context.createGain();
@@ -268,7 +352,7 @@ export class VoicePool {
     gainNode.gain.value = heard;
     source.connect(gainNode);
     gainNode.connect(panner);
-    panner.connect(this.master);
+    panner.connect(this.buses[bus]);
 
     const handle: MutableVoice = {
       id,
@@ -278,7 +362,7 @@ export class VoicePool {
       },
     };
 
-    const live: LiveVoice = { falloff, gain, gainNode, handle, id, panner, position, source };
+    const live: LiveVoice = { bus, falloff, gain, gainNode, handle, id, panner, position, source };
     // A one-shot frees its own slot. Nothing polls, and a loop simply never fires this.
     source.onended = (): void => {
       this.release(id, 'ended');
@@ -289,12 +373,51 @@ export class VoicePool {
     return live;
   }
 
+  /** How many voices one bus is holding. */
+  private countOn(bus: AudioBus): number {
+    let count = 0;
+    for (const voice of this.voices.values()) {
+      if (voice.bus === bus) {
+        count += 1;
+      }
+    }
+
+    return count;
+  }
+
   /** Let one voice's three nodes go. */
   private disconnect(voice: LiveVoice): void {
     voice.source.onended = null;
     voice.source.disconnect();
     voice.gainNode.disconnect();
     voice.panner.disconnect();
+  }
+
+  /**
+   * Make room for a sound worth `heard` on `bus`, or answer false. **Two ranks, and the order is the point.**
+   *
+   * 1. **Within the bus**, by the quietest at the listener — [decision 4.2](../../../docs/plans/203-audio/concept.md)
+   *    unchanged, because that is the question it was written about: which of the world's own sounds gives way.
+   *    A bus tidies its own house before it knocks on anybody else's.
+   * 2. **Across buses, only for a bus below its RESERVE**, and only from one above its own. This is the whole
+   *    of *an alert is never refused*: the world reserves nothing, so sixty-four engines are all fair game
+   *    for the first {@link CAD_RESERVE} panel alerts, however quiet those alerts are.
+   *
+   * A bus at or above its reserve that cannot find a victim of its own is simply refused, which is what keeps
+   * step 2 a floor rather than a licence.
+   */
+  private makeRoom(bus: AudioBus, heard: number): boolean {
+    if (this.stealFrom((voice) => voice.bus === bus, heard)) {
+      return true;
+    }
+    if (this.countOn(bus) >= RESERVE[bus]) {
+      return false;
+    }
+
+    // Under its reserve: it may take from a bus that is over its own, and the newcomer's loudness stops
+    // mattering — a panic at 0.01 still outranks an engine, because the reserve is about WHAT it is rather
+    // than how loud it is.
+    return this.stealFrom((voice) => this.countOn(voice.bus) > RESERVE[voice.bus], Number.POSITIVE_INFINITY);
   }
 
   /** Set a voice's gain and pan from where it and the listener now are. */
@@ -337,25 +460,25 @@ export class VoicePool {
   }
 
   /**
-   * Make room for a sound worth `heard`, or answer false.
+   * Retire the quietest voice matching `from`, if it is quieter than `heard`.
    *
-   * The victim is the quietest live voice AT THE LISTENER, which is the decision's own words. A newcomer
-   * that is quieter than every one of them takes nobody's slot: see the module note.
+   * `heard` of `Infinity` means *take the quietest whatever it costs*, which is what a bus under its reserve
+   * is entitled to and nothing else is.
    */
-  private steal(heard: number): boolean {
+  private stealFrom(from: (voice: LiveVoice) => boolean, heard: number): boolean {
     let quietest: LiveVoice | null = null;
     let quietestLevel = Number.POSITIVE_INFINITY;
     for (const voice of this.voices.values()) {
+      if (!from(voice)) {
+        continue;
+      }
       const level = audibleGain(this.listener, voice.position, voice.gain, voice.falloff);
       if (level < quietestLevel) {
         quietest = voice;
         quietestLevel = level;
       }
     }
-    if (quietest === null) {
-      return true;
-    }
-    if (quietestLevel >= heard) {
+    if (quietest === null || quietestLevel >= heard) {
       return false;
     }
     this.release(quietest.id, 'stolen');

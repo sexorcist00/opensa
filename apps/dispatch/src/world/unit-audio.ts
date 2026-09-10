@@ -227,6 +227,7 @@ export class UnitAudio {
     }
     const started = this.pool.play({
       buffer: warm.buffer,
+      bus: 'world',
       gain: at.gain,
       loop: true,
       pitch: at.pitch * warm.pitchScale,
@@ -288,6 +289,8 @@ export class UnitAudio {
     }
     const started = this.pool.play({
       buffer: warm.buffer,
+      // A siren is a thing in the world that a unit is driving, not a panel alert about it.
+      bus: 'world',
       falloff: event.falloff,
       gain: event.gain,
       loop: true,
