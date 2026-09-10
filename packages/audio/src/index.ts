@@ -73,6 +73,7 @@ export {
 export {
   type AudioBus,
   CAD_RESERVE,
+  DUCK_DEPTH,
   LIMITER_RATIO,
   LIMITER_THRESHOLD_DB,
   MAP_RESERVE,

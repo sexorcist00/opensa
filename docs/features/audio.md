@@ -35,6 +35,9 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
   it so the operator's own volume makes it work less. Clipping is the most recognisable *not-AAA* artefact
   there is and nothing else in the chain prevented it; `limiter.reduction` is reported because how hard the
   mix pushes is a fact about the content.
+- **Ducking** (204/1-03): an alert pulls the world and the map down 12 dB and lets them back up, derived from
+  the state of the `cad` bus rather than asked for — a duck a caller must remember is one somebody forgets. It
+  multiplies the operator's level rather than replacing it.
 - **Absence is a reported state, never a throw**: no Web Audio in the environment is `unsupported`, one line
   in the log, and a host every caller can go on using.
 

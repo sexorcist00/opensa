@@ -57,6 +57,8 @@ export interface VoicePoolReport {
   readonly busGain: Readonly<Record<AudioBus, number>>;
   /** How many voices the pool may hold at once. */
   readonly ceiling: number;
+  /** Whether an alert is currently holding the world down. */
+  readonly ducked: boolean;
   /** The ceiling, and how hard the mix is pushing against it. */
   readonly limiter: { readonly reduction: number; readonly thresholdDb: number };
   /** Playing right now. */
@@ -157,6 +159,28 @@ const LIMITER_ATTACK_SECONDS = 0.003;
 /** Long enough that the ceiling does not pump on every siren cycle. */
 const LIMITER_RELEASE_SECONDS = 0.25;
 
+/**
+ * How far the world is pulled down while an alert is playing — a linear gain, about **-12 dB**.
+ *
+ * **Ducking is what makes an alert INTELLIGIBLE**, and it is the difference between an alert that is louder
+ * than the city and one that is heard instead of it. Twelve decibels is where broadcast and two-way radio
+ * put it: enough that speech and a tone read cleanly over a bed, little enough that the bed is still there
+ * and the operator is not startled by a silence.
+ *
+ * **It is derived from the state of the `cad` bus rather than called for.** A duck a caller has to remember
+ * is a duck somebody eventually forgets, and the alert it was forgotten on is the one that mattered.
+ */
+export const DUCK_DEPTH = 0.25;
+
+/** Down quickly — the alert has already started, and a slow duck is a first syllable lost under traffic. */
+const DUCK_ATTACK_SECONDS = 0.08;
+
+/** Up slowly, so the city returns rather than reappearing. */
+const DUCK_RELEASE_SECONDS = 0.4;
+
+/** Which buses an alert pulls down. Not `cad` itself: an alert that quietened itself would be quite a bug. */
+const DUCKED: readonly AudioBus[] = ['map', 'world'];
+
 /** The world takes what is left: it is the loudest, the most numerous, and the most replaceable. */
 const RESERVE: Readonly<Record<AudioBus, number>> = { cad: CAD_RESERVE, map: MAP_RESERVE, world: 0 };
 
@@ -197,8 +221,11 @@ interface MutableVoice {
 export class VoicePool {
   /** One gain a bus, between every voice on it and the master. */
   private readonly buses: Readonly<Record<AudioBus, GainLike>>;
+  /** What the OPERATOR set each bus to, before any duck. The node carries `level x duck`. */
+  private readonly busLevel: Record<AudioBus, number> = { cad: 1, map: 1, world: 1 };
   private readonly ceiling: number;
   private readonly context: AudioContextLike;
+  private ducked = false;
   /** The ceiling, between the master and the speakers. */
   private readonly limiter: DynamicsCompressorLike;
   private listener: AudioListener = ORIGIN_LISTENER;
@@ -263,14 +290,18 @@ export class VoicePool {
     this.voices.set(id, live);
     this.started += 1;
     this.peak = Math.max(this.peak, this.voices.size);
+    this.applyDuck();
 
     return live.handle;
   }
 
   report(): VoicePoolReport {
     return {
-      busGain: { cad: this.buses.cad.gain.value, map: this.buses.map.gain.value, world: this.buses.world.gain.value },
+      // The LEVEL the operator asked for, not the node's momentary value — a duck is the mixer's business
+      // and a control that read back its own ducking would jump about while an alert played.
+      busGain: { ...this.busLevel },
       ceiling: this.ceiling,
+      ducked: this.ducked,
       limiter: { reduction: this.limiter.reduction, thresholdDb: LIMITER_THRESHOLD_DB },
       live: this.voices.size,
       liveByBus: { cad: this.countOn('cad'), map: this.countOn('map'), world: this.countOn('world') },
@@ -290,7 +321,11 @@ export class VoicePool {
    * sound. 1/03's ducking ramps this same node and does its own scheduling.
    */
   setBusGain(bus: AudioBus, value: number): void {
-    this.buses[bus].gain.value = Math.min(1, Math.max(0, value));
+    this.busLevel[bus] = Math.min(1, Math.max(0, value));
+    const node = this.buses[bus].gain;
+    // Cancel first: a duck ramp may be in flight, and an operator moving a level outranks it.
+    node.cancelScheduledValues(this.context.currentTime);
+    node.value = this.busLevel[bus] * this.duckFactor(bus);
   }
 
   /**
@@ -366,6 +401,29 @@ export class VoicePool {
     }
   }
 
+  /**
+   * Hold the world down while any alert is live, and let it up when none is.
+   *
+   * Called from the two places a bus's population can change — a voice starting and a voice leaving — rather
+   * than by whoever plays the alert. **A duck somebody has to ask for is one they eventually forget**, and
+   * the alert it is forgotten on is the one that mattered.
+   */
+  private applyDuck(): void {
+    const wanted = this.countOn('cad') > 0;
+    if (wanted === this.ducked) {
+      return;
+    }
+    this.ducked = wanted;
+    const now = this.context.currentTime;
+    const seconds = wanted ? DUCK_ATTACK_SECONDS : DUCK_RELEASE_SECONDS;
+    for (const bus of DUCKED) {
+      const node = this.buses[bus].gain;
+      node.cancelScheduledValues(now);
+      node.setValueAtTime(node.value, now);
+      node.linearRampToValueAtTime(this.busLevel[bus] * this.duckFactor(bus), now + seconds);
+    }
+  }
+
   private build(
     id: number,
     request: VoiceRequest,
@@ -429,6 +487,11 @@ export class VoicePool {
     voice.panner.disconnect();
   }
 
+  /** What a bus is multiplied by right now: the duck, or nothing if it is not one of the ducked. */
+  private duckFactor(bus: AudioBus): number {
+    return this.ducked && DUCKED.includes(bus) ? DUCK_DEPTH : 1;
+  }
+
   /**
    * Make room for a sound worth `heard` on `bus`, or answer false. **Two ranks, and the order is the point.**
    *
@@ -478,6 +541,9 @@ export class VoicePool {
     }
     this.voices.delete(id);
     voice.handle.live = false;
+    // Every path out of a voice comes through here — ended, stopped, stolen — so the duck cannot be left
+    // holding the world down for an alert that is no longer playing.
+    this.applyDuck();
     if (reason === 'ended') {
       voice.source.onended = null;
       this.disconnect(voice);

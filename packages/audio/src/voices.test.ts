@@ -5,7 +5,7 @@ import type { FakeAudioBuffer } from './test/fake-context';
 
 import { audibleGain } from './spatial';
 import { FakeAudioContext, type FakeBufferSource, type FakeGain } from './test/fake-context';
-import { CAD_RESERVE, LIMITER_THRESHOLD_DB, MAX_VOICES, VoicePool } from './voices';
+import { CAD_RESERVE, DUCK_DEPTH, LIMITER_THRESHOLD_DB, MAX_VOICES, VoicePool } from './voices';
 
 /** A listener at the origin looking down +Y with +X to its right. */
 const AT_ORIGIN: AudioListener = { forward: [0, 1, 0], position: [0, 0, 0], right: [1, 0, 0] };
@@ -444,6 +444,94 @@ describe('VoicePool limiter', () => {
 
       expect(pool.report().limiter.reduction).toBe(-4.5);
       expect(pool.report().limiter.thresholdDb).toBe(LIMITER_THRESHOLD_DB);
+    });
+  });
+});
+
+describe('VoicePool ducking', () => {
+  /** What the `world` bus node is actually set to right now, ramps included. */
+  function worldNow(context: FakeAudioContext): FakeGain | undefined {
+    return busGain(context, 'world');
+  }
+
+  describe('negative cases', () => {
+    it('leaves the world alone while nothing is on the cad bus', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+
+      pool.play({ buffer: buffer(context), position: null });
+      pool.play({ buffer: buffer(context), bus: 'map', position: null });
+
+      expect(worldNow(context)?.gain.value).toBe(1);
+      expect(pool.report().ducked).toBe(false);
+    });
+
+    it('never ducks the bus doing the ducking', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+
+      // An alert that quietened itself would be a very thorough way to lose one.
+      expect(busGain(context, 'cad')?.gain.ramps).toHaveLength(0);
+      expect(busGain(context, 'cad')?.gain.value).toBe(1);
+    });
+
+    it('lets the world back up when the alert ends', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+      expect(pool.report().ducked).toBe(true);
+
+      sourceOf(context, 0).finish();
+
+      expect(pool.report().ducked).toBe(false);
+      const ramps = worldNow(context)?.gain.ramps ?? [];
+      expect(ramps[ramps.length - 1]?.value).toBe(1);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('pulls the world and the map down, and does it as a RAMP', () => {
+      const context = new FakeAudioContext();
+      context.currentTime = 2;
+      const pool = new VoicePool(context);
+
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+
+      for (const bus of ['map', 'world'] as const) {
+        const ramps = busGain(context, bus)?.gain.ramps ?? [];
+        expect(ramps[ramps.length - 1]?.value).toBeCloseTo(DUCK_DEPTH, 9);
+        // A step here would be a click on the very sound that must not draw attention to the mixer.
+        expect(ramps[ramps.length - 1]?.time).toBeGreaterThan(2);
+      }
+      expect(pool.report().ducked).toBe(true);
+    });
+
+    it('MULTIPLIES the operator’s own level rather than replacing it', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.setBusGain('world', 0.5);
+
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+
+      // The operator asked for half a city; a duck makes it a quarter of that, not a fixed number that
+      // forgets what they asked for.
+      const ramps = worldNow(context)?.gain.ramps ?? [];
+      expect(ramps[ramps.length - 1]?.value).toBeCloseTo(0.5 * DUCK_DEPTH, 9);
+      expect(pool.report().busGain.world).toBe(0.5);
+    });
+
+    it('stays down while ANY alert is live, not just the first', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+
+      sourceOf(context, 0).finish();
+
+      // Two alerts inside one bad second is ordinary; the world coming back between them is not.
+      expect(pool.report().ducked).toBe(true);
     });
   });
 });
