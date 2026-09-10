@@ -2,7 +2,7 @@ import type { OsaudioZone } from '@opensa/engine-formats';
 
 import { describe, expect, it } from 'vitest';
 
-import type { AmbienceHost } from './ambience';
+import type { AmbienceHost, AmbienceLoop } from './ambience';
 import type { Voice } from './voices';
 
 import {
@@ -22,6 +22,7 @@ import {
 /** One `startLoop` call, as the fake saw it. */
 interface StartedLoop {
   fraction: number;
+  /** The LEVEL the bed asked for, before the row's own gain. */
   gain: number;
   name: string;
   voice: number;
@@ -35,6 +36,8 @@ class FakeHost implements AmbienceHost {
   readonly refused = new Set<string>();
   /** Refuse every call from this one on — how a pool that filled up looks from here. */
   refuseFrom = Number.POSITIVE_INFINITY;
+  /** What the table says every row of this fake is authored at. */
+  rowGain = 1;
   readonly started: StartedLoop[] = [];
   readonly stopped: number[] = [];
   private at = 0;
@@ -71,7 +74,7 @@ class FakeHost implements AmbienceHost {
     this.gains.push({ gain, seconds, voice: voice.id });
   }
 
-  async startLoop(name: string, startFraction: number, gain: number): Promise<null | Voice> {
+  async startLoop(name: string, startFraction: number, level: number): Promise<AmbienceLoop | null> {
     await Promise.resolve();
     this.calls += 1;
     if (this.refused.has(name) || this.calls > this.refuseFrom) {
@@ -79,13 +82,16 @@ class FakeHost implements AmbienceHost {
     }
     const id = this.nextVoice;
     this.nextVoice += 1;
-    this.started.push({ fraction: startFraction, gain, name, voice: id });
+    this.started.push({ fraction: startFraction, gain: level, name, voice: id });
 
     return {
-      id,
-      live: true,
-      stop: (): void => {
-        this.stopped.push(id);
+      gain: this.rowGain,
+      voice: {
+        id,
+        live: true,
+        stop: (): void => {
+          this.stopped.push(id);
+        },
       },
     };
   }
@@ -291,6 +297,21 @@ describe('ambience', () => {
       ambience.update(null, [0, 0, (BED_FULL_HEIGHT + BED_SILENT_HEIGHT) / 2], 0.1);
 
       expect(host.gains[0]?.gain).toBeCloseTo(0.5, 6);
+    });
+
+    it("keeps the ROW's authored gain under the envelope rather than replacing it", async () => {
+      const host = new FakeHost([DEFAULT_BED]);
+      host.rowGain = 0.3;
+      const ambience = new Ambience(host);
+      ambience.update(null, [0, 0, 0], CROSSFADE_SECONDS);
+      await settle();
+      host.gains.length = 0;
+
+      ambience.update(null, [0, 0, 0], 0.1);
+
+      // Envelope 1 x row 0.3. Handing the pool a bare 1 would collapse a 0.5/0.3/0.2 bed to three 1.0s and
+      // play a zone authored SILENT at full volume.
+      expect(host.gains[0]?.gain).toBeCloseTo(0.3, 9);
     });
 
     it('stacks every authored layer of one bed', async () => {

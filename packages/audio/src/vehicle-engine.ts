@@ -113,8 +113,17 @@ const REV_GAIN_WHILE_CRZ: Curve = [
 
 /** One car's engine, held across ticks because the crossfade has a position. */
 export class VehicleEngine {
-  private fadeIn = 0;
-  private fadeOut = 0;
+  /**
+   * Where the crossfade is, 0..1.
+   *
+   * **SA holds TWO of these, `m_FadeIn` and `m_FadeOut`, and here they would always be equal**: they are
+   * reset together on a state change and stepped by the same amount every tick, because the shipped config
+   * gives the in and out steps the same value in both transitions it defines (0.1/0.1 idle, 0.05/0.05
+   * cruise). Two fields that can never disagree read as two things that vary independently, which is a
+   * false promise to whoever changes this next — so it is one, and this note is where the original's second
+   * one went.
+   */
+  private fade = 0;
   private state: EngineState = 'off';
 
   /**
@@ -128,8 +137,7 @@ export class VehicleEngine {
   update(ratio: number, dtSeconds: number, running = true): EngineVoicing {
     if (!running) {
       this.state = 'off';
-      this.fadeIn = 0;
-      this.fadeOut = 0;
+      this.fade = 0;
 
       return { idleGain: 0, idlePitch: IDLE_PITCH.base, revGain: 0, revPitch: REV_PITCH.base, state: 'off' };
     }
@@ -139,14 +147,12 @@ export class VehicleEngine {
       // A state CHANGE restarts both fades, exactly as SA does when it crosses between DUMMY_ID and
       // DUMMY_CRZ — the crossfade is the transition, so carrying its old position over would make the
       // handover start halfway through.
-      this.fadeIn = 0;
-      this.fadeOut = 0;
+      this.fade = 0;
       this.state = wanted;
     } else {
       const seconds = wanted === 'crz' ? CRZ_FADE_SECONDS : IDLE_FADE_SECONDS;
       const step = seconds <= 0 ? 1 : Math.max(0, dtSeconds) / seconds;
-      this.fadeIn = Math.min(1, this.fadeIn + step);
-      this.fadeOut = Math.min(1, this.fadeOut + step);
+      this.fade = Math.min(1, this.fade + step);
     }
 
     return this.state === 'crz' ? this.cruising(clamped) : this.idling(clamped);
@@ -158,11 +164,11 @@ export class VehicleEngine {
     const rev = revProgress(ratio);
 
     return {
-      idleGain: gainOf(lerp(IDLE_DB.base, IDLE_DB.max, idle) + dbOf(curveAt(IDLE_GAIN_WHILE_CRZ, this.fadeOut), 20)),
-      idlePitch: lerp(IDLE_PITCH.base, IDLE_PITCH.max, idle) * curveAt(IDLE_PITCH_WHILE_CRZ, this.fadeOut),
-      revGain: gainOf(lerp(REV_DB.base, REV_DB.max, rev) + dbOf(curveAt(REV_GAIN_WHILE_CRZ, this.fadeIn), 20)),
+      idleGain: gainOf(lerp(IDLE_DB.base, IDLE_DB.max, idle) + dbOf(curveAt(IDLE_GAIN_WHILE_CRZ, this.fade), 20)),
+      idlePitch: lerp(IDLE_PITCH.base, IDLE_PITCH.max, idle) * curveAt(IDLE_PITCH_WHILE_CRZ, this.fade),
+      revGain: gainOf(lerp(REV_DB.base, REV_DB.max, rev) + dbOf(curveAt(REV_GAIN_WHILE_CRZ, this.fade), 20)),
       revPitch:
-        lerp(REV_PITCH.base, REV_PITCH.max, rev) * (this.fadeIn < 0.99 ? curveAt(REV_PITCH_WHILE_CRZ, this.fadeIn) : 1),
+        lerp(REV_PITCH.base, REV_PITCH.max, rev) * (this.fade < 0.99 ? curveAt(REV_PITCH_WHILE_CRZ, this.fade) : 1),
       state: 'crz',
     };
   }
@@ -173,12 +179,12 @@ export class VehicleEngine {
     const rev = revProgress(ratio);
     // SA stops the rev sound outright past 0.99 rather than leaving it at -inf dB, which is one fewer voice
     // against the pool's 64 for every idling car in the world.
-    const revGone = this.fadeOut >= 0.99;
+    const revGone = this.fade >= 0.99;
 
     return {
-      idleGain: gainOf(lerp(IDLE_DB.base, IDLE_DB.max, idle) + (this.fadeIn <= 0.99 ? dbOf(this.fadeIn, 10) : 0)),
+      idleGain: gainOf(lerp(IDLE_DB.base, IDLE_DB.max, idle) + (this.fade <= 0.99 ? dbOf(this.fade, 10) : 0)),
       idlePitch: lerp(IDLE_PITCH.base, IDLE_PITCH.max, idle),
-      revGain: revGone ? 0 : gainOf(lerp(REV_DB.base, REV_DB.max, rev) + dbOf(1 - this.fadeOut, 10)),
+      revGain: revGone ? 0 : gainOf(lerp(REV_DB.base, REV_DB.max, rev) + dbOf(1 - this.fade, 10)),
       revPitch: lerp(REV_PITCH.base, REV_PITCH.max, rev),
       state: 'id',
     };

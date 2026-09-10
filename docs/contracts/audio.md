@@ -89,6 +89,11 @@ outdoors rather than going silent.
 **A zone made deliberately SILENT is expressible**: author `AMB_<ZONE>` with a gain of `0`. It wins the
 lookup and is inaudible, which is how an interior says *not the outdoors, and not anything*.
 
+**The row's gain is a BALANCE and the bed is an envelope over it.** A three-layer bed authored 0.5 / 0.3 /
+0.2 keeps that ratio at every point of a crossfade and at every camera height — the bed multiplies, it never
+replaces. (It did replace it for one commit, which made a silent zone play at full volume one tick after
+starting; the regression test is `keeps the ROW's authored gain under the envelope`.)
+
 ### Layers
 
 A bed may stack up to **four** rows, and they all play at once:
@@ -193,6 +198,11 @@ unit, and it does.
 
 **A siren runs while the unit's status is `enRoute`, and at no other time.** Not while it is on scene, not
 while it is available. Nothing configures that: it is what the status means.
+
+**`maxDistance` on a siren row is honoured, including by the cull.** A unit too far away is given no voices
+at all — a car is two of them and the budget is 64 — and the distance that counts is the LARGER of the
+engine's default reach and the siren row's own. So `VEH_SIREN_PATROL, 40, 2, 0.9, loop, 900` really is heard
+from 900 m rather than being cut at 300 with nothing reported.
 
 | The mistake | What happens | What says so |
 | --- | --- | --- |

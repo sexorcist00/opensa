@@ -20,7 +20,7 @@ import { DEFAULT_FALLOFF, distanceBetween, VehicleEngine, type VehicleVoiceTable
 import type { Unit } from '../ops/types';
 
 /** How a caller turns a sound index into something the pool can play. */
-export type BufferFor = (soundIndex: number) => AudioBufferLike | null;
+export type BufferFor = (soundIndex: number) => null | WarmSound;
 
 /** What a capture says about the units' own sound. */
 export interface UnitAudioReport {
@@ -32,13 +32,27 @@ export interface UnitAudioReport {
   readonly unvoiced: number;
 }
 
+/** A sound the pool can play, and the playback-rate correction it needs. */
+export interface WarmSound {
+  readonly buffer: AudioBufferLike;
+  /**
+   * What the pitch must be multiplied by for the sound to play at its authored speed.
+   *
+   * **Web Audio's buffer floor is 3 000 Hz and the stock game has a sound below it**, so a buffer is made
+   * at `max(rate, 3000)` and played back at `rate / bufferRate`. `DispatchAudio.play` applies that itself;
+   * a caller that builds its own `pitch` — an engine does — has to be handed it or that one sound plays
+   * about half again too fast and too short.
+   */
+  readonly pitchScale: number;
+}
+
 /** The event name a unit kind's siren is authored under. */
 export function sirenNameFor(kind: Unit['kind']): string {
   return `VEH_SIREN_${kind.toUpperCase()}`;
 }
 
 /**
- * How far a unit may be and still be worth a voice, in world units.
+ * How far a unit's ENGINE may be and still be worth a voice, in world units.
  *
  * **A gain threshold would have been dead code and a test caught it.** `audibleGain` uses Web Audio's own
  * `inverse` model, which CLAMPS the distance at `maxDistance` rather than falling to zero — deliberately, so
@@ -54,12 +68,21 @@ export function sirenNameFor(kind: Unit['kind']): string {
  */
 export const AUDIBLE_REACH = DEFAULT_FALLOFF.maxDistance;
 
+/** A voice plus the rate correction it was started with. */
+interface LiveLoop {
+  readonly scale: number;
+  readonly voice: Voice;
+}
+
 /** One unit's live voices. */
 interface UnitVoices {
   engine: VehicleEngine;
+  /** The rate correction of the engine's two loops, remembered so the reuse path does not refetch. */
+  engineScale: number;
   idle: null | Voice;
   rev: null | Voice;
   siren: null | Voice;
+  sirenScale: number;
 }
 
 /** Holds a voice pair per unit and keeps them in step with the board. */
@@ -134,26 +157,42 @@ export class UnitAudio {
       return;
     }
     const at: Vec3 = [unit.at[0], unit.at[1], unit.elevation];
-    if (distanceBetween(ear, at) > AUDIBLE_REACH) {
+    if (distanceBetween(ear, at) > this.reachFor(unit)) {
       this.release(unit.id);
 
       return;
     }
-    const voices = this.live.get(unit.id) ?? { engine: new VehicleEngine(), idle: null, rev: null, siren: null };
+    const voices = this.live.get(unit.id) ?? {
+      engine: new VehicleEngine(),
+      engineScale: 1,
+      idle: null,
+      rev: null,
+      siren: null,
+      sirenScale: 1,
+    };
     this.live.set(unit.id, voices);
 
     const ratio = car.maxSpeedMs > 0 ? unit.speed / car.maxSpeedMs : 0;
     const voicing = voices.engine.update(ratio, gapSeconds);
     const offset = 10 ** (car.volumeOffsetDb / 20);
-    voices.idle = this.loop(
-      voices.idle,
-      car.idleSound,
-      voicing.idleGain * offset,
-      car.enginePitch * voicing.idlePitch,
+    const idle = this.loop(voices.idle, car.idleSound, {
       at,
-    );
-    voices.rev = this.loop(voices.rev, car.revSound, voicing.revGain * offset, car.enginePitch * voicing.revPitch, at);
-    voices.siren = this.siren(voices.siren, unit, at);
+      gain: voicing.idleGain * offset,
+      pitch: car.enginePitch * voicing.idlePitch,
+      scale: voices.engineScale,
+    });
+    const rev = this.loop(voices.rev, car.revSound, {
+      at,
+      gain: voicing.revGain * offset,
+      pitch: car.enginePitch * voicing.revPitch,
+      scale: voices.engineScale,
+    });
+    voices.engineScale = idle?.scale ?? rev?.scale ?? voices.engineScale;
+    voices.idle = idle?.voice ?? null;
+    voices.rev = rev?.voice ?? null;
+    const siren = this.siren(voices.siren, unit, at, voices.sirenScale);
+    voices.siren = siren?.voice ?? null;
+    voices.sirenScale = siren?.scale ?? voices.sirenScale;
   }
 
   /**
@@ -162,25 +201,60 @@ export class UnitAudio {
    * The pitch is set on the SOURCE rather than by picking a different sample, which is what a pitched loop
    * is — and it is why the engine model hands back a multiplier rather than a sound to play.
    */
-  private loop(voice: null | Voice, soundIndex: number, gain: number, pitch: number, at: Vec3): null | Voice {
-    if (gain <= 0) {
+  private loop(
+    voice: null | Voice,
+    soundIndex: number,
+    at: { at: Vec3; gain: number; pitch: number; scale: number },
+  ): LiveLoop | null {
+    if (at.gain <= 0) {
       voice?.stop();
 
       return null;
     }
     if (voice && voice.live) {
-      this.pool.setPosition(voice, at);
-      this.pool.setGain(voice, gain);
-      this.pool.setPitch(voice, pitch);
+      this.pool.setPosition(voice, at.at);
+      this.pool.setGain(voice, at.gain);
+      // The rate correction is remembered rather than re-read: the cache could evict the buffer under a
+      // playing voice, and losing the scale then would make the engine jump in pitch for no reason a
+      // listener could account for.
+      this.pool.setPitch(voice, at.pitch * at.scale);
 
-      return voice;
+      return { scale: at.scale, voice };
     }
-    const buffer = this.buffers(soundIndex);
-    if (buffer === null) {
+    const warm = this.buffers(soundIndex);
+    if (warm === null) {
       return null;
     }
+    const started = this.pool.play({
+      buffer: warm.buffer,
+      gain: at.gain,
+      loop: true,
+      pitch: at.pitch * warm.pitchScale,
+      position: at.at,
+    });
 
-    return this.pool.play({ buffer, gain, loop: true, pitch, position: at });
+    return started === null ? null : { scale: warm.pitchScale, voice: started };
+  }
+
+  /**
+   * How far this unit may be and still be worth a voice.
+   *
+   * **The engine's reach and the siren's are not the same number.** An engine plays at the default falloff;
+   * a siren plays at the one its ROW authored, and a `VEH_SIREN_PATROL … 900` row means an operator should
+   * hear it from 900 m. Culling both at 300 would silence that row with nothing reported — so the reach is
+   * the larger of the two, which is the distance past which NEITHER model can still tell one distance from
+   * another.
+   */
+  private reachFor(unit: Unit): number {
+    if (unit.status !== 'enRoute') {
+      return AUDIBLE_REACH;
+    }
+    // `has` before `find` so a build that authored no siren for this service is not reported once per kind
+    // per tick — the absence for a missing siren is said where the siren is actually wanted.
+    const name = sirenNameFor(unit.kind);
+    const siren = this.events().has(name) ? this.events().find(name) : null;
+
+    return Math.max(AUDIBLE_REACH, siren?.falloff.maxDistance ?? 0);
   }
 
   /** Drop everything one unit holds. */
@@ -196,7 +270,7 @@ export class UnitAudio {
   }
 
   /** The siren, which runs while a unit is on its way and at no other time. */
-  private siren(voice: null | Voice, unit: Unit, at: Vec3): null | Voice {
+  private siren(voice: null | Voice, unit: Unit, at: Vec3, scale: number): LiveLoop | null {
     if (unit.status !== 'enRoute') {
       voice?.stop();
 
@@ -205,21 +279,24 @@ export class UnitAudio {
     if (voice && voice.live) {
       this.pool.setPosition(voice, at);
 
-      return voice;
+      return { scale, voice };
     }
     const event = this.events().find(sirenNameFor(unit.kind));
-    const buffer = event === null ? null : this.buffers(event.soundIndex);
-    if (event === null || buffer === null) {
+    const warm = event === null ? null : this.buffers(event.soundIndex);
+    if (event === null || warm === null) {
       return null;
     }
-
-    return this.pool.play({
-      buffer,
+    const started = this.pool.play({
+      buffer: warm.buffer,
       falloff: event.falloff,
       gain: event.gain,
       loop: true,
       loopStartSeconds: event.loopStartSeconds,
+      // Without this the one stock sound below Web Audio's 3 000 Hz floor wails half again too fast.
+      pitch: warm.pitchScale,
       position: at,
     });
+
+    return started === null ? null : { scale: warm.pitchScale, voice: started };
   }
 }

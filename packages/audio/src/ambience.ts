@@ -67,9 +67,25 @@ export interface AmbienceHost {
   /**
    * Start one LOOPING voice of a named event — flat, with no position, because a bed is where you are.
    *
-   * `startFraction` is how far through the buffer it begins, 0..1. `null` when this build cannot play it.
+   * `startFraction` is how far through the buffer it begins, 0..1. `level` is where the bed's envelope
+   * currently is; the host multiplies it by the row's own gain and hands that gain back. `null` when this
+   * build cannot play the name.
    */
-  startLoop(name: string, startFraction: number, gain: number): Promise<null | Voice>;
+  startLoop(name: string, startFraction: number, level: number): Promise<AmbienceLoop | null>;
+}
+
+/** A started layer: the voice, and the gain its ROW was authored at. */
+export interface AmbienceLoop {
+  /**
+   * The layer's own place in the mix, 0..1, as the author wrote it.
+   *
+   * **It comes back out because the bed has to keep multiplying by it.** The crossfade and the height rule
+   * are an ENVELOPE over a mix the table decides, and a bed that handed the pool an absolute gain would
+   * overwrite the balance one tick after starting — collapsing three layers of 0.5 / 0.3 / 0.2 into three
+   * of 1.0, and playing a zone authored SILENT at gain 0 at full volume.
+   */
+  readonly gain: number;
+  readonly voice: Voice;
 }
 
 /** What a capture says about the bed. */
@@ -159,6 +175,8 @@ interface Bed {
 
 /** One layer: two voices of one sound, one of them audible. */
 interface Twin {
+  /** The row's authored gain — the layer's balance, which the envelope multiplies rather than replaces. */
+  gain: number;
   readonly name: string;
   playingFirst: boolean;
   /** When the current exchange finishes — until then the tick leaves this twin's gains alone. */
@@ -233,9 +251,12 @@ export class Ambience {
   private advance(bed: Bed, target: number, gapSeconds: number, height: number): void {
     const step = Math.max(0, gapSeconds) / CROSSFADE_SECONDS;
     bed.level = bed.level < target ? Math.min(target, bed.level + step) : Math.max(target, bed.level - step);
-    const gain = bed.level * height;
+    const envelope = bed.level * height;
     const now = this.host.nowMs();
     for (const twin of bed.twins) {
+      // The envelope multiplies the ROW's gain rather than replacing it: the table decides the layers'
+      // balance and the bed decides how loud the whole thing is.
+      const gain = envelope * twin.gain;
       if (now >= twin.swapAtMs) {
         this.swap(twin, gain, now);
       }
@@ -297,6 +318,7 @@ export class Ambience {
     const first = this.host.random();
     const second = (first + TWIN_OFFSET_MIN + this.host.random() * (TWIN_OFFSET_MAX - TWIN_OFFSET_MIN)) % 1;
     const twin: Twin = {
+      gain: 1,
       name,
       playingFirst: true,
       rampEndsAtMs: 0,
@@ -326,19 +348,21 @@ export class Ambience {
   }
 
   /** Await one voice and put it in its slot — unless its bed is already gone. */
-  private async take(bed: Bed, twin: Twin, slot: 0 | 1, fraction: number, gain: number): Promise<void> {
+  private async take(bed: Bed, twin: Twin, slot: 0 | 1, fraction: number, level: number): Promise<void> {
     this.pending += 1;
-    const voice = await this.host.startLoop(twin.name, fraction, gain);
+    const started = await this.host.startLoop(twin.name, fraction, level);
     this.pending -= 1;
-    if (voice === null) {
+    if (started === null) {
       return;
     }
     if (!bed.alive) {
-      voice.stop();
+      started.voice.stop();
 
       return;
     }
-    twin.voices[slot] = voice;
+    // Both halves of a twin are the same row, so the second one restates a gain the first already set.
+    twin.gain = started.gain;
+    twin.voices[slot] = started.voice;
     this.starts += 1;
   }
 }

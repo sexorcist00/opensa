@@ -1,4 +1,3 @@
-import type { AudioBufferLike } from '@opensa/audio';
 import type { OsaudioIndex, OsaudioSound } from '@opensa/engine-formats';
 import type { VehicleAudioRow } from '@opensa/renderware/parsers/text/vehicle-audio.parser';
 
@@ -7,6 +6,7 @@ import { FakeAudioContext } from '@opensa/audio/test/fake-context';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Unit } from '../ops/types';
+import type { WarmSound } from './unit-audio';
 
 import { AUDIBLE_REACH, sirenNameFor, UnitAudio } from './unit-audio';
 
@@ -45,7 +45,14 @@ const CAR: VehicleAudioRow = {
 };
 
 /** A pool over a fake context, plus everything `UnitAudio` needs around it. */
-function harness(options: { rows?: string; vehicles?: readonly VehicleAudioRow[] } = {}): {
+function harness(
+  options: {
+    maxDistance?: number;
+    pitchScale?: number;
+    rows?: string;
+    vehicles?: readonly VehicleAudioRow[];
+  } = {},
+): {
   audio: UnitAudio;
   context: FakeAudioContext;
   pool: VoicePool;
@@ -56,13 +63,16 @@ function harness(options: { rows?: string; vehicles?: readonly VehicleAudioRow[]
   const table = AudioEventTable.resolve(
     options.rows === undefined
       ? []
-      : [{ bank: 0, gain: 1, loop: true, maxDistance: null, name: options.rows, sound: 3 }],
+      : [{ bank: 0, gain: 1, loop: true, maxDistance: options.maxDistance ?? null, name: options.rows, sound: 3 }],
     INDEX,
     absence,
   );
   const vehicles = VehicleVoiceTable.resolve(options.vehicles ?? [CAR], new Map(), new Map(), INDEX, absence);
   const audio = new UnitAudio({
-    bufferFor: (): AudioBufferLike => context.createBuffer(1, 12_000, 12_000),
+    bufferFor: (): WarmSound => ({
+      buffer: context.createBuffer(1, 12_000, 12_000),
+      pitchScale: options.pitchScale ?? 1,
+    }),
     events: () => table,
     pool,
     vehicles: () => vehicles,
@@ -210,6 +220,40 @@ describe('UnitAudio', () => {
       audio.update([unit({ at: [9, 9], speed: 20 })], [0, 0, 0], 0.1);
 
       expect(pool.report().started).toBe(started);
+    });
+
+    it('reaches as far as the SIREN row was authored to, not just as far as an engine', () => {
+      // A `VEH_SIREN_PATROL … 900` row means an operator hears it from 900 m; culling at the engine's 300
+      // would silence the row with nothing reported.
+      const { audio } = harness({ maxDistance: 900, rows: sirenNameFor('patrol') });
+
+      audio.update([unit({ speed: 20, status: 'enRoute' })], [0, 0, AUDIBLE_REACH + 100], 0.1);
+
+      expect(audio.report().sirens).toBe(1);
+    });
+
+    it('folds the buffer-floor correction into an engine it pitched itself', () => {
+      // The one stock sound below Web Audio's 3 000 Hz floor: its buffer is made at 3 000 and must be played
+      // back slower, and a caller that builds its own pitch has to fold that in or it wails half again fast.
+      const plain = harness();
+      const corrected = harness({ pitchScale: 0.5 });
+      plain.audio.update([unit({ speed: 20 })], [0, 0, 0], 0.1);
+      corrected.audio.update([unit({ speed: 20 })], [0, 0, 0], 0.1);
+
+      const one = plain.context.sources[0]?.playbackRate.value ?? 0;
+      const half = corrected.context.sources[0]?.playbackRate.value ?? 0;
+
+      expect(half).toBeCloseTo(one * 0.5, 9);
+    });
+
+    it('keeps the correction across ticks, so an evicted buffer cannot jump the pitch', () => {
+      const { audio, context } = harness({ pitchScale: 0.5 });
+      audio.update([unit({ speed: 20 })], [0, 0, 0], 0.1);
+      const started = context.sources[0]?.playbackRate.value ?? 0;
+
+      audio.update([unit({ speed: 20 })], [0, 0, 0], 0.1);
+
+      expect(context.sources[0]?.playbackRate.value).toBeCloseTo(started, 6);
     });
 
     it('reaches exactly as far as the falloff still distinguishes', () => {

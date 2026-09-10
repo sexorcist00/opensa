@@ -1,10 +1,10 @@
 import { decodeOsaudio, type OsaudioIndex } from '@opensa/engine-formats';
 import { buildAudioIndex, openAudioRanges } from '@opensa/opensa-pack/audio-index';
 import { openGameDir } from '@opensa/opensa-pack/game-fs';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { BED_PACKAGE, BED_SECONDS, bedTable, pickBedLayers } from '../lib/audio-bed';
+import { BED_PACKAGE, BED_SECONDS, bedTable, mergeBedTable, pickBedLayers } from '../lib/audio-bed';
 import { gameArg, gameDir } from '../lib/game';
 
 /**
@@ -92,8 +92,15 @@ function draftBed(index: OsaudioIndex, game: string): void {
   const data = join(tree, 'data');
   mkdirSync(data, { recursive: true });
   const out = join(data, 'audio-events.dat');
-  writeFileSync(out, text, 'utf8');
-  console.log(`[bank-probe] wrote ${out} — deleting it restores silence, the stock game ships no such file`);
+  // MERGED, not overwritten: the same file carries the `VEH_SIREN_*` rows and anything else an ear has
+  // settled on, and a draft that took them with it would do so silently.
+  const had = existsSync(out);
+  writeFileSync(out, had ? mergeBedTable(readFileSync(out, 'utf8'), text) : text, 'utf8');
+  console.log(
+    had
+      ? `[bank-probe] merged the bed into ${out} — its other rows were kept, only AMB_DEFAULT* was replaced`
+      : `[bank-probe] wrote ${out} — deleting it restores silence, the stock game ships no such file`,
+  );
 }
 
 function flag(name: string): string | undefined {

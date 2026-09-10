@@ -43,6 +43,28 @@ export function bedTable(layers: readonly BedLayer[], gains: readonly number[]):
 }
 
 /**
+ * Merge a drafted bed into a table that may already exist.
+ *
+ * **A draft may not destroy authored rows.** The same file carries the `VEH_SIREN_*` rows 5/02 needs and
+ * anything else an ear has settled on, and a plain overwrite would take them with it — silently, since a
+ * table is only ever read by a browser. Every row that is not one of the bed's own is kept, in its own
+ * order, and the drafted layers are appended.
+ */
+export function mergeBedTable(existing: string, drafted: string): string {
+  const kept = existing
+    .split(/\r?\n/u)
+    .filter((line) => !isBedRow(line))
+    .join('\n')
+    .replace(/\n+$/u, '');
+  const rows = drafted
+    .split(/\r?\n/u)
+    .filter((line) => isBedRow(line))
+    .join('\n');
+
+  return kept === '' ? drafted : `${kept}\n${rows}\n`;
+}
+
+/**
  * The layers, longest first, at most one per BANK.
  *
  * **One per bank is the rule that matters.** The census found eight loops of identical length inside one
@@ -82,4 +104,9 @@ export function pickBedLayers(index: OsaudioIndex, layers: number): readonly Bed
   }
 
   return picked;
+}
+
+/** Whether a line is one of the default bed's own rows — the only ones a draft may replace. */
+function isBedRow(line: string): boolean {
+  return /^\s*AMB_DEFAULT(?:_\d+)?\s*[,\s]/iu.test(line);
 }

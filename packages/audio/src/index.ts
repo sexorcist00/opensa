@@ -3,6 +3,7 @@ export {
   Ambience,
   AMBIENCE_PREFIX,
   type AmbienceHost,
+  type AmbienceLoop,
   type AmbienceReport,
   BED_FULL_HEIGHT,
   BED_SILENT_HEIGHT,

@@ -2,7 +2,7 @@ import type { OsaudioIndex, OsaudioSound } from '@opensa/engine-formats';
 
 import { describe, expect, it } from 'vitest';
 
-import { BED_SECONDS, bedTable, pickBedLayers } from './audio-bed';
+import { BED_SECONDS, bedTable, mergeBedTable, pickBedLayers } from './audio-bed';
 
 /**
  * An index of banks, each `[package, ...sounds]`.
@@ -148,6 +148,64 @@ describe('bedTable', () => {
       expect(text).toContain('AMB_DEFAULT, 82, 0, 0.5, loop');
       expect(text).toContain('AMB_DEFAULT_2, 84, 3, 0.3, loop');
       expect(text.split('\n')[0]).toMatch(/^#/u);
+    });
+  });
+});
+
+describe('mergeBedTable', () => {
+  describe('negative cases', () => {
+    it('never takes an authored row with it — the sirens live in the same file', () => {
+      const existing = [
+        '# an ear settled these',
+        'VEH_SIREN_PATROL, 40, 2, 0.9, loop',
+        'AMB_DEFAULT, 1, 0, 0.5, loop',
+      ].join('\n');
+      const drafted = bedTable([{ bank: 82, seconds: 4, slot: 0 }], [0.5]);
+
+      const merged = mergeBedTable(existing, drafted);
+
+      expect(merged).toContain('VEH_SIREN_PATROL, 40, 2, 0.9, loop');
+      expect(merged).toContain('# an ear settled these');
+      // The old bed row is gone, replaced rather than doubled.
+      expect(merged).not.toContain('AMB_DEFAULT, 1, 0,');
+      expect(merged).toContain('AMB_DEFAULT, 82, 0, 0.5, loop');
+    });
+
+    it('replaces every numbered layer of the old bed, not only the first', () => {
+      const existing = [
+        'AMB_DEFAULT, 1, 0, 0.5, loop',
+        'AMB_DEFAULT_2, 2, 0, 0.3, loop',
+        'AMB_DEFAULT_3, 3, 0, 0.2, loop',
+      ].join('\n');
+
+      const merged = mergeBedTable(existing, bedTable([{ bank: 82, seconds: 4, slot: 0 }], [0.5]));
+
+      expect(merged).not.toContain('AMB_DEFAULT_2');
+      expect(merged).not.toContain('AMB_DEFAULT_3');
+    });
+
+    it("leaves a zone bed alone — only the DEFAULT one is the draft's to replace", () => {
+      const merged = mergeBedTable(
+        'AMB_LS_BEACH, 9, 0, 0.4, loop',
+        bedTable([{ bank: 82, seconds: 4, slot: 0 }], [0.5]),
+      );
+
+      expect(merged).toContain('AMB_LS_BEACH, 9, 0, 0.4, loop');
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is the draft itself when there was no table', () => {
+      const drafted = bedTable([{ bank: 82, seconds: 4, slot: 0 }], [0.5]);
+
+      expect(mergeBedTable('', drafted)).toBe(drafted);
+    });
+
+    it('is idempotent — merging the same draft twice writes the same rows', () => {
+      const drafted = bedTable([{ bank: 82, seconds: 4, slot: 0 }], [0.5]);
+      const once = mergeBedTable('VEH_SIREN_FIRE, 1, 1, 1, loop', drafted);
+
+      expect(mergeBedTable(once, drafted)).toBe(once);
     });
   });
 });

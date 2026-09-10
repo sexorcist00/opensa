@@ -20,6 +20,7 @@
  */
 import type {
   AmbienceHost,
+  AmbienceLoop,
   AmbienceReport,
   AudioAbsenceReport,
   AudioAvailability,
@@ -55,7 +56,7 @@ import { AudioCache } from '@opensa/loaders/audio-cache';
 import { openAudioSource } from '@opensa/loaders/audio-source';
 
 import type { Unit } from '../ops/types';
-import type { UnitAudioReport } from './unit-audio';
+import type { UnitAudioReport, WarmSound } from './unit-audio';
 
 import { UnitAudio } from './unit-audio';
 
@@ -119,6 +120,7 @@ export class DispatchAudio {
   private source: AudioSource | null = null;
   private table: AudioEventTable;
   private readonly units: null | UnitAudio;
+  private readonly unreadable = new Set<number>();
   private vehicles: VehicleVoiceTable = VehicleVoiceTable.empty();
   private volume = 1;
 
@@ -151,7 +153,7 @@ export class DispatchAudio {
       this.pool === null
         ? null
         : new UnitAudio({
-            bufferFor: (soundIndex): AudioBufferLike | null => this.warm(soundIndex),
+            bufferFor: (soundIndex): null | WarmSound => this.warm(soundIndex),
             events: (): AudioEventTable => this.table,
             pool: this.pool,
             vehicles: (): VehicleVoiceTable => this.vehicles,
@@ -337,8 +339,13 @@ export class DispatchAudio {
       setGain: (voice, gain, seconds): void => {
         this.pool?.setGain(voice, gain, seconds);
       },
-      startLoop: (name, startFraction, gain): Promise<null | Voice> =>
-        this.play(name, null, { gainScale: gain, startFraction }),
+      startLoop: async (name, startFraction, level): Promise<AmbienceLoop | null> => {
+        const voice = await this.play(name, null, { gainScale: level, startFraction });
+        // The row's own gain goes back to the bed, which multiplies its envelope by it every tick. Without
+        // that the first `setGain` would overwrite the table's layer balance with a bare envelope.
+
+        return voice === null ? null : { gain: this.table.find(name)?.gain ?? 1, voice };
+      },
     };
   }
 
@@ -386,18 +393,37 @@ export class DispatchAudio {
    * a cold sound is `null`; the tick after the fetch lands starts it. `pending` is what stops those ten
    * calls a second from each paying for a range request — the one place in this file where an in-flight
    * guard earns its state, because unlike a one-shot the ask repeats until it is answered.
+   *
+   * **A read that FAILED is not tried again**, which `pending` alone does not give: it clears the moment the
+   * promise settles, so a 404 on the package — a pak served without its game dir, a mod that ships a short
+   * one — would be re-asked ten times a second for the life of the page, and against a host that ignores
+   * `Range:` each of those pulls the whole 304.9 MB package. The absence report already names such a sound
+   * once; this makes the request match. The cost is that a sound lost to one bad moment stays lost until
+   * the page is reloaded, which is the cheaper of the two failures by a wide margin.
    */
-  private warm(soundIndex: number): AudioBufferLike | null {
+  private warm(soundIndex: number): null | WarmSound {
     const kept = this.buffers.get(soundIndex);
-    if (kept) {
-      return kept;
-    }
     const sound = this.index?.sounds[soundIndex];
-    if (!sound || this.pending.has(soundIndex)) {
+    if (!sound) {
+      return null;
+    }
+    // The same arithmetic `play` uses: a buffer below Web Audio's floor is made at 3 000 Hz and played
+    // slower, and a caller that builds its own pitch has to fold that in.
+    const pitchScale = sound.sampleRate / Math.max(sound.sampleRate, MIN_BUFFER_RATE);
+    if (kept) {
+      return { buffer: kept, pitchScale };
+    }
+    if (this.pending.has(soundIndex) || this.unreadable.has(soundIndex)) {
       return null;
     }
     this.pending.add(soundIndex);
-    void this.buffer(soundIndex, sound.sampleRate).finally(() => this.pending.delete(soundIndex));
+    void this.buffer(soundIndex, sound.sampleRate)
+      .then((buffer) => {
+        if (buffer === null) {
+          this.unreadable.add(soundIndex);
+        }
+      })
+      .finally(() => this.pending.delete(soundIndex));
 
     return null;
   }
