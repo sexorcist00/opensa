@@ -27,6 +27,13 @@ its research record into its `docs/plans/<n>-…/` folder, and a killed one move
   device's format at load (Basis/KTX2), so a phone can open the real map. Direction decided 2026-08-04;
   the open question is whether the quality survives a second generation of loss on SA's DXT. Gate on
   [plan 200 chain 2](../plans/200-platform-reach/2-universal-textures/readme.md).
+- **[panel-audio](panel-audio.md)** — the console's own voice, opened 2026-09-10. Two halves: the panel's event
+  vocabulary (almost all of it shared with PCAD, because 202's phase 3 makes the console an island inside
+  PCAD's shell and the chrome that raises those events will be PCAD's), and the eight named gaps between
+  what 203 built and AAA. Recommendation up front: the mixer half — buses, ducking, a limiter — is worth
+  doing whatever is decided about panel sounds, because **an alert can be refused by 64 car engines today**;
+  and panel sounds should be SYNTHESISED as their floor, since a computed tone is the one sound in this chain
+  with no failure mode to inherit.
 - **[go-backend](go-backend.md)** — Go for the dispatch backend, opened 2026-08-26. Recommendation up front:
   do not rewrite PCAD's working Node server (~4.1k lines, real users, and [202](../plans/202-pcad-dispatch/readme.md)
   says the dull half is behind us), and do not close the door either — the one shape that pays is the
