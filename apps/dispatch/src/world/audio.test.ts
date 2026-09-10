@@ -3,7 +3,7 @@ import type { AudioClockHost, AudioListener } from '@opensa/audio';
 import { FakeAudioContext } from '@opensa/audio/test/fake-context';
 import { describe, expect, it, vi } from 'vitest';
 
-import { audioArm, DispatchAudio } from './audio';
+import { audioArm, DispatchAudio, MIXES } from './audio';
 
 /** Timers a test drives by hand. `fire(ms)` moves the clock first, so the tick's gap is the test's own. */
 function clockHost(): AudioClockHost & { fire(afterMs?: number): void } {
@@ -202,6 +202,7 @@ describe('DispatchAudio', () => {
         buffers: { bytes: 0, ceilingBytes: 67_108_864, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },
         clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
         events: 0,
+        mix: 'full' as const,
         resumesRefused: 0,
         units: { engines: 0, sirens: 0, unvoiced: 0 },
         vehicles: 0,
@@ -221,6 +222,108 @@ describe('DispatchAudio', () => {
       detach();
 
       expect(listeners).toEqual([]);
+    });
+  });
+});
+
+/** A `localStorage` a test owns, including one that throws the way a blocked store does. */
+function store(initial?: string): Pick<Storage, 'getItem' | 'setItem'> & { written: string[] } {
+  const written: string[] = [];
+
+  return {
+    getItem: (): null | string => initial ?? null,
+    setItem: (_key, value): void => {
+      written.push(value);
+    },
+    written,
+  };
+}
+
+describe('DispatchAudio mixes', () => {
+  describe('negative cases', () => {
+    it('starts on the full mix when nothing was ever stored', () => {
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clockHost(),
+        log: vi.fn(),
+        storage: store(),
+      });
+
+      expect(audio.report().mix).toBe('full');
+    });
+
+    it('ignores a stored name this build does not have', () => {
+      // A mix renamed between builds must not leave a console on a level nothing can reach.
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clockHost(),
+        log: vi.fn(),
+        storage: store('deafening'),
+      });
+
+      expect(audio.report().mix).toBe('full');
+    });
+
+    it('survives a storage that throws, which is what a blocked store does', () => {
+      const throwing: Pick<Storage, 'getItem' | 'setItem'> = {
+        getItem: (): never => {
+          throw new Error('blocked');
+        },
+        setItem: (): never => {
+          throw new Error('blocked');
+        },
+      };
+
+      // A private window, a browser set to block site data, a third-party frame. Losing the mix is a small
+      // failure; taking the console down on load over one is not.
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clockHost(),
+        log: vi.fn(),
+        storage: throwing,
+      });
+
+      expect(audio.report().mix).toBe('full');
+      expect(() => audio.setMix('muted')).not.toThrow();
+    });
+  });
+
+  describe('positive cases', () => {
+    it('comes back on the mix the operator left it on', () => {
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clockHost(),
+        log: vi.fn(),
+        storage: store('work'),
+      });
+
+      expect(audio.report().mix).toBe('work');
+    });
+
+    it('remembers every step, so a reload is not a surprise', () => {
+      const storage = store();
+      const audio = new DispatchAudio(new URLSearchParams(), { clockHost: clockHost(), log: vi.fn(), storage });
+
+      audio.stepMix();
+      audio.stepMix();
+
+      expect(storage.written.slice(-2)).toEqual(['work', 'alerts']);
+    });
+
+    it('wraps past muted back to the full mix', () => {
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clockHost(),
+        log: vi.fn(),
+        storage: store(),
+      });
+
+      const seen = [audio.stepMix(), audio.stepMix(), audio.stepMix(), audio.stepMix()];
+
+      expect(seen).toEqual(['work', 'alerts', 'muted', 'full']);
+    });
+
+    it('puts the city UNDER the work rather than making everything quieter', () => {
+      // The whole reason these are mixes: `work` leaves the panel where it was and drops the city.
+      const [full, work] = MIXES;
+
+      expect(work?.world).toBeLessThan(full?.world ?? 0);
+      expect(work?.cad).toBe(full?.cad);
     });
   });
 });

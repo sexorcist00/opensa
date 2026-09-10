@@ -14,7 +14,7 @@
 import type { GtaGround } from '../map/coords';
 import type { SharedView } from '../map/view-link';
 import type { Operations, Selection } from '../ops/types';
-import type { DispatchAudioReport } from './audio';
+import type { DispatchAudioReport, MixName } from './audio';
 import type { BootOptions, DispatchHandle, DispatchReadout, ZoomLevel } from './boot';
 import type { SearchedPlace } from './zones';
 
@@ -66,6 +66,7 @@ const SILENT_AUDIO: DispatchAudioReport = {
   buffers: { bytes: 0, ceilingBytes: 0, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },
   clock: { maxMs: 0, meanMs: 0, rateHz: 0, ticks: 0 },
   events: 0,
+  mix: 'full' as const,
   resumesRefused: 0,
   units: { engines: 0, sirens: 0, unvoiced: 0 },
   vehicles: 0,
@@ -334,7 +335,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
       lastPayload = {
         // Plan mode is the flat 2D fallback: it builds no audio host at all, so the control it feeds says
         // so rather than claiming a world this surface could not make a sound in.
-        audio: { availability: 'unsupported' as const, volume: 1 },
+        audio: { availability: 'unsupported' as const, mix: 'full' as const },
         buildTime: `plan mode — ${why}`,
         cellsTotal: 0,
         cellsVisible: 0,
@@ -369,7 +370,7 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     // nothing.
     audio: {
       report: (): DispatchAudioReport => SILENT_AUDIO,
-      step: (): number => 1,
+      step: (): MixName => 'full',
     },
     camera,
     dispose(): void {

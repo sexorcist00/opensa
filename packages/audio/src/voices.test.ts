@@ -5,7 +5,7 @@ import type { FakeAudioBuffer } from './test/fake-context';
 
 import { audibleGain } from './spatial';
 import { FakeAudioContext, type FakeBufferSource, type FakeGain } from './test/fake-context';
-import { CAD_RESERVE, DUCK_DEPTH, LIMITER_THRESHOLD_DB, MAX_VOICES, VoicePool } from './voices';
+import { ALERT_FLOOR, CAD_RESERVE, DUCK_DEPTH, LIMITER_THRESHOLD_DB, MAX_VOICES, VoicePool } from './voices';
 
 /** A listener at the origin looking down +Y with +X to its right. */
 const AT_ORIGIN: AudioListener = { forward: [0, 1, 0], position: [0, 0, 0], right: [1, 0, 0] };
@@ -532,6 +532,69 @@ describe('VoicePool ducking', () => {
 
       // Two alerts inside one bad second is ordinary; the world coming back between them is not.
       expect(pool.report().ducked).toBe(true);
+    });
+  });
+});
+
+describe('VoicePool alert floor', () => {
+  describe('negative cases', () => {
+    it('is a FLOOR and not an exemption: a muted alert is quiet, not full', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.setBusGain('cad', 0);
+
+      pool.play({ buffer: buffer(context), bus: 'cad', floored: true, position: null });
+
+      // The operator asked for silence and gets something well under it — not their level ignored.
+      expect(busGain(context, 'cad')?.gain.value).toBe(ALERT_FLOOR);
+      expect(ALERT_FLOOR).toBeLessThan(0.5);
+      expect(ALERT_FLOOR).toBeGreaterThan(0);
+    });
+
+    it('does not raise a bus for an ordinary alert', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.setBusGain('cad', 0);
+
+      // A routine chime is not a panic button; muting the bus really does silence it.
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+
+      expect(busGain(context, 'cad')?.gain.value).toBe(0);
+    });
+
+    it('drops back to the operator’s level once the floored voice ends', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.setBusGain('cad', 0);
+      pool.play({ buffer: buffer(context), bus: 'cad', floored: true, position: null });
+
+      sourceOf(context, 0).finish();
+
+      expect(busGain(context, 'cad')?.gain.value).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('never pulls a bus DOWN to the floor when the operator asked for more', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.setBusGain('cad', 1);
+
+      pool.play({ buffer: buffer(context), bus: 'cad', floored: true, position: null });
+
+      expect(busGain(context, 'cad')?.gain.value).toBe(1);
+    });
+
+    it('says in the report that a floor is holding a bus open', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      pool.setBusGain('cad', 0);
+
+      pool.play({ buffer: buffer(context), bus: 'cad', floored: true, position: null });
+
+      // The operator's level is unchanged and the report says so; the floor is the mixer's doing.
+      expect(pool.report().busGain.cad).toBe(0);
+      expect(pool.report().flooring).toEqual(['cad']);
     });
   });
 });

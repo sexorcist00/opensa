@@ -5,8 +5,13 @@ import type { AudioAvailability } from '@opensa/audio';
  * **One control, two jobs, because the cross-platform rule allows exactly one.** A slider beside a mute
  * button is two targets and ~120 px of a bar that already clips at 360 CSS px
  * ([the restriction](../../../../docs/restrictions/cross-platform-surface.md)); this is one target at
- * `TOUCH_TARGET`, it needs no hover, no keyboard and no popover, and it says its own state. It steps
- * full → half → quiet → muted → full, which is *volume and mute* in the only shape that fits.
+ * `TOUCH_TARGET`, it needs no hover, no keyboard and no popover, and it says its own state.
+ *
+ * **Since 204/1-04 it steps MIXES rather than volumes**, and that is the more useful control as well as the
+ * one that fits: nobody working a board wants *everything quieter*, they want *the city under the work* —
+ * which a master volume cannot express at all. `work` is the shift mix. And **`muted` is honest about its
+ * own floor**: the panic button and the lost link stay audible, quietly, so the label says so rather than
+ * letting an operator believe they have switched off the two things that matter.
  *
  * **The glyph is monochrome on purpose**, like every other key in this cluster (`⟲`, `▲`, `☑`): a colour
  * emoji would be the one coloured thing on a console whose whole palette is a decision.
@@ -15,6 +20,8 @@ import type { AudioAvailability } from '@opensa/audio';
  * accessible name states both the level and what pressing does — which is also what a screen reader gets.
  */
 import type { ReactElement } from 'react';
+
+import type { MixName } from '../world/audio';
 
 import { styles } from './styles';
 
@@ -27,20 +34,20 @@ interface KeyFace {
 export function AudioKey({
   availability,
   disabled = false,
+  mix,
   onStep,
   touch = false,
-  volume,
 }: {
   /** What the browser allows right now — the honest half of the indicator. */
   readonly availability: AudioAvailability;
   readonly disabled?: boolean;
+  /** The mix the console is on. */
+  readonly mix: MixName;
   /** Step the volume. It resumes the context too: pressing the sound control IS the gesture. */
   readonly onStep: () => void;
   readonly touch?: boolean;
-  /** The step the volume is on, 0..1. */
-  readonly volume: number;
 }): ReactElement {
-  const face = audioKeyFace(availability, volume);
+  const face = audioKeyFace(availability, mix);
   const unavailable = availability === 'unsupported';
 
   return (
@@ -63,7 +70,7 @@ export function AudioKey({
  * Exported because it is the whole of this control's behaviour and the only part a headless test can
  * reach — the JSX around it is one `<button>` (`docs/development/e2e.md` owns the rendered half).
  */
-export function audioKeyFace(availability: AudioAvailability, volume: number): KeyFace {
+export function audioKeyFace(availability: AudioAvailability, mix: MixName): KeyFace {
   if (availability === 'unsupported') {
     return { glyph: '⊘', label: 'Sound is not available on this surface' };
   }
@@ -72,15 +79,17 @@ export function audioKeyFace(availability: AudioAvailability, volume: number): K
     // "press and it plays", and none of them is a fault worth three different words.
     return { glyph: '♪', label: 'Turn sound on' };
   }
-  if (volume <= 0) {
-    return { glyph: '⊘', label: 'Muted — press for full sound' };
+  if (mix === 'muted') {
+    // Named rather than implied: an operator who mutes and is then reached by a panic tone should have been
+    // told, once, in the control that did it.
+    return { glyph: '⊘', label: 'Muted — panic and lost link stay audible. Press for the full mix' };
   }
-  if (volume <= 0.2) {
-    return { glyph: '▁', label: 'Sound: quiet — press to mute' };
+  if (mix === 'alerts') {
+    return { glyph: '▁', label: 'Sound: alerts only — press to mute' };
   }
-  if (volume <= 0.5) {
-    return { glyph: '▄', label: 'Sound: half — press for quiet' };
+  if (mix === 'work') {
+    return { glyph: '▄', label: 'Sound: the city under the work — press for alerts only' };
   }
 
-  return { glyph: '█', label: 'Sound: full — press for half' };
+  return { glyph: '█', label: 'Sound: the full mix — press to put the city under the work' };
 }

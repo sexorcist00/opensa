@@ -38,6 +38,10 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
 - **Ducking** (204/1-03): an alert pulls the world and the map down 12 dB and lets them back up, derived from
   the state of the `cad` bus rather than asked for — a duck a caller must remember is one somebody forgets. It
   multiplies the operator's level rather than replacing it.
+- **Four mixes on one key, persisted** (204/1-04): `full` → `work` (the city under the work) → `alerts` →
+  `muted`. Levels rather than a master volume, because *everything quieter* was never what a dispatcher
+  wanted; one control rather than three sliders, because the cross-platform rule forbids the second. Muting
+  leaves the panic button and the lost link audible at a floor, and the key's own label says so.
 - **Absence is a reported state, never a throw**: no Web Audio in the environment is `unsupported`, one line
   in the log, and a host every caller can go on using.
 

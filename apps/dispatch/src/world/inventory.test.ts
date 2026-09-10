@@ -65,6 +65,7 @@ const CONTEXT = {
     buffers: { bytes: 0, ceilingBytes: 67_108_864, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },
     clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
     events: 0,
+    mix: 'full' as const,
     resumesRefused: 0,
     units: { engines: 0, sirens: 0, unvoiced: 0 },
     vehicles: 0,

@@ -20,6 +20,7 @@ import type { AudioAvailability } from '@opensa/audio';
  */
 import { type ReactElement, useState } from 'react';
 
+import type { MixName } from '../world/audio';
 import type { DispatchHandle } from '../world/boot';
 import type { MapMode } from '../world/mode-switch';
 
@@ -41,7 +42,7 @@ export function MapNav({
   yaw,
 }: {
   /** What the sound key shows (203/6-02). Absent before the first readout. */
-  audio?: { availability: AudioAvailability; volume: number };
+  audio?: { availability: AudioAvailability; mix: MixName };
   /** Narrow screen: the cluster keeps what is used every few seconds and folds the rest behind one key. */
   compact?: boolean;
   handle: DispatchHandle | null;
@@ -84,9 +85,9 @@ export function MapNav({
       <AudioKey
         availability={audio?.availability ?? 'unsupported'}
         disabled={disabled}
+        mix={audio?.mix ?? 'full'}
         onStep={() => handle?.audio.step()}
         touch={touch}
-        volume={audio?.volume ?? 1}
       />
 
       {compact && (

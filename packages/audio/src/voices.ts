@@ -59,6 +59,8 @@ export interface VoicePoolReport {
   readonly ceiling: number;
   /** Whether an alert is currently holding the world down. */
   readonly ducked: boolean;
+  /** Buses a floored voice is holding open above the level the operator set. */
+  readonly flooring: readonly AudioBus[];
   /** The ceiling, and how hard the mix is pushing against it. */
   readonly limiter: { readonly reduction: number; readonly thresholdDb: number };
   /** Playing right now. */
@@ -92,6 +94,15 @@ export interface VoiceRequest {
   readonly bus?: AudioBus;
   /** Distance model. Absent, {@link DEFAULT_FALLOFF} — a fitted bridge, see `docs/hacks/`. */
   readonly falloff?: Falloff;
+  /**
+   * Whether this sound is heard even when its bus is muted.
+   *
+   * **For the two events this chain exists for** — the panic button and the lost link — and nothing else. A
+   * floored voice holds its whole bus open at {@link ALERT_FLOOR} for as long as it plays, which is why it
+   * is a property of the SOUND rather than a mode of the mixer: a routine chime beside a panic is quiet
+   * because it is routine, not because the mixer was in the wrong state.
+   */
+  readonly floored?: boolean;
   /** Authored gain, 0..1, before distance. */
   readonly gain?: number;
   readonly loop?: boolean;
@@ -172,6 +183,19 @@ const LIMITER_RELEASE_SECONDS = 0.25;
  */
 export const DUCK_DEPTH = 0.25;
 
+/**
+ * The lowest a bus goes while a FLOORED voice is playing on it, whatever the operator set.
+ *
+ * **A floor, not an exemption** (204's decision 3.4). A dispatcher who mutes the panel gets silence for the
+ * routine chimes and something quiet for the two events this whole chain exists to deliver — the panic
+ * button and the lost link. An alert that ignored a mute outright would be the other failure: an operator
+ * turns sound off for a reason, sometimes because somebody is asleep in the room.
+ *
+ * **And it is stated in the interface rather than sprung on anybody**: the control says which events stay
+ * audible, so a muted console is a promise rather than a surprise.
+ */
+export const ALERT_FLOOR = 0.25;
+
 /** Down quickly — the alert has already started, and a slow duck is a first syllable lost under traffic. */
 const DUCK_ATTACK_SECONDS = 0.08;
 
@@ -201,6 +225,7 @@ const FADE_SECONDS = 0.008;
 interface LiveVoice {
   bus: AudioBus;
   falloff: Falloff;
+  floored: boolean;
   gain: number;
   gainNode: GainLike;
   handle: MutableVoice;
@@ -302,6 +327,7 @@ export class VoicePool {
       busGain: { ...this.busLevel },
       ceiling: this.ceiling,
       ducked: this.ducked,
+      flooring: BUSES.filter((bus) => this.flooring(bus)),
       limiter: { reduction: this.limiter.reduction, thresholdDb: LIMITER_THRESHOLD_DB },
       live: this.voices.size,
       liveByBus: { cad: this.countOn('cad'), map: this.countOn('map'), world: this.countOn('world') },
@@ -325,7 +351,7 @@ export class VoicePool {
     const node = this.buses[bus].gain;
     // Cancel first: a duck ramp may be in flight, and an operator moving a level outranks it.
     node.cancelScheduledValues(this.context.currentTime);
-    node.value = this.busLevel[bus] * this.duckFactor(bus);
+    node.value = this.nodeGain(bus);
   }
 
   /**
@@ -410,17 +436,23 @@ export class VoicePool {
    */
   private applyDuck(): void {
     const wanted = this.countOn('cad') > 0;
-    if (wanted === this.ducked) {
-      return;
-    }
-    this.ducked = wanted;
     const now = this.context.currentTime;
-    const seconds = wanted ? DUCK_ATTACK_SECONDS : DUCK_RELEASE_SECONDS;
-    for (const bus of DUCKED) {
-      const node = this.buses[bus].gain;
-      node.cancelScheduledValues(now);
-      node.setValueAtTime(node.value, now);
-      node.linearRampToValueAtTime(this.busLevel[bus] * this.duckFactor(bus), now + seconds);
+    if (wanted !== this.ducked) {
+      this.ducked = wanted;
+      const seconds = wanted ? DUCK_ATTACK_SECONDS : DUCK_RELEASE_SECONDS;
+      for (const bus of DUCKED) {
+        const node = this.buses[bus].gain;
+        node.cancelScheduledValues(now);
+        node.setValueAtTime(node.value, now);
+        node.linearRampToValueAtTime(this.nodeGain(bus), now + seconds);
+      }
+    }
+    // The floor is stepped rather than ramped, and deliberately: it opens on the first sample of an alert
+    // that a muted console would otherwise have swallowed, and a ramp there is a late alert.
+    for (const bus of BUSES) {
+      if (!DUCKED.includes(bus) || !this.ducked) {
+        this.buses[bus].gain.value = this.nodeGain(bus);
+      }
     }
   }
 
@@ -456,7 +488,18 @@ export class VoicePool {
       },
     };
 
-    const live: LiveVoice = { bus, falloff, gain, gainNode, handle, id, panner, position, source };
+    const live: LiveVoice = {
+      bus,
+      falloff,
+      floored: request.floored === true,
+      gain,
+      gainNode,
+      handle,
+      id,
+      panner,
+      position,
+      source,
+    };
     // A one-shot frees its own slot. Nothing polls, and a loop simply never fires this.
     source.onended = (): void => {
       this.release(id, 'ended');
@@ -492,6 +535,17 @@ export class VoicePool {
     return this.ducked && DUCKED.includes(bus) ? DUCK_DEPTH : 1;
   }
 
+  /** Whether a floored voice is currently playing on a bus. */
+  private flooring(bus: AudioBus): boolean {
+    for (const voice of this.voices.values()) {
+      if (voice.bus === bus && voice.floored) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /**
    * Make room for a sound worth `heard` on `bus`, or answer false. **Two ranks, and the order is the point.**
    *
@@ -517,6 +571,19 @@ export class VoicePool {
     // mattering — a panic at 0.01 still outranks an engine, because the reserve is about WHAT it is rather
     // than how loud it is.
     return this.stealFrom((voice) => this.countOn(voice.bus) > RESERVE[voice.bus], Number.POSITIVE_INFINITY);
+  }
+
+  /**
+   * What a bus's node should be set to right now: the operator's level, ducked, and never below the floor
+   * while a floored voice is on it.
+   *
+   * `max` rather than a replacement, so the floor can only ever RAISE a muted bus and never pull down one
+   * the operator wanted louder.
+   */
+  private nodeGain(bus: AudioBus): number {
+    const wanted = this.busLevel[bus] * this.duckFactor(bus);
+
+    return this.flooring(bus) ? Math.max(wanted, ALERT_FLOOR) : wanted;
   }
 
   /** Set a voice's gain and pan from where it and the listener now are. */

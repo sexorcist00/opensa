@@ -64,7 +64,7 @@ import {
   type WorldClockSource,
   type WorldTimeAnchor,
 } from '../ops/world-clock';
-import { DispatchAudio, type DispatchAudioReport } from './audio';
+import { DispatchAudio, type DispatchAudioReport, type MixName } from './audio';
 import { loadAudio, type LoadedAudio } from './audio-load';
 import { bootBytes, bootDone, bootStep } from './boot-progress';
 import { composeImage } from './capture';
@@ -129,7 +129,7 @@ export interface DispatchHandle {
    * operator reaching for the sound control is the clearest gesture a page ever gets, and a button that
    * changed a number while the page stayed silent would be a lie.
    */
-  readonly audio: { report(): DispatchAudioReport; step(): number };
+  readonly audio: { report(): DispatchAudioReport; step(): MixName };
   readonly camera: MapCamera;
   dispose(): void;
   /**
@@ -213,7 +213,7 @@ export interface DispatchHandle {
 export interface DispatchReadout {
   /** What the sound control shows (203/6-01, 6-02): what the browser allows, and the step the volume is on.
    *  The chrome draws an HONEST indicator from this rather than claiming the world is audible. */
-  readonly audio: { readonly availability: AudioAvailability; readonly volume: number };
+  readonly audio: { readonly availability: AudioAvailability; readonly mix: MixName };
   readonly buildTime: string;
   readonly cellsTotal: number;
   readonly cellsVisible: number;
@@ -1136,7 +1136,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       const rate = frameClock.read(now);
       const audioNow = audio.report();
       lastPayload = {
-        audio: { availability: audioNow.availability, volume: audioNow.volume },
+        audio: { availability: audioNow.availability, mix: audioNow.mix },
         buildTime: world.label,
         cellsTotal: stats.cellsTotal,
         cellsVisible: stats.cellsVisible,
@@ -1207,7 +1207,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     /** What the sound control needs: the state to draw and the step to take (203/6-02). */
     audio: {
       report: (): DispatchAudioReport => audio.report(),
-      step: (): number => audio.stepVolume(),
+      step: (): MixName => audio.stepMix(),
     },
     camera,
     dispose(): void {
