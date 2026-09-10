@@ -1,0 +1,160 @@
+# 204 — Panel audio: the console's own voice, and the mixer underneath it
+
+**Opened 2026-09-10**, out of [the concept](concept.md) — its research record, the reading of PCAD's real
+client, and the four rounds of questioning that produced every decision below. Read that first; this document
+is what gets built and in which order, and it does not re-argue anything the concept settled.
+
+Subordinate to [202](../202-pcad-dispatch/readme.md), which is the product, and a sibling of
+[203](../203-audio/readme.md), which gave the console the world's own sound. **203 made the console hear the
+CITY. This one makes it hear the WORK** — and fixes the mixer that both stand on.
+
+---
+
+## The decisions this chain is built on
+
+Taken with the user 2026-09-10, in four rounds. The [concept's §6](concept.md) carries the reasoning and the
+full table; this is what every step below inherits.
+
+| Decision | What it rules in | What it rules out |
+| --- | --- | --- |
+| **Three categories, one owner each** | `world` (ours, the city) · `map` (ours, what the board SHOWS) · `cad` (PCAD's, what only the plugin knows) | one pool for incomparable things, and any need for deduplication — an event never has two sources |
+| **The owner makes the sound** | a forwarded foreign event is DISPLAYED | an operator with the game and the browser open hearing one panic twice, at two delays |
+| **The vocabulary is a CONTRACT** | one document both repositories are built against, and PCAD fixed NOW rather than at phase 3 | a console-side table that drifts from the plugin's for as long as phase 3 takes |
+| **Our own set, most of it PCAD's** | the two surfaces sound like ONE product | synthesis-only, which would make the shared vocabulary shared in name and different in sound |
+| **Synthesis is the FLOOR, not the product** | an alert that cannot be missing, because a computed tone has no failure mode to inherit | a panic button that inherits [203's decision 4.3](../203-audio/concept.md) — *silence is the normal case* |
+| **In the app bundle** | latency and reliability at once; the set belongs to the APP, not to a world build | 4.1's *a sound fix must not cost a world rebuild*, which does not reach a set that is not part of the world |
+| **Everything on by default** | an audio system that protects somebody | one nobody enables |
+| **A floor, not an exemption** | `cad` at zero makes panic and link-loss QUIET, and the interface says so | an alert that ignores the operator's own mute |
+| **The mock plays PCAD's part** | an ear and a latency number before phase 3, through the seam PCAD will use | a `cad` bus that cannot be heard or measured until another repository ships |
+| **One chain** | mixer and panel together, the user's call | shipping the mixer first, which was the recommendation — see the note under [the order](#the-order-and-the-trade-it-takes) |
+
+## The budgets this chain is held to
+
+New numbers, named before the work, per [directive 5](../../project-goals.md#5-performance-is-a-requirement-not-an-outcome).
+The four from 203 (64 voices · 2 ms/frame · 64 MB · ≤ 200 ms to the first sound) still hold and are not
+restated per step.
+
+| Budget | Value | Where it bites |
+| --- | --- | --- |
+| Event → audible | **≤ 50 ms** | 2/03. 203's 200 ms is a COLD-START figure; a sound answering an action needs an order of magnitude less or it reads as a coincidence rather than a response |
+| Alerts refused | **0, ever** | 1/01, and it is the regression guard for the defect that opened this plan |
+| Peak sample on the master | **≤ 1.0** | 1/02. Clipping is the most recognisable *not-AAA* artefact there is |
+| Voices reserved for `cad` | **4 of the 64** | 1/01 — a number to measure and move, not a guess to defend |
+| The panel set in the bundle | **≤ 1 MB** | 2/02 |
+
+**One of these may not all hold at once, and the chain says so up front.** A 50 ms budget on a phone that is
+also streaming a city is not a number anybody here has measured, and 5/01 decides it with a measurement
+rather than an argument.
+
+## What this chain does NOT own
+
+The voice/chat layer ([202 §7](../202-pcad-dispatch/readme.md): *the console does not become a radio* — a
+key-up CLICK is not voice and is in scope; carrying traffic is not). Radio and ped speech, still out of v1 by
+203's decision 1.1. And distance filtering, which is [deferred with its price](../../performance/README.md)
+rather than planned: 64 biquads on a Mali phone is a number nobody has measured.
+
+---
+
+## The chains
+
+| # | Chain | Why here |
+| --- | --- | --- |
+| 1 | [The mixer](#1--the-mixer) | Everything else plays through it, and it carries a live defect today |
+| 2 | [The vocabulary](#2--the-vocabulary) | A name has to mean something to both repositories before either can raise it |
+| 3 | [The consumers](#3--the-consumers) | The console's two categories, and the tab it is not looking at |
+| 4 | [PCAD](#4--pcad) | The other signatory. A branch and a PR, not a push |
+| 5 | [The numbers](#5--the-numbers) | AAA is a measurable claim or it is a mood |
+
+### 1 — The mixer
+
+`@opensa/audio`, `type:engine`. **Improves the world audio that already ships**, whatever happens to the rest.
+
+| Step | What it produces | Verified by |
+| --- | --- | --- |
+| **1/01** | **Buses, and the end of the refused alert.** `master → { world, map, cad }`, one gain each; a voice names its bus; the stealing rule ranks WITHIN a bus; `cad` reserves voices the world can never take. [Decision 4.2](../203-audio/concept.md) is untouched — *the quietest at the listener* still decides among the world's own sounds, which is what it was about | a test that fills the pool with 64 world voices and then plays a `cad` voice, which must NOT be refused. **The mutation is the proof**: it passes today, because today there is no such thing as a `cad` voice |
+| **1/02** | **The limiter.** A `DynamicsCompressorLike` on the master, and the conformance assertion that a real node satisfies it (the pattern that already caught `interrupted`) | a test summing 64 voices at full scale; the peak sample against the 1.0 budget, on the device in 5/01 |
+| **1/03** | **Ducking**: `cad` pulls `world` down for the length of an alert plus a release, through the ramp API `voices.ts` already has | a capture showing the world bus gain move and return, plus the ear on the phone |
+| **1/04** | **Three levels, persisted, one control** — and the FLOOR that keeps panic and link-loss audible at `cad = 0`. Answers [the cross-platform five](../../restrictions/cross-platform-surface.md) by construction, the way the volume key already does | `styles.test.ts`'s existing `TOUCH_TARGET` pin, a test that the floor holds at zero, and a reload that keeps the levels |
+
+### 2 — The vocabulary
+
+| Step | What it produces | Verified by |
+| --- | --- | --- |
+| **2/01** | **The contract** in `docs/contracts/`: the three categories, every event name, who owns each, the *owner sounds* rule, and **the provenance of the sound set** — which is recorded nowhere today and in six months has nobody left to ask | a doc row, and 4/01 building against it |
+| **2/02** | **The set, in the bundle**, plus the synthesis floor: a name with no file resolves to a computed tone and says so in the report, exactly as an absent bank does | a test that every contract name resolves to SOMETHING; the bundle size against 1 MB |
+| **2/03** | **The event API** — `audio.event(category, name)`, resident, no fetch on the path | the latency field, measured in 5/01 against 50 ms |
+| **2/04** | **Coalescing and variation.** Ten calls in a burst is one tone and a count, not a machine gun; repeated one-shots vary. The chain already learned this from the original — [`CAETwinLoopSoundEntity` randomises its swap interval](../../gta-sa-original/audio-ambience.md) because a fixed one becomes a rhythm the ear cannot unhear | a test firing ten events inside the window and asserting one voice |
+
+### 3 — The consumers
+
+| Step | What it produces | Verified by |
+| --- | --- | --- |
+| **3/01** | **`map`: the board's lifecycle as the console SEES it** — an incident appears, a unit arrives, a unit stops reporting, a call closes. Derived from `Operations`, which the console already holds | tests on a board stepped by hand |
+| **3/02** | **`cad`: the shell's events**, and the mock playing PCAD's part through the same seam so there is something to hear before phase 3 | the ear on the phone; the seam unchanged when the mock is switched off |
+| **3/03** | **The visual counterpart for every event.** [DESIGN.md](../../../apps/dispatch/DESIGN.md)'s rule applied: *any one channel read alone is enough*, so a muted, deaf or headphone-less dispatcher loses nothing — which is exactly what makes *on by default* defensible | a table in the contract mapping each event to what is drawn, and a test that the drawing does not depend on the audio path |
+| **3/04** | **The backgrounded tab.** The dispatcher is a player, so the console is behind the game window and background timers clamp to ≥ 1 s. Alerts are scheduled on the `AudioContext` clock and must never route through the audio tick; the ambience being throttled there is accepted and STATED | a test that the alert path does not touch the clock, and a device check with the tab hidden |
+
+### 4 — PCAD
+
+**A branch and a pull request in `sexorcist00/pcad`** — the user reviews and merges. Changes to somebody's
+running system do not arrive silently in `main`.
+
+| Step | What it produces | Verified by |
+| --- | --- | --- |
+| **4/01** | **The explicit sound field**, replacing `title_lc:find("assistance request")`. Reword a title, translate it, or fix a typo in it today and the sound stops — silently, with the notification still appearing | the trigger fires on a renamed title |
+| **4/02** | **The four missing events**: `link_lost` / `link_back` (nothing sounds when the board freezes, which is this product's worst failure), `unit_stale` (the backend already marks one at 300 s), `bolo_new` | a session where the socket is cut |
+| **4/03** | **The priority tones, split.** `priority_start` / `_middle` / `_end` are on disk and only the first is wired, to `assist_request`; P1 and P3 sound identical while the assets for the difference sit unused | the ear, on three calls |
+
+### 5 — The numbers
+
+| Step | What it produces | Verified by |
+| --- | --- | --- |
+| **5/01** | **The device row**: event → audible ms, **alerts refused (must be 0)**, peak sample on the master, voices per bus at peak, ms/tick against the 2 ms, MB against the 64, and the battery delta against `?audio=0` — which 203/4-03 already owes and which this chain makes larger | a phone row in `docs/benchmarks/`, filed BEFORE it is analysed |
+
+---
+
+## The order, and the trade it takes
+
+The recommendation was to ship chain 1 first and alone: it improves audio that already ships, it is small, and
+**G1 is a live defect today rather than a missing feature**. The user chose one chain, and that is the call
+this plan is built on.
+
+**What the trade costs, stated so it is not discovered**: the refused alert lives until the whole chain lands
+rather than until chain 1 does. So **1/01 is the first step inside the chain** — the defect does not get to
+outlive the work that happens to sit beside it.
+
+## The check, against the six questions
+
+[The goals](../../project-goals.md#the-check-when-a-plan-is-written) ask six of every plan:
+
+1. **Which authored data, read as the author meant it?** PCAD's own trigger table and its sound set, adopted
+   rather than reinvented — the reading in [the concept](concept.md) is what replaced a guessed vocabulary.
+2. **What does the original do, and why is that not our answer?** San Andreas has no dispatch panel at all.
+   Nothing to port, nothing to match, and [directive 3](../../project-goals.md) makes *good* the only bar.
+3. **What is better, and what says so?** Five named defects with named fixes, and 5/01's row. The one that is
+   not an opinion today: an alert can be refused by 64 car engines, and a test will fail on it.
+4. **What does it cost when the world is busy?** The 2 ms tick is unchanged — alerts do not run on it (3/04) —
+   and `cad`'s four reserved voices come out of the 64 the budget already names.
+5. **What contract does a mod author keep?** `audio-events.dat` is untouched. The panel set is the APP's and
+   is not a mod surface, which 2/01 states so nobody looks for one.
+6. **Does it need a player?** No. `@opensa/audio` stays `type:engine` and Node-free; the buses and the limiter
+   are engine-layer, and only the console's two consumers know what a unit is.
+
+---
+
+## Status
+
+| Step | State |
+| --- | --- |
+| the chain itself | **OPENED 2026-09-10** — declared, ordered, and the decisions above taken with the user in four rounds |
+| the questioning round | **CLOSED 2026-09-10** — fourteen decisions, frontier empty, and the category split confirmed as a reading rather than a quote ([the concept](concept.md) §6) |
+| 1/01 · 1/02 · 1/03 · 1/04 | not started |
+| 2/01 · 2/02 · 2/03 · 2/04 | not started |
+| 3/01 · 3/02 · 3/03 · 3/04 | not started |
+| 4/01 · 4/02 · 4/03 | not started |
+| 5/01 | not started |
+
+**The defect this plan opened on, restated so the first step cannot be skipped**: `VoicePool` ranks a voice
+by `audibleGain`, which for a positionless sound is its bare gain — so a panel alert authored at 0.8 ranks
+below sixty-four engines at 1.0 near the camera and `play` returns `null`. Nothing reports it as anything but
+a refusal count. It is live in `main` today and only invisible because nothing yet plays a panel alert.

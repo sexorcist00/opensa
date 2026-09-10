@@ -242,8 +242,18 @@ phases and risks: [docs/plans/202-pcad-dispatch/](docs/plans/202-pcad-dispatch/r
   - [x] `audio.osaudio` baked beside the pak, samples fetched by byte range
   - [x] Voices, the 64-voice pool, and the quietest-at-the-listener steal
   - [x] The console hears the world: camera as the listener, first-touch resume, volume and mute
-  - [ ] Ambience per audio zone — blocked on one question: a pre-mixed track or a bed of SFX loops
+  - [x] Ambience per audio zone — the block is lifted: SA plays no bed at all, so ours is assembled from
+        SFX loops with `CAETwinLoopSoundEntity`'s twin-loop taken by behaviour (2026-09-09)
+  - [x] A car's engine, as SA voices one it is not driving — two loops crossfaded by speed, every constant
+        recovered (2026-09-09)
+  - [ ] The ear on the phone, and every number on a device (4/03)
   - [ ] surfaud.dat support - different sounds in different surface
+- [ ] Panel audio — **[plan 204](docs/plans/204-panel-audio/readme.md)**, opened 2026-09-10. The console's own
+      voice: three buses with one owner each, a limiter, ducking, and an event vocabulary shared with PCAD as
+      a contract. Opens on a live defect — an alert can be refused by 64 car engines
+  - [ ] Buses, and the end of the refused alert (1/01)
+  - [ ] The limiter and the duck
+  - [ ] The contract, and PCAD's half as a branch and a PR
 - [ ] Swimming
 - [ ] Bicycles
 - [ ] Bikes

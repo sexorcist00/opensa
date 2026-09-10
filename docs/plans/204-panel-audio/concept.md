@@ -1,4 +1,8 @@
-# Panel audio, and what AAA actually costs
+# Panel audio, and what AAA actually costs — the research record
+
+> **This was the concept, and it GRADUATED on 2026-09-10.** It is kept verbatim beside
+> [the plan it produced](readme.md) as the record of how those decisions were reached — the reading of PCAD's
+> real client, the eight named gaps, and the four rounds. The plan is what gets built; this is why.
 
 **Opened 2026-09-10**, on the user's request, paraphrased in English because this repository is English-only:
 *a AAA audio system for the dispatch panel — it already handles the game's sounds, and now it needs the

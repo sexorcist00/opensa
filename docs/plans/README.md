@@ -49,6 +49,19 @@ Newest first:
   left is one QUESTION and one DEVICE**: 4/02 needs the operator to say whether a zone's ambience is the
   pre-mixed track SA streams or a bed assembled from SFX loops, and the 2 ms / 64 MB / battery figures have
   never been on a phone.
+- **[204 — Panel audio](./204-panel-audio/readme.md)** — the console's own voice and the mixer underneath it,
+  opened 2026-09-10 out of [its concept](./204-panel-audio/concept.md) after four rounds. The fact that shapes
+  it is [202's phase 3](./202-pcad-dispatch/readme.md): the console becomes module 10 of PCAD's own rewrite, so
+  the chrome raising almost every panel event will be PCAD's — which makes the vocabulary a CONTRACT both
+  repositories are built against rather than a table of ours. **Three categories, one owner each** (`world`
+  ours, `map` ours, `cad` PCAD's) and **the owner makes the sound**, so a forwarded event is displayed and an
+  operator with the game and the browser open never hears one panic twice. Sounds are our own set, most of it
+  reused from PCAD's 27 files, in the app BUNDLE — with a synthesis floor, because a computed tone is the one
+  sound in this chain with no failure mode to inherit and a panic button may not inherit *silence is normal*.
+  **It opens on a live defect**: an alert can be refused by 64 car engines, since the pool ranks a positionless
+  sound by its bare gain — invisible today only because nothing yet plays one. Five chains; PCAD's half lands
+  as a branch and a PR, including the fix for a trigger currently resolved by string-matching a notification
+  title.
 - **[202 — PCAD Dispatch](./202-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
   product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
   client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this
