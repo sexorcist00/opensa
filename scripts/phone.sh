@@ -83,11 +83,20 @@ TEXTURES="${TEXTURES:-astc}"
 #   threads=1 — weld 42.2s, first array at 30s, 20 arrays / 18.3 M texels, eta ~1226s falling as it went.
 #
 # The equal weld times are what make it clean: the smaller heap costs nothing before the encode, so the
-# stall belongs to the pool and not to the reservation. **The 2.38x measured on 2026-08-07 is not reachable
-# here** — it was measured where the isolates have room, and this phone is not that machine.
+# difference belongs to the pool and not to the reservation. **The 2.38x measured on 2026-08-07 is not
+# reachable here** — it was measured where the isolates have room, and this phone is not that machine.
 #
-# `ASTC_THREADS=0` restores one-per-core for a machine that can afford it; on THIS device 1 is required
-# rather than merely proven.
+# CORRECTED THE SAME DAY, and the correction matters more than the finding: a THIRD run showed that ONE
+# thread stalls too. It reached array 4 of 20 (2.7 of 18.3 M texels, elapsed 178s) and then printed nothing
+# for over 45 minutes, alive the whole time and far past its own ~1007s eta for the ENTIRE stage. So:
+#
+#   - two threads is WORSE and 1 stays the default — 0 arrays against 4 is not nothing;
+#   - but "one thread works" is FALSE. Both stall. One simply gets further.
+#
+# Whatever is wrong is not only the thread pool, and it is unexplained. DO NOT plan a convert here on the
+# assumption that single-threaded finishes: no run on this device has yet produced an ASTC pak.
+#
+# `ASTC_THREADS=0` restores one-per-core for a machine that can afford it.
 ASTC_THREADS="${ASTC_THREADS:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked
