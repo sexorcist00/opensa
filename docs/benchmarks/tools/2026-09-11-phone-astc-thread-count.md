@@ -1,4 +1,4 @@
-# 2026-09-11 — two ASTC threads STALL the encode on this phone
+# 2026-09-11 — the ASTC encode stalls on this phone, and two threads stall it sooner
 
 **Tool:** `opensa-pack`, driven by `scripts/phone.sh` through the phone console's MCP (`phone_run phone`).
 **Inputs:** `game-src/original`, district `los-santos-centre` (rect `5,-7,6,-6` — 4 grid cells, the pinned
@@ -59,6 +59,33 @@ have room. `--astc-threads 1` is therefore REQUIRED here rather than merely prov
 - **That is the trigger of [`opensa-pack-encode-checkpoints`](../../in-reserve/opensa-pack-encode-checkpoints.md)**,
   whose own card named *"an encoder that can use more than one thread on this device"* as one of the two
   things that would retire it instead. Tested; not available.
+
+## CORRECTION, same day: ONE thread stalls too
+
+**A third run refutes the headline above, and it is filed rather than edited away.** After the panel was
+restarted the single-threaded convert was started again on the same district. It reached the encode and
+printed the same four arrays — `1/20` and `2/20` at 25 s, `3/20` and `4/20` at 177-178 s, 2.7 of 18.3 M
+texels — and then **nothing for over 45 minutes**, with the process alive throughout. Its own eta at that
+point was ~1 007 s, so it is far past the time it predicted for the WHOLE stage.
+
+So the difference between the two thread counts is narrower than this row first claimed:
+
+| | `ASTC_THREADS=2` | `ASTC_THREADS=1` |
+| --- | --- | --- |
+| arrays before it went quiet | **0** | **4 of 20** (2.7 of 18.3 M texels) |
+| then | silent, alive | silent, alive |
+
+**What survives:** two threads is worse — it produces no array at all where one thread produces four. That
+comparison still holds and `--astc-threads 1` is still the right default.
+
+**What does NOT survive:** the reading that one thread *works* and two *stall*. Both stall; one simply gets
+further. Whatever is wrong is not only the thread pool, and the 08-25 row's *"the encode is the wall"* is
+looking like a understatement rather than a rate problem — a rate would keep printing.
+
+**What is now unexplained and needs its own investigation**: what array 5 is, and whether the encoder is
+grinding on one enormous array or has hung. The next instrument this wants is per-ARRAY size in the log
+before the encode of that array starts, rather than after it finishes — the current line can only report an
+array that completed, which is precisely the thing that stops happening.
 
 ## What this row does NOT say
 
