@@ -133,6 +133,11 @@ numbers below are measurements rather than documentation:
   from the gesture to the first sound. 64 voices each with a `PannerNode` is a number nobody here has
   measured on a Mali phone. Since 204/5-01 the capture can ANSWER the panel half of that row — event →
   audible ms, `refusedByBus.cad`, the output peak, voices per bus at peak — but the phone has not been asked.
+- **No ENGINE has ever been heard on a device.** Until 2026-09-11 no build without fastman92's Limit
+  Adjuster voiced a single car — the stock settings are compiled into the executable, so a plain copy of the
+  game has no table and `VehicleVoiceTable` resolved zero rows. The pak build now writes the
+  [recovered stock table](../contracts/audio.md#4-datagtasa_vehicleaudiosettingscfg--a-cars-engine-sound)
+  when the game dir has none, but no pak built before that date carries it, and none has been flown.
 - **The authored panel sound files are not in the bundle.** The raw set is **2.9 MB against a 1 MB budget**,
   so it needs transcoding before it can ship at all; until then every panel name resolves to its synthesised
   tone and the report says so. That is the budget doing its job rather than an obstacle.

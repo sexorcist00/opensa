@@ -1,5 +1,12 @@
 # What a car's audio row MEANS
 
+> **We keep our own copy of this table** (204, 2026-09-11). Because the stock game has no file, a build with
+> no adjuster voiced no cars at all — so `scripts/debug/bake-vehicle-audio.ts` recovers the 232-entry array
+> out of the reversed source and writes the 212 real fleet rows as
+> [`tools/opensa-pack/data/vehicle-audio-settings.cfg`](../../tools/opensa-pack/data/vehicle-audio-settings.cfg),
+> which the pak build places when the game dir carries none. This page stays the record of what the columns
+> MEAN; the contract half is [contracts/audio.md §4](../contracts/audio.md).
+
 Recovered 2026-09-09 from [gta-reversed-modern](../links.md) — `tVehicleAudioSettings`
 (`Audio/Entities/AEVehicleAudioEntity.VehicleAudioSettings.h`) and the six enums its fields are typed by —
 while building [203/5-02](../plans/203-audio/readme.md). Written down because the numbers in

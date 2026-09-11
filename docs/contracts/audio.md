@@ -159,9 +159,26 @@ no consumer ever needs the constant again.
 
 ## 4. `data/gtasa_vehicleAudioSettings.cfg` — a car's engine sound
 
-**Where it lives:** in the built game's `data/`, written by fastman92's Limit Adjuster's vehicle audio
-loader. A mod author does not usually edit it directly — they ship `audio.txt` in the car's folder and
-`vehicle-installer` merges the row ([vehicles.md](./vehicles.md)).
+**Where it lives:** in the built game's `data/`. On an install with the adjuster it is fastman92's Limit
+Adjuster's own vehicle audio loader file; a mod author does not usually edit it directly — they ship
+`audio.txt` in the car's folder and `vehicle-installer` merges the row ([vehicles.md](./vehicles.md)).
+
+**And where it comes from when there is no adjuster** (204, 2026-09-11). A plain copy of the game has no such
+file and never will — the settings are an array compiled into the executable — so until this was noticed
+`VehicleVoiceTable` resolved **zero** cars on any install without FLA, and every vehicle was unvoiced. The
+first panel-audio flight measured a 150-unit board that sounded empty for exactly that reason, with
+`vehicles: 0` as the only trace. So the pak build now **writes the recovered stock table** into `<out>/data/`
+when the game dir carries none:
+
+| | |
+| --- | --- |
+| The file | [`tools/opensa-pack/data/vehicle-audio-settings.cfg`](../../tools/opensa-pack/data/vehicle-audio-settings.cfg) — 212 rows, the whole stock fleet |
+| Where it came from | `scripts/debug/bake-vehicle-audio.ts`, out of the reversed game's own array and enums. Re-runnable, and the output is byte-identical run to run |
+| What wins | **The game dir's own file, always.** The check is on the OUTPUT after the mirror, so an adjuster's table — or one a mod's `audio.txt` has been merged into — is left alone |
+| What says which | the build log names it either way, and a build serving the baked one still voices its cars |
+
+**Its comment marker is `;`**, this format's own — `#` is `audio-events.dat`'s. A header written with the
+wrong one parses as broken rows rather than as legend, which is how the first bake was caught.
 
 **What the columns MEAN is a fact about the original game**, not a rule of ours, so it is recorded where the
 other such facts are: [gta-sa-original/vehicle-audio-settings.md](../gta-sa-original/vehicle-audio-settings.md)

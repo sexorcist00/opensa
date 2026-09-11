@@ -203,6 +203,14 @@ resolved at BUILD time, because a surface streaming the pak reaches neither file
 - Bakes: AO/skyVis **on by default** (`--no-ao` to skip — it replaces prod's SSAO); the heavy sun-vis shadow
   bake is opt-in (`--bakes`), and **off** in the pmb pack stage.
 
+- **The vehicle audio table is WRITTEN when the game dir has none** (204, 2026-09-11). The stock game keeps
+  these settings in an array compiled into the executable, and `data/gtasa_vehicleAudioSettings.cfg` exists
+  only where fastman92's Limit Adjuster put it — so without this, no build of this target voiced a single
+  car. The check is on the OUTPUT after the mirror, so an adjuster's own table, or one a mod's `audio.txt`
+  has been merged into, is left alone; the log names which happened. The file is
+  [recovered stock data](../contracts/audio.md#4-datagtasa_vehicleaudiosettingscfg--a-cars-engine-sound),
+  re-bakeable by `scripts/debug/bake-vehicle-audio.ts`.
+
 Point any host at the GAME DIR — it is self-contained (`pak/` inside; loaders also resolve legacy layouts
 and a build-root pick): `?loader=http-dir&src=http://localhost:3001/build/original/opensa` (game),
 `?src=…/build/original/opensa` (lab), `--after ./build/original/opensa` (viewers).
