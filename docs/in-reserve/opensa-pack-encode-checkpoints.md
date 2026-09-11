@@ -40,19 +40,25 @@ thread on this device without the isolate blow-up that forced `--astc-threads 1`
 being killed (the EMUI settings and the Android 12+ phantom-process limit are in
 [termux.md](../development/termux.md)).
 
-**THE FIRST OF THOSE WAS TESTED 2026-09-11 AND IS NOT AVAILABLE.** `ASTC_THREADS=2` was the retry
-`phone.sh` had been asking for since 08-25, and it does not blow up — it STALLS: the weld finishes in the
-same 45 s as the single-threaded run and then `encoding texture arrays` prints not one array line for over
-half an hour, with the process alive throughout. The comparison is clean because both runs held
-`HEAP=1536` and differed in that one knob; the single-threaded half encoded its first array at 30 s. So the
-2.38x measured on a desktop in 2026-08-07 is not reachable here, and the escape this card offered through
-*more threads* is closed.
+**THE FIRST OF THOSE WAS PROBED 2026-09-11 AND THE PROBE WAS UNREADABLE** — see the correction at the end
+of [its row](../benchmarks/tools/2026-09-11-phone-astc-thread-count.md): every reading that day was taken
+through a blind spot in the log, and nothing about the thread pool was actually established.
 
-**And the same pair priced the trigger.** The pinned district is **18.3 M texels** and encodes in ~21
-minutes single-threaded. Texels grow SUBLINEARLY in cells — 4 cells 18.3 M against 16 cells 56.5 M, because
-map objects share one world dictionary — which extrapolates the full 576-cell map to roughly **1.0 G texels
-and ~20 hours** of continuous, unresumable encode. That is the number this card is about, and it is now
-arithmetic from a measurement rather than an estimate.
+**What the day DID establish belongs here, because it changes this card's shape.** The pinned district's
+`array 5/20` is **13.5 of 18.3 M texels — 74 % of the stage in ONE array**. A checkpoint granularity of *per
+array* would therefore save almost nothing on a district: a kill during array 5 loses 74 % of the work
+whether or not the four arrays before it were journalled. **If this card is ever built, its unit has to be
+smaller than an array** — a layer, or a band of layers — or it will be a journal that cannot help the only
+case it exists for. That is a design constraint the card did not have this morning.
+
+**The escape through more threads is therefore still OPEN and still untested**, which is worth saying
+plainly: it was reported closed for several hours on 2026-09-11 and it was not.
+
+**What the day did give this card is the TRIGGER's size.** The pinned district is **18.3 M texels**. Texels
+grow SUBLINEARLY in cells — 4 cells 18.3 M against 16 cells 56.5 M, because map objects share one world
+dictionary — which extrapolates the full 576-cell map to roughly **1.0 G texels**. The per-texel RATE is
+still owed: every figure quoted that day was the encoder's own eta rather than a completed stage, and an eta
+is not a measurement.
 
 ## A neighbour that WAS broken, and is fixed (2026-09-11)
 

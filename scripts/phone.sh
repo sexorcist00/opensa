@@ -73,36 +73,25 @@ TEXTURES="${TEXTURES:-astc}"
 # because it is what has been proven on this device; the cost is speed only (astcenc's pool measured 2.38x one
 # thread on 2026-08-07, bit-identical either way).
 #
-# RETRIED 2026-09-11, AND THE ANSWER IS NO: `2` STALLS THE ENCODE ON THIS DEVICE. The note here used to say
-# this was worth retrying because the three deaths came from the bug fixed on 2026-08-09 rather than from the
-# thread count surviving it. It was — and the retry settles it against the pool. Two runs on the pinned
-# district, `HEAP=1536` in BOTH, differing in this one knob:
+# WHAT 2026-09-11 ACTUALLY ESTABLISHED, after three wrong readings of the same evidence.
 #
-#   threads=2 — weld 45.5s, then `encoding texture arrays` and NOT ONE array line for over half an hour.
-#               Alive the whole time: the process never died, it just stopped making progress.
-#   threads=1 — weld 42.2s, first array at 30s, 20 arrays / 18.3 M texels, eta ~1226s falling as it went.
+# Every run that day showed `encoding texture arrays`, four array lines, and then a long silence — and it was
+# blamed on the thread pool, then on the heap, then on thermal throttling. It was none of them. **One array
+# is most of the stage**: on the pinned district `array 5/20` is 13.5 of 18.3 M texels, 206 layers at
+# 256x256 — 74 % of the work in a single unit. Four small arrays finish in two minutes and the encoder then
+# spends the rest of the run inside that one. The progress line reported an array that had FINISHED, so the
+# array that mattered was invisible while it ran; `convert.ts` now prints each array's size BEFORE encoding
+# it, which is what made this readable at all.
 #
-# The equal weld times are what make it clean: the smaller heap costs nothing before the encode, so the
-# difference belongs to the pool and not to the reservation. **The 2.38x measured on 2026-08-07 is not
-# reachable here** — it was measured where the isolates have room, and this phone is not that machine.
+# So the thread pair proves nothing about threads: both counts were watched through that same blind spot,
+# and the screen was off for part of it. `1` stays the default because it is the value with a working
+# history, not because anything here tested it fairly. `ASTC_THREADS=0` restores one-per-core for a machine
+# that can afford it.
 #
-# CORRECTED THE SAME DAY, and the correction matters more than the finding: a THIRD run showed that ONE
-# thread stalls too. It reached array 4 of 20 (2.7 of 18.3 M texels, elapsed 178s) and then printed nothing
-# for over 45 minutes, alive the whole time and far past its own ~1007s eta for the ENTIRE stage. So:
-#
-#   - two threads is WORSE and 1 stays the default — 0 arrays against 4 is not nothing;
-#   - but "one thread works" is FALSE. Both stall. One simply gets further.
-#
-# AND THEN THE OPERATOR SAID THE SCREEN HAD BEEN OFF, which voids the comparison above. `termux-wake-lock`
-# keeps the CPU awake — the log even records it held — but it does not defeat EMUI's PowerGenie, which
-# FREEZES rather than kills (docs/development/termux.md). A frozen process is alive and idle, which is what
-# both runs looked like, so `0 arrays against 4` may be nothing but how long each run had the screen on.
-#
-# **Neither thread count has been fairly tested.** Keep 1 as the default because it is the value with a
-# working history, not because this pair proved anything. And a kill and a FREEZE are different failures:
-# this repo has been reading them as one, the 08-25 row included.
-#
-# `ASTC_THREADS=0` restores one-per-core for a machine that can afford it.
+# **HEAP=1536 IS REQUIRED ON THIS DEVICE, and that one is real.** At the default 4096 the WELD itself never
+# completes — three runs each way, including one on a phone left to cool for hours. The reservation starves
+# everything else and the process buckles into GC instead of dying, which looks exactly like a hang. The
+# smaller heap costs nothing measurable: welds came in at 36-45 s either way.
 ASTC_THREADS="${ASTC_THREADS:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked

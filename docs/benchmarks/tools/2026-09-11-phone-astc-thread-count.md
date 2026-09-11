@@ -1,4 +1,4 @@
-# 2026-09-11 — the ASTC encode stalls on this phone; screen-off may be why, and the thread pair is void
+# 2026-09-11 — the ASTC encode never stalled: one array is 74 % of the work
 
 **Tool:** `opensa-pack`, driven by `scripts/phone.sh` through the phone console's MCP (`phone_run phone`).
 **Inputs:** `game-src/original`, district `los-santos-centre` (rect `5,-7,6,-6` — 4 grid cells, the pinned
@@ -106,6 +106,35 @@ verdict they carried is withdrawn until a run with the screen ON says otherwise.
 **What this costs, stated plainly**: a day's worth of conclusions about `--astc-threads`, and the 08-25 row's
 own *"Android killed it at 6 m 25 s"* now also wants re-reading — a kill and a freeze are different failures
 and this project has been treating them as one.
+
+## THIRD CORRECTION, and this one is the answer: array 5 is 74 % of the work
+
+**Nothing ever hung.** The instrument added after the stalls says so on the first run that carried it:
+
+```
+astc: array 1/20 starting — 0.4 M texels, 107 layers at 64x64
+astc: array 2/20 starting — 0.0 M texels, 3 layers at 4x4
+astc: array 3/20 starting — 2.3 M texels, 141 layers at 128x128
+astc: array 4/20 starting — 0.0 M texels, 2 layers at 16x16
+astc: array 5/20 starting — 13.5 M texels, 206 layers at 256x256
+```
+
+**Array 5 alone is 13.5 of the district's 18.3 M texels — 74 % of the stage in ONE array**, 206 layers at
+256x256. Four small arrays finish in the first two minutes, and then the encoder spends the rest of the run
+inside a single unit of work whose completion is the only thing that prints. Every "stall" in this file was
+that array being encoded.
+
+So the readings collected all day were of one shape: *four arrays and then silence*. They were correctly
+observed and wrongly explained three times — thread count, then heap size, then thermal throttling. The
+observation never distinguished them because **the progress line reported an array that had FINISHED**, and
+the array that mattered had not.
+
+**What still stands from the corrections above:** `HEAP=1536` is required on this device — with the default
+4096 the weld itself does not complete, measured across three runs each way. That one is real and separate.
+
+**What is now explained rather than mysterious:** everything else. And the run that produced these lines is
+also the first where `--resume` engaged (`resuming the last convert from …/.pack-checkpoints`), after the
+stamp was moved out of the directory the pack deletes.
 
 ## What this row does NOT say
 
