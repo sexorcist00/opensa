@@ -18,6 +18,7 @@ export const LINK_NAMES = [
   'cleared',
   'engine',
   'board',
+  'boardsilent',
   'nomodels',
   'silent',
   'nosprites',
@@ -170,6 +171,25 @@ export function consoleUrls(state = {}) {
     // it, and every number 5/02 and 5/04 owe is measured AT it. It is no longer THE FIELD RUN — it is what
     // the field run is compared against once the map is the shape we want it.
     board: `${app}?${query}&units=150&calls=40&${capture}`,
+    // THE PANEL AUDIO ARM (204/5-01): `board` with the sound REMOVED rather than muted, so `board` −
+    // `boardsilent` is what the whole audio path costs at the DECLARED count. Its partner is `board`
+    // itself and there is deliberately no third link: one that differed from `board` only by name would be
+    // a decoy, and this folder has paid for those.
+    //
+    // **Why `board` and not `field`.** An empty board is a console with nothing to announce: no incident
+    // appears, no unit arrives, and the CAD stand-in picks a unit off the board before it speaks — so a run
+    // at `units=0` files a row of zeros that reads as *the panel is quiet* rather than *there was nothing to
+    // say*. 150 units and 40 calls is also the only place `refusedByBus.cad` has any chance of being
+    // non-zero, and its value is a BUDGET whose value is zero.
+    //
+    // **A tap is still needed, in both halves of the pair.** A browser starts an `AudioContext` only on a
+    // trusted gesture, and a camera flight driven over the bus is not one: `audio.availability` reads
+    // `waiting` until a finger touches the page, and a capture taken in that state measures a SILENT console
+    // rather than a quiet one — which is the null-arm failure this folder's own rules were written about.
+    // Read that field first, in both halves, before believing either.
+    //
+    // One charge, one thermal window, `power.charging` checked in both halves.
+    boardsilent: `${app}?${query}&units=150&calls=40&${capture}&audio=0`,
     // THE BOX PINNED, and it is a VERIFICATION arm rather than a member of the circuit yet (201/9, §6).
     // `?surface=` holds the scene's buffer still and deliberately leaves the CSS box alone, so the overlay —
     // the largest CPU line in this frame — has always followed the browser's chrome: 360x320, 360x570 and
