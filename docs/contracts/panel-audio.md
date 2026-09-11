@@ -133,6 +133,40 @@ said until a CAD has connected **once**. A console that has never had a CAD is n
 down, and a state claimed before anyone answered is a claim rather than a reading (the lesson
 [the agent link](../../apps/dispatch/src/world/agent-link.ts) already paid for).
 
+## 4a. Every event is also SEEN
+
+**[DESIGN.md](../../apps/dispatch/DESIGN.md)'s redundancy rule applies to sound**: *any one channel read
+alone is enough*. An operator may have muted the console, be on a browser with no Web Audio, be wearing no
+headphones in a room where sound is rude, or be in plan mode — the fallback surface every non-WebGPU browser
+lands on, which has no audio object at all. **An event that exists only as a tone is an event those four
+operators never receive**, and this table is also the defence of sound being ON by default: it ADDS a
+channel rather than carrying one alone.
+
+| Category | What is drawn | Where |
+| --- | --- | --- |
+| `map` | the board itself — the queue row appears or leaves, the map symbol, the unit's status, the call log line | the console's own panels, already, since 201 |
+| `cad` | one line, top-centre, for **4 s** — **15 s** for the two FLOORED names, in the danger style | [`panel-notices.tsx`](../../apps/dispatch/src/ui/panel-notices.tsx) |
+| `world` | nothing, and deliberately — a siren or an engine is the world being heard, not an event being reported | — |
+
+**`map` needs nothing new and that is the finding, not an omission**: a second line saying *a call appeared*
+over a queue that just grew a row is chrome covering the thing it reports on. What had no visual at all was
+`cad`, because nothing on the console knows those events except the sound they made.
+
+**The wiring carries the rule too.** The CAD link
+([`cad-link.ts`](../../apps/dispatch/src/world/cad-link.ts)) belongs to the console rather than to its
+audio, both channels subscribe to it, and a sink that THROWS is counted rather than rethrown — a dead
+`AudioContext` may not take the notice off the screen with it. A link owned by the speaker is a link a deaf
+console does not have.
+
+**The same two names the mute leaves audible are the two the screen holds longest**, and it is one rule
+rather than two: a `cad` event is not on the board and nothing else on this console remembers it, so an
+operator who looked away for four seconds during a panic has missed the only report of it. Even a panic goes
+eventually — a line that never leaves is a line over the map, and the map is the product.
+
+**A name with no sentence shows as the name.** A vocabulary this console has not caught up with is exactly
+the case an operator should be able to see and report; a blank line would make a newer PCAD's event
+indistinguishable from no event.
+
 ## 5. The sound set, and where it came from
 
 **Provenance, recorded because it is written nowhere else and in six months there is nobody left to ask.**

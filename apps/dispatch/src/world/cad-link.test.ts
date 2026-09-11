@@ -1,19 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PanelSurface } from './cad-link';
-
 import { ASSUMED_SOUND, CadLink, cadSound } from './cad-link';
 
-/** A surface that records what it was asked to play. */
-function surface(): PanelSurface & { readonly played: string[] } {
+/** A link with one sink on it, recording what it was asked to raise. */
+function linked(): { readonly link: CadLink; readonly played: string[] } {
+  const link = new CadLink();
   const played: string[] = [];
+  link.listen((name) => {
+    played.push(name);
+  });
 
-  return {
-    event: (name: string) => {
-      played.push(name);
-    },
-    played,
-  };
+  return { link, played };
 }
 
 describe('cadSound', () => {
@@ -49,58 +46,71 @@ describe('cadSound', () => {
 describe('CadLink', () => {
   describe('negative cases', () => {
     it('says nothing the first time it learns the link is up', () => {
-      const panel = surface();
-      const link = new CadLink(panel);
+      const { link, played } = linked();
 
       link.setOnline(true);
 
-      expect(panel.played).toEqual([]);
+      expect(played).toEqual([]);
       expect(link.report().online).toBe(true);
     });
 
     it('says nothing when a console that never had a CAD learns it has none', () => {
-      const panel = surface();
-      const link = new CadLink(panel);
+      const { link, played } = linked();
 
       link.setOnline(false);
 
-      expect(panel.played).toEqual([]);
+      expect(played).toEqual([]);
     });
 
     it('does not repeat itself while the state holds', () => {
-      const panel = surface();
-      const link = new CadLink(panel);
+      const { link, played } = linked();
       link.setOnline(true);
 
       link.setOnline(false);
       link.setOnline(false);
       link.setOnline(false);
 
-      expect(panel.played).toEqual(['link_lost']);
+      expect(played).toEqual(['link_lost']);
     });
   });
 
   describe('positive cases', () => {
+    it('carries an event to every other sink when one of them throws, and counts the one that did', () => {
+      // The sinks are independent channels and one of them is a speaker. A dead AudioContext may not take
+      // the notice off the screen with it — which is DESIGN.md's redundancy rule applied to the wiring.
+      const link = new CadLink();
+      const drawn: string[] = [];
+      link.listen(() => {
+        throw new Error('the context is gone');
+      });
+      link.listen((name) => {
+        drawn.push(name);
+      });
+
+      link.deliver({ sound: 'panic_button', title: 'Panic Button' });
+
+      expect(drawn).toEqual(['panic_button']);
+      expect(link.report().failed).toBe(1);
+    });
+
     it('counts a message that named no sound, so an old CAD is visible in a capture', () => {
-      const panel = surface();
-      const link = new CadLink(panel);
+      const { link, played } = linked();
 
       link.deliver({ sound: 'panic_button', title: 'Panic Button' });
       link.deliver({ title: 'Assistance Request' });
 
-      expect(panel.played).toEqual(['panic_button', ASSUMED_SOUND]);
-      expect(link.report()).toEqual({ assumed: 1, delivered: 2, online: null });
+      expect(played).toEqual(['panic_button', ASSUMED_SOUND]);
+      expect(link.report()).toEqual({ assumed: 1, delivered: 2, failed: 0, online: null });
     });
 
     it('sounds the drop and the recovery', () => {
-      const panel = surface();
-      const link = new CadLink(panel);
+      const { link, played } = linked();
       link.setOnline(true);
 
       link.setOnline(false);
       link.setOnline(true);
 
-      expect(panel.played).toEqual(['link_lost', 'link_back']);
+      expect(played).toEqual(['link_lost', 'link_back']);
     });
   });
 });

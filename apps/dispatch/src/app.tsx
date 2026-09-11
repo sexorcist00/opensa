@@ -8,7 +8,7 @@
  * at two stable getters and a readout pushed four times a second — which is also why the layout can flip
  * without the map noticing: nothing here is on the frame path.
  */
-import { type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { GtaGround } from './map/coords';
 import type { KeyBindings } from './map/keymap';
@@ -20,6 +20,7 @@ import type { MapMode } from './world/mode-switch';
 import { keyOf, loadBindings } from './map/keymap';
 import { MAP_YAW } from './map/map-camera';
 import { readView } from './map/view-link';
+import { useCad } from './ops/use-cad';
 import { useOperations } from './ops/use-operations';
 import { DetailPanel } from './ui/detail-panel';
 import { DISPATCH_SCOPE, installDispatchCss } from './ui/global-css';
@@ -59,6 +60,9 @@ const UNITS_RECT = { h: 480, w: 300, x: 12, y: 180 } as const;
 
 export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}): ReactElement {
   const { actions, autoDispatch, clock, historyWindow, ops, read, selection, worldTime } = useOperations();
+  // The CAD feed is owned HERE rather than by the audio, because an event has to reach the screen on a
+  // console that cannot make a sound at all (204/3-03). The sound is one subscriber; the notices are another.
+  const cad = useCad(read.ops);
   const [readout, setReadout] = useState<DispatchReadout | null>(null);
   /** Which surface is drawing, and how to change it (201/6-03) — the map reports it up, because the switch
    *  outlives any one surface and the chrome is what survives it. */
@@ -125,6 +129,17 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
     setHandle(next);
   }, []);
   const locate = useCallback((at: GtaGround) => handleRef.current?.locate(at), []);
+  /** The map's own getters, plus the CAD link's counts for `?inventory=1`. */
+  const mapRead = useMemo(() => ({ ...read, cad: () => cad.link.report() }), [cad.link, read]);
+  // Sound is ONE subscriber to the feed, wired when there is a console to play it — and unwired when that
+  // console goes, since a boot that is replaced leaves its audio behind.
+  useEffect(() => {
+    if (handle === null) {
+      return;
+    }
+
+    return cad.link.listen((name, atMs) => handle.audio.event(name, atMs));
+  }, [cad.link, handle]);
   const setHour = useCallback((hour: number) => handleRef.current?.setHour(hour), []);
   const releaseHour = useCallback(() => handleRef.current?.releaseHour(), []);
   /**
@@ -195,10 +210,11 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
       actions={actions}
       compact={compact}
       createPakWorker={createPakWorker}
+      notices={cad.notices}
       onMode={({ mode, toggle }) => setMapMode({ mode, toggle })}
       onReadout={setReadout}
       onReady={onReady}
-      read={read}
+      read={mapRead}
     >
       <MapTools
         behindLive={clock.mode === 'live' ? 0 : Math.max(0, Math.round((performance.now() - clock.t) / 1000))}

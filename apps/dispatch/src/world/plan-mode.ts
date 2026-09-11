@@ -64,7 +64,6 @@ const SILENT_AUDIO: DispatchAudioReport = {
   arm: 'on',
   availability: 'unsupported',
   buffers: { bytes: 0, ceilingBytes: 0, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },
-  cad: { assumed: 0, delivered: 0, online: null },
   clock: { maxMs: 0, meanMs: 0, rateHz: 0, ticks: 0 },
   events: 0,
   mix: 'full' as const,
@@ -378,6 +377,12 @@ export function bootPlanMode(options: BootOptions, why: string): DispatchHandle 
     // is the honest answer for a surface with no audio host rather than a knob that turns and changes
     // nothing.
     audio: {
+      // Plan mode has no audio at all. It still takes events, and drops them: the feed that raises them is
+      // upstream (204/3-03), so the NOTICES on this surface are exactly the ones the live map would show.
+      event: (): void => {
+        // Nothing to play. The feed that raised it is upstream (204/3-03), so the NOTICES on this surface
+        // are exactly the ones the live map would show — which is the whole point of the seam being here.
+      },
       report: (): DispatchAudioReport => SILENT_AUDIO,
       step: (): MixName => 'full',
     },

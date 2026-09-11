@@ -8,9 +8,11 @@ import { type ReactElement, useEffect, useRef, useState } from 'react';
 import type { GtaGround } from '../map/coords';
 import type { HistoryStats } from '../ops/history';
 import type { Operations, Selection } from '../ops/types';
+import type { PanelNotice } from '../ops/use-cad';
 import type { DispatchActions } from '../ops/use-operations';
 import type { AgentStatus } from '../world/agent-link';
 import type { BootOptions, DispatchHandle, DispatchReadout } from '../world/boot';
+import type { CadLinkReport } from '../world/cad-link';
 import type { BootedMode, MapMode, ModeReport } from '../world/mode-switch';
 
 import { commandFor } from '../map/keymap';
@@ -23,6 +25,7 @@ import { bootPlanMode } from '../world/plan-mode';
 import { AgentBand } from './agent-band';
 import { AgentNotices, useAgentNotices } from './agent-notices';
 import { InventoryPanel } from './inventory-panel';
+import { PanelNotices } from './panel-notices';
 import { styles } from './styles';
 
 /** Module scope, so StrictMode's dev double-mount boots the engine on the canvas exactly once. */
@@ -35,6 +38,7 @@ export function MapCanvas({
   children,
   compact,
   createPakWorker,
+  notices: panelNotices,
   onMode,
   onReadout,
   onReady,
@@ -47,12 +51,16 @@ export function MapCanvas({
   compact: boolean;
   /** How to build the pak worker, for a bundle that cannot serve the chunk beside it (201/2-02). */
   createPakWorker?: () => Worker;
+  /** Panel events as the SCREEN holds them (204/3-03) — drawn here because this wrapper survives the fall
+   *  back to plan mode, which is exactly the surface that can make no sound at all. */
+  notices: readonly PanelNotice[];
   /** Which surface is drawing, and how to change it (201/6-03) — called on the first open and after every
    *  switch, so the chrome shows the mode the operator actually has rather than the one they asked for. */
   onMode?: (state: { mode: MapMode; toggle: () => void; why: string }) => void;
   onReadout: (readout: DispatchReadout) => void;
   onReady: (handle: DispatchHandle) => void;
   read: {
+    cad: () => CadLinkReport;
     fixAges: () => ReadonlyMap<string, number>;
     ops: () => Operations;
     selection: () => Selection;
@@ -96,6 +104,7 @@ export function MapCanvas({
       // Read from the ref like every other callback: the boot effect must not re-run, and a factory prop
       // that arrives one render later would otherwise re-boot the engine and leak a device.
       ...(liveRef.current.createPakWorker ? { createPakWorker: liveRef.current.createPakWorker } : {}),
+      cad: () => liveRef.current.read.cad(),
       fixAges: () => liveRef.current.read.fixAges(),
       onClick: (click) => {
         const { select } = liveRef.current.actions;
@@ -213,6 +222,7 @@ export function MapCanvas({
       {children}
       {agent && <AgentBand compact={compact} status={agent} />}
       <AgentNotices notices={notices.notices} />
+      <PanelNotices notices={panelNotices} />
       {degraded && <DegradedBanner compact={compact} message={degraded} />}
       {dispatchParams().get('inventory') === '1' && (
         <InventoryPanel read={() => handleRef.current?.inventory() ?? null} />

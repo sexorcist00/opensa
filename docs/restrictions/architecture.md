@@ -1154,6 +1154,26 @@ occurrences above look like an agent misreading a menu rather than a menu that i
 arithmetic a reader has to do by hand — comparing what the surface offers against what the checkout contains
 — which is why it took a second occurrence to write this down.
 
+## An event's own feed may not live inside the channel that plays it
+
+**A dispatch event reaches the operator on two channels — sound and screen — and the thing that RAISES it
+belongs to neither.** The CAD link and its stand-in sit beside the board
+([`use-cad.ts`](../../apps/dispatch/src/ops/use-cad.ts)); the audio subscribes and so do the notices
+([204/3-03](../plans/204-panel-audio/readme.md)). A sink that throws is counted, never rethrown.
+
+**What breaks when it is violated**: everything the speaker cannot do, the screen stops doing too. The 3/02
+version owned the link inside `DispatchAudio` and lost the screen three separate ways — `?audio=0` never
+starts the audio tick, so the stand-in never ran at all; plan mode, the surface every non-WebGPU browser
+falls back to, has no audio object to hold a link; and one throwing sink would have taken the rest of the
+fan-out with it.
+
+**SILENT on every one of those three.** Nothing errors: a browser with no Web Audio, a muted console and
+plan mode are all states the console reports as working, and a capture taken on any of them would show
+`delivered: 0` — which reads as *a quiet shift* rather than as *this surface cannot receive*. It is also the
+half [DESIGN.md](../../apps/dispatch/DESIGN.md)'s redundancy rule does not state, because that rule is about
+pixels and this one is about the object graph: **a link owned by the speaker is a link a deaf console does
+not have.**
+
 ## An alert is not ranked against the world
 
 **A voice names its BUS, and a voice that names none is `world`.** The pool's stealing rule — *the quietest

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Operations, Unit } from '../ops/types';
 
-import { CadMock, MOCK_MEAN_SECONDS } from './cad-mock';
+import { cadArm, CadMock, MOCK_MEAN_SECONDS } from './cad-mock';
 
 function board(units: readonly Unit[]): Operations {
   return { incidents: [], log: [], now: 0, units: [...units] };
@@ -84,6 +84,23 @@ describe('CadMock', () => {
       for (let draw = 0; draw < 16; draw += 1) {
         expect(new CadMock(scripted(0, 0, draw / 16)).step(board([unit('12')]), 1)?.sound).toBeDefined();
       }
+    });
+  });
+});
+
+describe('cadArm', () => {
+  describe('negative cases', () => {
+    it('treats anything but the exact string 0 as ON — a typo may not silently remove the stand-in', () => {
+      for (const value of ['', '1', 'off', 'false', '00']) {
+        expect(cadArm(new URLSearchParams(`cad=${value}`))).toBe('on');
+      }
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is on when absent, and off for `?cad=0`', () => {
+      expect(cadArm(new URLSearchParams())).toBe('on');
+      expect(cadArm(new URLSearchParams('cad=0'))).toBe('off');
     });
   });
 });

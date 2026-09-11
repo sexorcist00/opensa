@@ -33,6 +33,7 @@ import type { HistoryStats } from '../ops/history';
  * shared config→Environment driver, so the map is lit exactly as the game lights it.
  */
 import type { Operations, Selection } from '../ops/types';
+import type { CadLinkReport } from './cad-link';
 
 import { Beacons } from '../map/beacons';
 import { engineToGta, engineToGta3, gtaToEngine } from '../map/coords';
@@ -91,6 +92,9 @@ import { fetchWater, installWater } from './water';
 import { type DistrictLookup, loadDistricts, NO_DISTRICTS, type SearchedPlace } from './zones';
 
 export interface BootOptions {
+  /** What the CAD seam has carried (204/3-02) — read only by `?inventory=1`, so a host embedding the map
+   *  with no console simply does not pass it. */
+  readonly cad?: () => CadLinkReport;
   readonly canvas: HTMLCanvasElement;
   /**
    * Build the pak IO worker (201/2-02). Absent = the engine's module-relative default, which is what every
@@ -129,7 +133,12 @@ export interface DispatchHandle {
    * operator reaching for the sound control is the clearest gesture a page ever gets, and a button that
    * changed a number while the page stayed silent would be a lie.
    */
-  readonly audio: { report(): DispatchAudioReport; step(): MixName };
+  readonly audio: {
+    /** Raise one panel event by name (204/2-03). The CAD feed is upstream of this and never inside it. */
+    event(name: string, atMs?: number): void;
+    report(): DispatchAudioReport;
+    step(): MixName;
+  };
   readonly camera: MapCamera;
   dispose(): void;
   /**
@@ -1208,6 +1217,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
   return {
     /** What the sound control needs: the state to draw and the step to take (203/6-02). */
     audio: {
+      event: (name: string, atMs?: number): void => audio.event(name, atMs),
       report: (): DispatchAudioReport => audio.report(),
       step: (): MixName => audio.stepMix(),
     },
@@ -1275,6 +1285,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
           requests: pakTraffic.requests,
           totalBytes: pakTraffic.totalBytes,
         },
+        cad: options.cad?.() ?? null,
         camera: { at: pose.at, height: pose.height, projection: pose.projection },
         device: engine.deviceReport,
         district: params.get('district') ?? UNNAMED_DISTRICT,

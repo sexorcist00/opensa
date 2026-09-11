@@ -18,6 +18,9 @@
 import type { Operations, Unit } from '../ops/types';
 import type { CadMessage } from './cad-link';
 
+/** Whether this run carries the stand-in at all. `off` is `?cad=0`, spelled the way a filed row spells it. */
+export type CadArm = 'off' | 'on';
+
 /**
  * Mean seconds between messages.
  *
@@ -86,6 +89,18 @@ export class CadMock {
 
     return pick(this.random() * TOTAL_WEIGHT).line(unit);
   }
+}
+
+/**
+ * Read the arm out of `?cad=`.
+ *
+ * Absent is `on`, and that is a statement with an expiry date: until PCAD carries the contract's `sound`
+ * field there is no CAD to connect to, so a console opened with nothing on the `cad` bus would report a
+ * budget nobody exercised. `?cad=0` removes the stand-in and leaves the seam exactly as it is — which is
+ * also what the day PCAD arrives looks like. Like every arm in this family, unrecognised is the DEFAULT.
+ */
+export function cadArm(params: URLSearchParams): CadArm {
+  return params.get('cad') === '0' ? 'off' : 'on';
 }
 
 function message(title: string, body: string, sound: string): CadMessage {

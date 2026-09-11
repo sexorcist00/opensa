@@ -30,6 +30,15 @@ export interface CadLinkReport {
    */
   readonly assumed: number;
   readonly delivered: number;
+  /**
+   * Sinks that THREW while being handed an event.
+   *
+   * A count rather than a rethrow, because the sinks are independent channels and one of them is a speaker:
+   * a dead `AudioContext` may not take the notice off the screen with it, which is the whole of
+   * [DESIGN.md](../../DESIGN.md)'s redundancy rule applied to the wiring rather than to the pixels. It is
+   * reported because a silently swallowed throw is how a channel stops working without anyone noticing.
+   */
+  readonly failed: number;
   /** Whether a CAD is currently answering. `null` before one ever has. */
   readonly online: boolean | null;
 }
@@ -51,21 +60,23 @@ export interface CadSound {
 /** The name a message with no `sound` field is played under — the contract's own fallback. */
 export const ASSUMED_SOUND = 'notification';
 
-/** Whatever raises panel events; `DispatchAudio` is the one that does. */
-export interface PanelSurface {
-  event: (name: string, atMs?: number) => void;
-}
+/** Somewhere an event goes. A sound is one of these; so is a line on the screen. */
+export type PanelSink = (name: string, atMs?: number) => void;
 
-/** The console's end of the CAD link: messages in, panel events out, and a report of what arrived. */
+/**
+ * The console's end of the CAD link: messages in, event names out to every sink, and a report of what
+ * arrived.
+ *
+ * **It belongs to the console rather than to its audio**, and that is the 3/03 rule in the object graph: an
+ * event has to reach the SCREEN on a surface with no Web Audio, with the mix muted, and in plan mode, where
+ * there is no audio object at all. A link owned by the speaker is a link a deaf console does not have.
+ */
 export class CadLink {
   private assumed = 0;
   private delivered = 0;
+  private failed = 0;
   private online: boolean | null = null;
-  private readonly surface: PanelSurface;
-
-  constructor(surface: PanelSurface) {
-    this.surface = surface;
-  }
+  private readonly sinks = new Set<PanelSink>();
 
   /**
    * Play one message.
@@ -79,11 +90,20 @@ export class CadLink {
     if (sound.assumed) {
       this.assumed += 1;
     }
-    this.surface.event(sound.name, atMs);
+    this.raise(sound.name, atMs);
+  }
+
+  /** Subscribe. The returned function unsubscribes, which is what a React effect hands back. */
+  listen(sink: PanelSink): () => void {
+    this.sinks.add(sink);
+
+    return (): void => {
+      this.sinks.delete(sink);
+    };
   }
 
   report(): CadLinkReport {
-    return { assumed: this.assumed, delivered: this.delivered, online: this.online };
+    return { assumed: this.assumed, delivered: this.delivered, failed: this.failed, online: this.online };
   }
 
   /** Tell the link whether a CAD is answering. The first call only records; a CHANGE is what sounds. */
@@ -98,7 +118,17 @@ export class CadLink {
       // "the link dropped" — there was no link to drop.
       return;
     }
-    this.surface.event(online ? 'link_back' : 'link_lost');
+    this.raise(online ? 'link_back' : 'link_lost');
+  }
+
+  private raise(name: string, atMs?: number): void {
+    for (const sink of this.sinks) {
+      try {
+        sink(name, atMs);
+      } catch {
+        this.failed += 1;
+      }
+    }
   }
 }
 

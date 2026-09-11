@@ -32,6 +32,7 @@ import type { EngineStats, FrameSpanTotals, PakTrafficKind, StreamStats } from '
 
 import type { MapProjection } from '../map/map-camera';
 import type { DispatchAudioReport } from './audio';
+import type { CadLinkReport } from './cad-link';
 import type { CssBoxExtremes } from './capture-box';
 import type { VisibilityReport } from './capture-visibility';
 import type { FrameIntervalKind } from './frame-clock';
@@ -140,6 +141,14 @@ export interface InventoryReport {
     readonly requests: number;
     readonly totalBytes: number;
   };
+  /**
+   * What the CAD seam has carried (204/3-02), or null for a host with no console around the map.
+   *
+   * Beside `audio` rather than inside it, and that is the 3/03 rule in the report as well as in the object
+   * graph: these events reach the screen on a surface that can make no sound, so a capture that filed them
+   * under the speaker would say a muted console received nothing.
+   */
+  readonly cad: CadLinkReport | null;
   /** Where the operator was when they took the report, and how the world was PROJECTED — so the capture
    *  states its own ground and its own arm. A plan-view frame and a perspective one cover different
    *  amounts of world at the same pose, so a row that does not say which it was cannot be compared to
@@ -622,6 +631,7 @@ export class FrameInventory {
       requests: number;
       totalBytes: number;
     };
+    cad: CadLinkReport | null;
     camera: { at: readonly [number, number]; height: number; projection: MapProjection };
     device: unknown;
     district: string;
@@ -674,6 +684,7 @@ export class FrameInventory {
       boot: context.boot,
       build: context.build,
       bytes: context.bytes,
+      cad: context.cad,
       camera: { at: context.camera.at, height: context.camera.height, projection: context.camera.projection },
       cpu: {
         bodyMaxMs: this.maxima.get('cpu-body') ?? 0,
