@@ -49,6 +49,22 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
   nothing fetches on the path, latency measured from when the EVENT happened rather than from the speaker,
   a 900 ms per-name coalescing window and a 3 % detune so a burst is one tone and a count rather than a
   machine gun.
+- **The board's own events** (204/3-01): two `Operations` snapshots diffed into event names — a call appears
+  coded by its priority, a unit commits, a unit reaches its scene, a call clears. On the audio clock, because
+  the board moves whether or not a frame was drawn for it; the FIRST board raises nothing.
+- **The CAD seam, and a stand-in on it** (204/3-02): a message names its sound in `sound_trigger` and never
+  in its title; one that names none plays `notification` and is COUNTED. `link_lost` / `link_back` are
+  derived rather than sent, and neither is said until a CAD has answered once. `?cad=0` removes the stand-in
+  and leaves the seam.
+- **Every event is also SEEN** (204/3-03): `map` needed nothing — the board already draws it — and every
+  `cad` event now gets a line, 4 s, and 15 s for the two FLOORED names. The feed belongs to the CONSOLE
+  rather than to its audio, so a muted console, a browser with no Web Audio and plan mode all still receive.
+- **The backgrounded tab** (204/3-04): the alert path touches no timer, and an event arriving at a suspended
+  context asks for it back on the way past. What IS throttled is listed in the contract and accepted.
+- **PCAD's half** (204/4): [PR #13](https://github.com/sexorcist00/pcad/pull/13) — the title search deleted,
+  four events that had no sound at all, and calls coded by priority. Awaiting the user's review.
+- **The output peak, measured** (204/5-01): `voices.peakSample` is the loudest sample that actually left the
+  graph, tapped after the limiter; `voices.peakByBus` says how many of a full pool were alerts.
 - **Absence is a reported state, never a throw**: no Web Audio in the environment is `unsupported`, one line
   in the log, and a host every caller can go on using.
 
@@ -115,7 +131,13 @@ numbers below are measurements rather than documentation:
   bank is reachable.
 - **The budgets are named and unmeasured**: 64 concurrent voices, 2 ms of CPU a frame, 64 MB, and ≤ 200 ms
   from the gesture to the first sound. 64 voices each with a `PannerNode` is a number nobody here has
-  measured on a Mali phone.
+  measured on a Mali phone. Since 204/5-01 the capture can ANSWER the panel half of that row — event →
+  audible ms, `refusedByBus.cad`, the output peak, voices per bus at peak — but the phone has not been asked.
+- **The authored panel sound files are not in the bundle.** The raw set is **2.9 MB against a 1 MB budget**,
+  so it needs transcoding before it can ship at all; until then every panel name resolves to its synthesised
+  tone and the report says so. That is the budget doing its job rather than an obstacle.
+- **The PCAD sound MAPPINGS are placeholders.** PR #13's four new events and its three priority tones were
+  assigned only so no two events sound alike; nobody has listened to them in those roles.
 - **No ear has heard any of it.** Every number in the ambience bed is arithmetic against the census —
   the swap window, the exchange ramp, the crossfade and the height bounds are all
   [a fitted bridge](../hacks/audio-twin-loop-swap.md) waiting on the operator's own verdict, which is what

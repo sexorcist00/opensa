@@ -251,9 +251,15 @@ phases and risks: [docs/plans/202-pcad-dispatch/](docs/plans/202-pcad-dispatch/r
 - [ ] Panel audio — **[plan 204](docs/plans/204-panel-audio/readme.md)**, opened 2026-09-10. The console's own
       voice: three buses with one owner each, a limiter, ducking, and an event vocabulary shared with PCAD as
       a contract. Opens on a live defect — an alert can be refused by 64 car engines
-  - [ ] Buses, and the end of the refused alert (1/01)
-  - [ ] The limiter and the duck
-  - [ ] The contract, and PCAD's half as a branch and a PR
+  - [x] Buses, and the end of the refused alert (1/01)
+  - [x] The limiter, the duck, the mixes and the alert floor (1/02–1/04)
+  - [x] The contract, the synthesis floor, the event API, coalescing (2/01–2/04) — the authored FILES are
+        still owed: 2.9 MB against a 1 MB budget, so they need transcoding before they can ship
+  - [x] The consumers: the board's own events, the CAD seam and its stand-in, a VISIBLE counterpart for every
+        event, and the backgrounded tab (3/01–3/04)
+  - [x] PCAD's half as a branch and a PR — [#13](https://github.com/sexorcist00/pcad/pull/13), awaiting the
+        user's review (4/01–4/03)
+  - [ ] The device row (5/01) — the capture can answer it now; the phone has not been asked
 - [ ] Swimming
 - [ ] Bicycles
 - [ ] Bikes

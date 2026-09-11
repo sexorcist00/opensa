@@ -61,7 +61,10 @@ Newest first:
   **It opens on a live defect**: an alert can be refused by 64 car engines, since the pool ranks a positionless
   sound by its bare gain — invisible today only because nothing yet plays one. Five chains; PCAD's half lands
   as a branch and a PR, including the fix for a trigger currently resolved by string-matching a notification
-  title.
+  title. **Chains 1-4 are DONE** (2026-09-11); PCAD's half is
+  [PR #13](https://github.com/sexorcist00/pcad/pull/13), awaiting review. Two things are owed and both are
+  named in the plan: the authored sound FILES (2.9 MB against a 1 MB budget — the budget doing its job), and
+  **every number in 5/01's device row**, which only the phone can give.
 - **[202 — PCAD Dispatch](./202-pcad-dispatch/readme.md)** — **THE FINAL PLAN**, opened 2026-08-06. The
   product every dispatch doc here now serves: a **web dispatch application for a SA-MP server**, paired with a
   client-side CAD plugin (PCAD). Three pieces — the plugin, a backend, and the web application — of which this
