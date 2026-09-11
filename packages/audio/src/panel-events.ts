@@ -127,13 +127,21 @@ export class PanelEvents {
    */
   event(name: string, atMs?: number): null | Voice {
     const bus = PANEL_CATEGORY[name];
-    const buffer = this.sounds.find(name);
-    if (bus === undefined || buffer === null) {
+    if (bus === undefined) {
+      // **`unknown` is about the VOCABULARY and nothing else.** A build with no context has no buffers at
+      // all (`PanelSounds.empty()`), and listing every contract name here would make the silent baseline
+      // capture indistinguishable from a real mismatch between two repositories — which is the one thing
+      // this field exists to report. A name the table knows but this build cannot voice is an ABSENCE, and
+      // absence is already what `played` being zero says.
       if (!this.said.has(name)) {
         this.said.add(name);
         this.unknown.push(name);
       }
 
+      return null;
+    }
+    const buffer = this.sounds.find(name);
+    if (buffer === null) {
       return null;
     }
     const at = this.now();

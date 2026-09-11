@@ -51,6 +51,9 @@ export class FakeAnalyser extends FakeNode implements AnalyserLike {
   }
 
   getFloatTimeDomainData(array: Float32Array): void {
+    // Fill the WHOLE array, as a real analyser does. A partial write would leave the caller's reused buffer
+    // carrying the previous read's samples, so a quiet read would report the loud one before it.
+    array.fill(0);
     array.set(this.samples.subarray(0, array.length));
   }
 }

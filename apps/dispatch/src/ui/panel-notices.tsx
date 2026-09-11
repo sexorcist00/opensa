@@ -57,7 +57,7 @@ export function PanelNotices({ notices }: { readonly notices: readonly PanelNoti
   }
 
   return (
-    <div style={styles.agentNotices}>
+    <div style={styles.panelNotices}>
       {notices.map((notice) => (
         <div key={notice.id} style={FLOORED.has(notice.name) ? styles.agentNoticeFailed : styles.agentNotice}>
           {noticeText(notice.name)}

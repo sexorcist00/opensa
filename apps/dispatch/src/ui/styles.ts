@@ -786,6 +786,29 @@ export const styles = {
     minHeight: 0,
     overflow: 'hidden',
   },
+  /**
+   * The panel-event stack (204/3-03).
+   *
+   * Its own strip rather than the agent one's: both are absolutely positioned and a shared `top` painted a
+   * `PANIC BUTTON` line and an agent notice over each other — on exactly the surfaces (muted, plan mode) the
+   * line exists for. Below the agent band, and the same bounded width, so neither can reach a corner cluster.
+   */
+  panelNotices: {
+    display: 'grid',
+    fontFamily: MONO,
+    gap: SPACE.xxs,
+    justifyItems: 'center' as const,
+    left: SPACE.sm,
+    margin: '0 auto',
+    maxWidth: 460,
+    pointerEvents: 'none' as const,
+    position: 'absolute' as const,
+    right: SPACE.sm,
+    // Clear of `agentNotices` (top 36) and of its own stack of three, so the two never share a row.
+    top: 132,
+    width: 'fit-content' as const,
+    zIndex: 5,
+  },
   /** The phone sheet's tab strip. */
   /**
    * A slider a finger can catch.

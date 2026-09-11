@@ -62,7 +62,7 @@ export function App({ createPakWorker }: { createPakWorker?: () => Worker } = {}
   const { actions, autoDispatch, clock, historyWindow, ops, read, selection, worldTime } = useOperations();
   // The CAD feed is owned HERE rather than by the audio, because an event has to reach the screen on a
   // console that cannot make a sound at all (204/3-03). The sound is one subscriber; the notices are another.
-  const cad = useCad(read.ops);
+  const cad = useCad(read.liveOps);
   const [readout, setReadout] = useState<DispatchReadout | null>(null);
   /** Which surface is drawing, and how to change it (201/6-03) — the map reports it up, because the switch
    *  outlives any one surface and the chrome is what survives it. */

@@ -54,7 +54,9 @@ export function boardEvents(previous: null | Operations, next: Operations): read
       // the contract. It is named here so the next reader knows it was considered rather than missed.
       continue;
     }
-    if (was.incident === null && unit.incident !== null) {
+    // Any CHANGE of commitment, not only leaving patrol: `assignUnit` moves a unit straight from one call
+    // to another, and a dispatcher re-directing a unit mid-run is exactly the moment worth hearing.
+    if (unit.incident !== null && was.incident !== unit.incident) {
       events.push('unit_assigned');
     }
     if (arrived(was, unit)) {

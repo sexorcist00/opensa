@@ -105,6 +105,15 @@ export interface BootOptions {
   /** How old each unit's last fix is, ms (201/8-02) — absent for a host with no board, whose markers are
    *  then all drawn as fresh. */
   readonly fixAges?: () => ReadonlyMap<string, number>;
+  /**
+   * The board the FEED is on, for the event diff (204/3-01) — never the reconstructed past.
+   *
+   * Separate from {@link ops}, which is the board AT THE CLOCK and is what the map DRAWS. Diffing that one
+   * would raise an alert for every unit that arrived an hour ago the moment an operator scrubbed the
+   * timeline: an alert about the past, which is the one thing a dispatch alert may never be. Absent, the
+   * board raises no events at all.
+   */
+  readonly liveOps?: () => Operations;
   /** The radar's own canvas (201/7-04). Absent for a host that does not want one — an embedded map, or
    *  plan mode, which draws its own board and has no room for an inset. */
   readonly minimap?: HTMLCanvasElement;
@@ -707,8 +716,9 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       // a city nobody is panning still has an engine.
     },
     () => options.ops().units,
-    // The same snapshot the board renders from, diffed on the audio clock into `map` events (204/3-01).
-    () => options.ops(),
+    // The board the FEED is on, diffed on the audio clock into `map` events (204/3-01). NOT `ops`, which is
+    // the board at the shift clock and rewinds when an operator scrubs.
+    options.liveOps,
   );
   // The bounds are the world's, not the camera's: how far it may zoom out and how shallow it may tilt both
   // come from how much world there is around the focus (201/7-02).

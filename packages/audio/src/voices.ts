@@ -382,7 +382,6 @@ export class VoicePool {
     };
   }
 
-  /** Move the ear. Every live positional voice is re-gained and re-panned from where it stands. */
   /**
    * Read the output and remember the loudest sample seen.
    *
@@ -442,6 +441,7 @@ export class VoicePool {
     param.linearRampToValueAtTime(target, now + seconds);
   }
 
+  /** Move the ear. Every live positional voice is re-gained and re-panned from where it stands. */
   setListener(listener: AudioListener): void {
     this.listener = listener;
     for (const voice of this.voices.values()) {

@@ -76,6 +76,15 @@ describe('boardEvents', () => {
   });
 
   describe('positive cases', () => {
+    it('announces a unit RE-DIRECTED from one call to another', () => {
+      // `assignUnit` moves a unit straight from one incident to another without passing through patrol, and
+      // a dispatcher re-directing a unit mid-run is exactly the moment worth hearing.
+      const before = board([unit({ incident: 'i1', status: 'enRoute' })]);
+      const after = board([unit({ incident: 'i2', status: 'enRoute' })]);
+
+      expect(boardEvents(before, after)).toEqual(['unit_assigned']);
+    });
+
     it('codes a new call by its PRIORITY, because every other channel does', () => {
       for (const [priority, name] of [
         [1, 'call_created_p1'],

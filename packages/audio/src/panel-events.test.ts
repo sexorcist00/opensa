@@ -44,6 +44,19 @@ describe('PanelEvents', () => {
       expect(events.report().played).toBe(0);
     });
 
+    it('does not call a name UNKNOWN just because this build has no sound for it', () => {
+      // A build with no AudioContext holds an empty sound set, so every contract name would resolve to
+      // nothing. Listing them here would make the `?audio=0` baseline capture read exactly like a real
+      // vocabulary mismatch with PCAD — the one failure this field exists to report.
+      const events = new PanelEvents({ pool: null });
+
+      events.event('panic_button');
+      events.event('link_lost');
+      events.event('shift_change');
+
+      expect(events.report().unknown).toEqual(['shift_change']);
+    });
+
     it('never lets an alert be refused, even with the world full', () => {
       const { context, events, pool } = harness();
       for (let at = 0; at < MAX_VOICES; at += 1) {

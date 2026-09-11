@@ -64,6 +64,8 @@ export interface DispatchStore {
   readonly read: {
     /** How old each unit's last fix is, ms (201/8-02). Same rate and same source as {@link trails}. */
     fixAges: () => ReadonlyMap<string, number>;
+    /** The board the FEED is on — for anything reacting to a CHANGE rather than drawing a state. */
+    liveOps: () => Operations;
     ops: () => Operations;
     selection: () => Selection;
     trackStats: () => HistoryStats;
@@ -198,6 +200,15 @@ export function useOperations(): DispatchStore {
   const read = useMemo(
     () => ({
       fixAges: (): ReadonlyMap<string, number> => fixAgesRef.current,
+      /**
+       * The board the FEED is on, never the reconstructed past.
+       *
+       * For anything that reacts to a CHANGE rather than drawing a state (204/3-01's event diff). Scrubbing
+       * the timeline rewrites `ops` to a moment that has already happened, and a diff taken across that
+       * would raise an alert for every unit that arrived an hour ago — an alert about the past, which is the
+       * one thing a dispatch alert may never be.
+       */
+      liveOps: (): Operations => liveRef.current,
       ops: (): Operations => opsRef.current,
       selection: (): Selection => selectionRef.current,
       trackStats: (): HistoryStats => history.stats(),

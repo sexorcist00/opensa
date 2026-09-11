@@ -68,7 +68,24 @@ export function expired(notice: PanelNotice, now: number): boolean {
   return now - notice.atMs >= (FLOORED.has(notice.name) ? FLOORED_HOLD_MS : HOLD_MS);
 }
 
-export function useCad(ops: () => Operations): CadFeed {
+/**
+ * Keep at most {@link MAX_NOTICES}, dropping the OLDEST ORDINARY line first.
+ *
+ * Arrival order alone would let three routine chimes push a panic off the screen after three seconds, when
+ * the whole point of holding it for fifteen is that it is the one an operator may have looked away from. A
+ * floored line yields only to another floored line.
+ */
+export function trim(notices: readonly PanelNotice[]): readonly PanelNotice[] {
+  if (notices.length <= MAX_NOTICES) {
+    return notices;
+  }
+  const ordinary = notices.filter((notice) => !FLOORED.has(notice.name));
+  const dropping = new Set(ordinary.slice(0, notices.length - MAX_NOTICES));
+
+  return notices.filter((notice) => !dropping.has(notice)).slice(-MAX_NOTICES);
+}
+
+export function useCad(liveOps: () => Operations): CadFeed {
   const link = useMemo(() => new CadLink(), []);
   const mock = useMemo(() => (cadArm(dispatchParams()) === 'on' ? new CadMock() : null), []);
   const [notices, setNotices] = useState<readonly PanelNotice[]>([]);
@@ -79,7 +96,7 @@ export function useCad(ops: () => Operations): CadFeed {
       link.listen((name) => {
         nextId.current += 1;
         const notice = { atMs: performance.now(), id: nextId.current, name };
-        setNotices((current) => [...current, notice].slice(-MAX_NOTICES));
+        setNotices((current) => trim([...current, notice]));
       }),
     [link],
   );
@@ -103,7 +120,7 @@ export function useCad(ops: () => Operations): CadFeed {
       return;
     }
     const id = setInterval(() => {
-      const said = mock.step(ops(), STEP_MS / 1_000);
+      const said = mock.step(liveOps(), STEP_MS / 1_000);
       if (said) {
         // A CAD that is talking is a CAD that is answering, so the stand-in marks the seam up as it speaks.
         // It never fakes a DROP: `link_lost` is the loudest thing this console says, and a stand-in that
@@ -114,7 +131,7 @@ export function useCad(ops: () => Operations): CadFeed {
     }, STEP_MS);
 
     return (): void => clearInterval(id);
-  }, [link, mock, ops]);
+  }, [link, mock, liveOps]);
 
   return { link, notices };
 }

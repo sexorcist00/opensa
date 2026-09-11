@@ -62,6 +62,7 @@ export function MapCanvas({
   read: {
     cad: () => CadLinkReport;
     fixAges: () => ReadonlyMap<string, number>;
+    liveOps: () => Operations;
     ops: () => Operations;
     selection: () => Selection;
     trackStats: () => HistoryStats;
@@ -106,6 +107,7 @@ export function MapCanvas({
       ...(liveRef.current.createPakWorker ? { createPakWorker: liveRef.current.createPakWorker } : {}),
       cad: () => liveRef.current.read.cad(),
       fixAges: () => liveRef.current.read.fixAges(),
+      liveOps: () => liveRef.current.read.liveOps(),
       onClick: (click) => {
         const { select } = liveRef.current.actions;
         if (click.kind === 'ground') {

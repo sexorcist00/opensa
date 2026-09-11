@@ -132,7 +132,8 @@ generic handler was dropping the field, and the client fell back to searching th
 
 **What the console does with a message that names nothing** (204/3-02,
 [`cad-link.ts`](../../apps/dispatch/src/world/cad-link.ts)): it plays `notification` and **counts it**
-(`audio.cad.assumed`), because otherwise *the CAD stopped naming its sounds* and *the CAD went quiet* look
+(`cad.assumed` — top-level in the capture, not under `audio`: these events reach the screen on a surface
+that can make no sound), because otherwise *the CAD stopped naming its sounds* and *the CAD went quiet* look
 identical from here — and the first of those is the worse one, since everything still chimes and every event
 now chimes the SAME. An empty or blank field counts as absent rather than as an unknown NAME: a CAD that
 sends `""` has not adopted the field, and filing that under the vocabulary column would put a wiring problem
