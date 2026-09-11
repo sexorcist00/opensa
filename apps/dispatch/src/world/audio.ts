@@ -223,6 +223,14 @@ export class DispatchAudio {
    * @param atMs when the event HAPPENED, if it crossed a wire. Absent, now.
    */
   event(name: string, atMs?: number): void {
+    // **A backgrounded tab may be holding a SUSPENDED context** (204/3-04), and the dispatcher is a player:
+    // this console spends its shift behind a game window. An alert is the one thing that may not wait for a
+    // gesture that is not coming, so ask for the context back on the way past. Fire and forget — a refusal
+    // is counted in `resumesRefused` rather than thrown, and the event still goes to the panel either way,
+    // because a context that comes back mid-tone is a late alert and a dropped one is no alert.
+    if (this.host.state.availability === 'suspended') {
+      void this.host.resume();
+    }
     this.panel.event(name, atMs);
   }
 
@@ -354,6 +362,11 @@ export class DispatchAudio {
       this.units?.update(unitsOf(), listener.position, gapSeconds);
       // The board is diffed HERE rather than where it is stepped: the console renders a board it does not
       // own, and on the audio clock it sees every snapshot whether or not a frame was drawn for it.
+      //
+      // **A hidden tab clamps this clock to about 1 Hz, and for `map` that is accepted** (204/3-04): the
+      // board itself is stepped on a React timer that is clamped by the same rule, so a diff taken on the
+      // audio clock cannot be later than the snapshots it has to compare. The path that may NOT be throttled
+      // is `cad`, and it is not — `event()` plays straight through with no tick between it and the speaker.
       const board = boardOf?.();
       if (board) {
         for (const name of boardEvents(this.lastBoard, board)) {

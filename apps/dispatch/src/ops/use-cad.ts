@@ -20,7 +20,14 @@ import { dispatchParams } from '../world/boot';
 import { CadLink } from '../world/cad-link';
 import { cadArm, CadMock } from '../world/cad-mock';
 
-/** How often the stand-in is offered a turn. The mock draws against elapsed SECONDS, so this is not its rate. */
+/**
+ * How often the stand-in is offered a turn. The mock draws against elapsed SECONDS, so this is not its rate.
+ *
+ * **A backgrounded tab clamps this to about 1 Hz and that is accepted** (204/3-04): the stand-in is a fake,
+ * and a real CAD does not arrive on a timer — it arrives on a socket, which wakes a hidden tab. What may NOT
+ * be on a clamped timer is the path from an event to the alert, and it is not: `link.deliver` plays straight
+ * through, with no tick between it and the speaker.
+ */
 const STEP_MS = 500;
 
 /**

@@ -147,6 +147,48 @@ function board(over: { readonly assigned?: boolean } = {}): Operations {
   };
 }
 
+describe('DispatchAudio in a backgrounded tab', () => {
+  describe('negative cases', () => {
+    it('plays an alert without the audio tick ever having run', () => {
+      // 204/3-04: the dispatcher is a player, so this console spends its shift behind a game window, where
+      // a background timer is clamped to about 1 Hz. An alert routed through the audio clock would be up to
+      // a second late — which is not an alert. The clock is never started here at all.
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clockHost(),
+        createContext: () => new FakeAudioContext(),
+        log: vi.fn(),
+      });
+
+      audio.event('panic_button');
+
+      expect(audio.report().panel.played).toBe(1);
+      expect(audio.report().clock.ticks).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('asks a SUSPENDED context back on the way past, rather than waiting for a gesture', async () => {
+      // A tab nobody is looking at gets no gesture, and the alert is exactly what would be waiting for one.
+      const context = new FakeAudioContext();
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clockHost(),
+        createContext: () => context,
+        log: vi.fn(),
+      });
+      // The page HAS been touched — stepping the sound control is the gesture — and then the browser took
+      // the context back, which is `suspended` rather than `waiting`.
+      audio.stepMix();
+      await context.suspend();
+      expect(audio.report().availability).toBe('suspended');
+
+      audio.event('panic_button');
+
+      expect(audio.report().availability).toBe('running');
+      expect(audio.report().panel.played).toBe(1);
+    });
+  });
+});
+
 describe('DispatchAudio board events', () => {
   describe('negative cases', () => {
     it('raises nothing on the tick that FIRST sees a board', () => {

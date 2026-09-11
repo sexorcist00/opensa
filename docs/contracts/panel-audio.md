@@ -167,6 +167,27 @@ eventually — a line that never leaves is a line over the map, and the map is t
 the case an operator should be able to see and report; a blank line would make a newer PCAD's event
 indistinguishable from no event.
 
+## 4b. The console spends its shift in a background tab
+
+**The dispatcher is a player.** This console sits behind a game window, and a browser clamps a hidden tab's
+timers to about 1 Hz. So the rule is a division rather than a fix:
+
+| Path | On a timer? | In a hidden tab |
+| --- | --- | --- |
+| a `cad` event → the speaker | **no** — `event()` plays straight through | immediate |
+| the ambience's position updates | yes, the audio clock | coarse, and [stated since 203](../../packages/audio/src/audio-clock.ts) — the graph keeps playing in the audio thread, only the positions go stale |
+| the `map` diff | yes, the audio clock | throttled, and accepted: the board it diffs is stepped on a React timer clamped by the same rule, so the diff cannot be later than the snapshots it compares |
+| the CAD stand-in | yes | throttled, and it is a FAKE — a real CAD arrives on a socket, which wakes a hidden tab |
+
+**A suspended context is asked back on the way past.** A tab nobody is looking at gets no gesture, and an
+alert is exactly what would otherwise be waiting for one — so an event arriving at a `suspended` host asks
+for it back and plays regardless; a refusal is counted in `resumesRefused` rather than thrown. A context that
+comes back mid-tone is a late alert, and a dropped one is no alert.
+
+**Owed: the device check.** Everything above is verified by tests. Whether Android actually keeps this
+console's context alive behind the game window is a question only the phone can answer
+([termux.md](../development/termux.md) — no headless browser here), and it belongs with 5/01's row.
+
 ## 5. The sound set, and where it came from
 
 **Provenance, recorded because it is written nowhere else and in six months there is nobody left to ask.**
