@@ -1,4 +1,4 @@
-# 2026-09-11 — the ASTC encode stalls on this phone, and two threads stall it sooner
+# 2026-09-11 — the ASTC encode stalls on this phone; screen-off may be why, and the thread pair is void
 
 **Tool:** `opensa-pack`, driven by `scripts/phone.sh` through the phone console's MCP (`phone_run phone`).
 **Inputs:** `game-src/original`, district `los-santos-centre` (rect `5,-7,6,-6` — 4 grid cells, the pinned
@@ -86,6 +86,26 @@ looking like a understatement rather than a rate problem — a rate would keep p
 grinding on one enormous array or has hung. The next instrument this wants is per-ARRAY size in the log
 before the encode of that array starts, rather than after it finishes — the current line can only report an
 array that completed, which is precisely the thing that stops happening.
+
+## SECOND CORRECTION: the pair may not be a pair at all
+
+**The operator's own report, hours later: the screen was off during these runs.** That is not a detail — it
+is a confound that reaches the whole row.
+
+`termux-wake-lock` keeps the CPU awake and the log records it held, but it does not defeat EMUI's
+PowerGenie, which [termux.md](../../development/termux.md) already calls the most aggressive background
+killer of any Android skin. A frozen process is ALIVE and makes no progress — which is exactly the symptom
+both runs showed, and exactly what neither the kill-signature test nor the thread comparison can tell apart
+from a real stall.
+
+**So `0 arrays against 4` may be nothing but how long the screen happened to be on in each run.** The two
+runs were not controlled for the one variable that turns out to matter most, and no conclusion about the
+thread pool can be drawn from them. The rows above stay as filed — they are what was logged — but the
+verdict they carried is withdrawn until a run with the screen ON says otherwise.
+
+**What this costs, stated plainly**: a day's worth of conclusions about `--astc-threads`, and the 08-25 row's
+own *"Android killed it at 6 m 25 s"* now also wants re-reading — a kill and a freeze are different failures
+and this project has been treating them as one.
 
 ## What this row does NOT say
 

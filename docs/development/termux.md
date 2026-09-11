@@ -91,6 +91,17 @@ adb shell "/system/bin/device_config put activity_manager max_phantom_processes 
 It resets on reboot. Check whether it is the cause before spending the evening on it: if the convert dies
 around the same *stage* every time rather than after the same *elapsed time*, it is the phantom killer.
 
+**A THIRD failure looks like neither, and it cost a day on 2026-09-11: the process is FROZEN, not killed.**
+With the screen off, PowerGenie can suspend a background app's threads instead of reaping them — so the job
+stays `running`, the panel keeps answering, the log keeps its last line, and nothing anywhere errors. Two
+ASTC converts were read as *the encoder stalls* and a whole thread-count comparison was drawn from them
+before the operator mentioned the screen had been off. **`termux-wake-lock` does not prevent this** — it
+holds the CPU, and the log records it held, which is what made the reading so convincing.
+
+So the test above needs a third branch: a run that stops printing but stays alive, and RESUMES when the
+screen comes back on, was frozen. Keep the screen on for any convert whose timing is going to be believed,
+and say so in the row.
+
 *Our half, and it is the one that makes the kill survivable.* **A convert that is killed is resumed, not
 restarted.** `scripts/phone.sh` passes `--checkpoints "$OUT/.pack-checkpoints"` to the pack, which journals
 every weld chunk, and adds `--resume` on the next run when that journal is there — so a run that dies at

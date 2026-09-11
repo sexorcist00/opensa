@@ -93,8 +93,14 @@ TEXTURES="${TEXTURES:-astc}"
 #   - two threads is WORSE and 1 stays the default — 0 arrays against 4 is not nothing;
 #   - but "one thread works" is FALSE. Both stall. One simply gets further.
 #
-# Whatever is wrong is not only the thread pool, and it is unexplained. DO NOT plan a convert here on the
-# assumption that single-threaded finishes: no run on this device has yet produced an ASTC pak.
+# AND THEN THE OPERATOR SAID THE SCREEN HAD BEEN OFF, which voids the comparison above. `termux-wake-lock`
+# keeps the CPU awake — the log even records it held — but it does not defeat EMUI's PowerGenie, which
+# FREEZES rather than kills (docs/development/termux.md). A frozen process is alive and idle, which is what
+# both runs looked like, so `0 arrays against 4` may be nothing but how long each run had the screen on.
+#
+# **Neither thread count has been fairly tested.** Keep 1 as the default because it is the value with a
+# working history, not because this pair proved anything. And a kill and a FREEZE are different failures:
+# this repo has been reading them as one, the 08-25 row included.
 #
 # `ASTC_THREADS=0` restores one-per-core for a machine that can afford it.
 ASTC_THREADS="${ASTC_THREADS:-1}"
