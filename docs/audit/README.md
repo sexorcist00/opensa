@@ -5,6 +5,15 @@ numbers and links to the raw records — so the result survives the session and 
 without re-deriving it. Runtime numbers live in [`../benchmarks/`](../benchmarks/); these docs summarise and
 interpret them.
 
+- [`2026-09-11-panel-audio-chain.md`](./2026-09-11-panel-audio-chain.md) — plan 204's chains 1-4 in one day:
+  11 commits here and 1 in PCAD, ~2 780 lines, 176 tests in `@opensa/audio`. The defect it opened on was real
+  and is gone — an alert could be refused by sixty-four car engines, silently. Its subject is the COST line:
+  **six defects a review found after the work was called done, none of which errored and none of which a
+  written test would have caught**, because this chain's instruments are good at what has numbers and blind
+  to what has geometry and timing. Plus one structural mistake corrected mid-session (the CAD feed owned by
+  the audio, which lost the screen three ways) that became a restriction. **No benchmark row accompanies
+  it**: every number is still owed to a phone this container does not have.
+
 - [`2026-09-09-audio-chain.md`](./2026-09-09-audio-chain.md) — plan 203 from *a gate nobody had passed* to *a
   console with an ear* in one day: 29 commits, 3 702 lines across 26 files, 74 tests in `@opensa/audio`. Its
   subject is that **five defects were caught by instruments rather than by ears**, and three of them would
