@@ -42,6 +42,9 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
   `muted`. Levels rather than a master volume, because *everything quieter* was never what a dispatcher
   wanted; one control rather than three sliders, because the cross-platform rule forbids the second. Muting
   leaves the panic button and the lost link audible at a floor, and the key's own label says so.
+- **A synthesised floor under every panel sound** (204/2-02): eighteen tones, pure and deterministic, no
+  bytes and nothing to 404. A deployment that ships the authored set sounds like PCAD; one that cannot still
+  alerts, and the report says which layer answered.
 - **Absence is a reported state, never a throw**: no Web Audio in the environment is `unsupported`, one line
   in the log, and a host every caller can go on using.
 

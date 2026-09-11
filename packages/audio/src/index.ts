@@ -40,6 +40,7 @@ export type {
   StereoPannerLike,
 } from './audio-host.interface';
 export { type AudioEvent, AudioEventTable } from './event-table';
+export { PanelSounds, type PanelSoundsReport, type SoundSource, TONE_RATE } from './panel-sounds';
 export {
   attenuation,
   audibleGain,
@@ -50,6 +51,7 @@ export {
   panFor,
   type Vec3,
 } from './spatial';
+export { GAP_SECONDS, PANEL_TONES, renderTone, toneSeconds, type ToneSpec } from './tones';
 export {
   CRZ_FADE_SECONDS,
   type EngineState,

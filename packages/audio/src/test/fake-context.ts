@@ -130,6 +130,8 @@ export class FakeStereoPanner extends FakeNode implements StereoPannerLike {
 
 /** The context itself. `refuseResume` is how a test plays the browser turning a gesture down. */
 export class FakeAudioContext implements AudioContextLike {
+  /** Every buffer ever built. The tone floor builds one a name. */
+  readonly buffers: FakeAudioBuffer[] = [];
   /** Every limiter ever built. The pool builds exactly one. */
   readonly compressors: FakeCompressor[] = [];
   currentTime = 0;
@@ -153,7 +155,10 @@ export class FakeAudioContext implements AudioContextLike {
   }
 
   createBuffer(numberOfChannels: number, length: number, sampleRate: number): AudioBufferLike {
-    return new FakeAudioBuffer(numberOfChannels, length, sampleRate);
+    const buffer = new FakeAudioBuffer(numberOfChannels, length, sampleRate);
+    this.buffers.push(buffer);
+
+    return buffer;
   }
 
   createBufferSource(): AudioBufferSourceLike {
