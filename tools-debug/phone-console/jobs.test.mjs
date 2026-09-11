@@ -58,7 +58,7 @@ describe('phone console jobs', () => {
 
     it('refuses a job it does not have, and names the ones it does', () => {
       expect(() => buildJob('rm-rf')).toThrow(
-        /unknown job 'rm-rf' — known: debug, districts, main, map, map3d, open, phone, pull, rebase, setup, share, sirv, webapp/,
+        /unknown job 'rm-rf' — known: data, debug, districts, main, map, map3d, open, phone, pull, rebase, setup, share, sirv, webapp/,
       );
     });
 

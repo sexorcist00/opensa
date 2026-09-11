@@ -63,9 +63,10 @@
  * `--pak-out`). Point a host at the game dir (`?src=<out>`).
  */
 import { argValue, fromCwd } from '@opensa/tool-kit/cli';
-import { statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { packGameDir, type TextureTarget } from './pack';
+import { packGameDir, placeBakedData, type TextureTarget } from './pack';
 
 function arg(name: string): null | string {
   return argValue(`--${name}`) ?? null;
@@ -81,9 +82,22 @@ async function main(): Promise<void> {
         '[--pak-out <dir>] [--game-id <id>] [--no-ao] [--no-models] [--bakes] [--bake-workers N] ' +
         '[--textures astc|bc|rgba8] [--astc-threads N] [--max-texture N] [--map-objects-in-rect] [--lod-only] ' +
         '[--platforms desktop|mobile[,…]] [--bake-collision] [--stochastic <file>[,<file>…]] ' +
-        '[--vehicles a,b] [--peds a,b]',
+        '[--vehicles a,b] [--peds a,b] [--data-only]',
     );
     process.exitCode = 2;
+
+    return;
+  }
+  // `--data-only` refreshes the data files this repository OWNS in an already-built tree and does nothing
+  // else: no weld, no encode, no archive rewrite. They change with the repo rather than with the world, and
+  // a 45-minute reconvert to pick up a new one is a stage nobody spends — which on the phone means one
+  // nobody CAN spend, since Android kills the encode long before it ends.
+  if (process.argv.includes('--data-only')) {
+    const outDir = requireDir('out', outRaw);
+    if (!existsSync(join(outDir, 'pak'))) {
+      throw new Error(`${outDir} has no pak/ — --data-only refreshes a BUILT tree, and this is not one`);
+    }
+    placeBakedData(requireDir('game', gameRaw), outDir, (message) => console.log(message));
 
     return;
   }

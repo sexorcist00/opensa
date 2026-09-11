@@ -50,6 +50,15 @@ project keeps, so the branch a phone was left on is deleted the day its work lan
 pak gate whose fix was already in `main` went on refusing a good pak). It is `git checkout main` and nothing
 else: `pull` is what makes the checkout current, and one job doing both would hide which half failed.
 
+**`data` refreshes the files this REPOSITORY owns in a tree that is already built**, and nothing else — no
+weld, no encode, no archive rewrite (204, 2026-09-11). Today that is the recovered stock vehicle audio table:
+the game has no such file, so without it every car on the console was unvoiced. It is a job rather than part
+of `pull` because it changes the BUILT tree, and it exists because these files follow the repo rather than
+the world — on this device a reconvert to pick one up is not slow but impossible, since the ASTC encode is
+~45 minutes, unresumable, and Android kills it at minute six. It refuses a tree with no `pak/`, the game's
+own file always wins over ours, and it never re-mirrors `data/`: the convert EDITS files in there, so a
+re-mirror would unregister an archive the build had just registered.
+
 **`Baked 3D city map` is the third convert** (201/6-01): `LODONLY=1`, which welds the cell LOD tier and skips
 the HD one, into its own `-map3d` folder. It is a mode the operator picks rather than a frame that gave up —
 the LODs are a simplified city already, and it is where the console's hardest budget (a full board with models)

@@ -68,6 +68,17 @@ export const JOBS = {
    *
    * `long` because a census over a whole IMG archive is minutes, not seconds.
    */
+  // The data files the REPO owns, refreshed in a tree that is already built (204, 2026-09-11). They change
+  // with the repo rather than with the world — the recovered vehicle audio table is the first — so picking a
+  // new one up must not cost a reconvert. On this device that is not a preference: an ASTC encode is
+  // ~45 minutes, unresumable, and Android kills it at minute six, so a reconvert here is a stage that never
+  // finishes. It touches no `pak/` and re-mirrors no `data/`: the convert EDITS files in there.
+  data: {
+    args: ['tools/opensa-pack/src/cli.ts', '--game', './game-src/original', '--out', './build/phone', '--data-only'],
+    command: 'tsx',
+    label: 'refresh the data files this repo owns in the built tree',
+    long: false,
+  },
   debug: {
     args: ['tools-debug/phone-console/debug-run.mjs'],
     command: 'node',

@@ -223,7 +223,7 @@ export async function packGameDir(options: PackOptions): Promise<PackResult> {
   const products = options.pakDir ?? join(outDir, 'pak');
   mkdirSync(products, { recursive: true });
   log(`copied the game dir → ${outDir} (${((Date.now() - copyStarted) / 1000).toFixed(1)} s)`);
-  bakeVehicleAudio(outDir, log);
+  placeBakedData(gameDir, outDir, log);
 
   // Water bake (074/06 row 12 v2, user directive — water WITHOUT the shadow bakes): shore-field
   // tessellation from water.dat, pure 2D geometry (no rays, no BVH), always on — it costs seconds.
@@ -661,7 +661,21 @@ function writeDistricts(
 const MAX_LISTED_FAILURES = 20;
 
 /**
- * Put the stock vehicle audio table in the output when the source has none (204, 2026-09-11).
+ * Put the data files this repository OWNS into a built game dir (204, 2026-09-11).
+ *
+ * Exported because it is also the whole of `--data-only`: these files change with the repo rather than with
+ * the world, so needing a 45-minute reconvert to pick up a new one would be a stage nobody spends.
+ *
+ * **It writes only what it owns, and never re-mirrors `data/`.** The convert EDITS files in there — a
+ * family that spilled into a new archive is registered in `gta.dat` — so a re-mirror would silently
+ * unregister it and a field run would then fail to load that archive.
+ */
+export function placeBakedData(gameDir: string, outDir: string, log: (message: string) => void): void {
+  bakeVehicleAudio(gameDir, outDir, log);
+}
+
+/**
+ * Put the stock vehicle audio table in the output when the GAME has none (204, 2026-09-11).
  *
  * **In the stock game this is not a file.** The settings are an array compiled into the executable, and
  * `data/gtasa_vehicleAudioSettings.cfg` is fastman92's Limit Adjuster exposing it — so a plain copy of the
@@ -669,21 +683,22 @@ const MAX_LISTED_FAILURES = 20;
  * is unvoiced, which is what the first panel-audio flight measured: a 150-unit board that sounded empty
  * while every field in the report stayed plausible.
  *
- * **The source's own file always wins.** An install with the adjuster, or one a mod's `audio.txt` has been
- * merged into, is carrying the authored table and this may not overwrite it — which is also why the check is
- * on the OUTPUT after the mirror rather than on the input: the mirror has just put the real one there.
+ * **The check is on the SOURCE, not on the output, and the difference is not cosmetic.** An install with the
+ * adjuster — or one a mod's `audio.txt` has been merged into — is carrying the authored table and this may
+ * never overwrite it. But testing the OUTPUT cannot tell that table from OUR OWN previous copy, so a rebake
+ * after this file changes would find its predecessor and decline to update it, forever.
  */
-function bakeVehicleAudio(outDir: string, log: (message: string) => void): void {
+function bakeVehicleAudio(gameDir: string, outDir: string, log: (message: string) => void): void {
   const target = join(outDir, 'data', 'gtasa_vehicleAudioSettings.cfg');
-  if (existsSync(target)) {
-    log('vehicle audio: the game dir carries its own table — left alone');
+  if (existsSync(join(gameDir, 'data', 'gtasa_vehicleAudioSettings.cfg'))) {
+    log('vehicle audio: the game carries its own table — left alone');
 
     return;
   }
   const baked = join(dirname(fileURLToPath(import.meta.url)), '..', 'data', 'vehicle-audio-settings.cfg');
   mkdirSync(dirname(target), { recursive: true });
   copyFileSync(baked, target);
-  log('vehicle audio: no table in the game dir — wrote the recovered stock one');
+  log('vehicle audio: no table in the game — wrote the recovered stock one');
 }
 
 /**
