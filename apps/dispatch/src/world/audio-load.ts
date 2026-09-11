@@ -29,6 +29,15 @@ export interface LoadedAudio {
   readonly handling: ReadonlyMap<string, HandlingEntry>;
   /** `null` when this build carries no index — the console then says so once and stays silent. */
   readonly index: null | OsaudioIndex;
+  /**
+   * Paths a consumer needed and this build does not serve, each with what goes quiet without it.
+   *
+   * **Its absence cost the first panel-audio flight** (2026-09-11): a missing
+   * `gtasa_vehicleAudioSettings.cfg` turned into an empty array here, every car on a 150-unit board went
+   * unvoiced, and the only trace in the capture was `vehicles: 0`. Nothing was said, so the run measured a
+   * board that sounded empty while every field in the report stayed plausible.
+   */
+  readonly missing: readonly { readonly path: string; readonly what: string }[];
   /** Rows the author wrote. Empty when there is no table, which is a build with no named sounds. */
   readonly rows: readonly AudioEventRow[];
   /** One row a car, from FLA's own table — the engine bank, its pitch and its volume offset. */
@@ -48,7 +57,21 @@ const VEHICLE_DEFS = 'data/vehicles.ide';
 const HANDLING = 'data/handling.cfg';
 
 /** Nothing to hear, and nothing wrong. */
-const NO_AUDIO: LoadedAudio = { defs: new Map(), handling: new Map(), index: null, rows: [], vehicles: [] };
+const NO_AUDIO: LoadedAudio = {
+  defs: new Map(),
+  handling: new Map(),
+  index: null,
+  missing: [],
+  rows: [],
+  vehicles: [],
+};
+
+/** What each table is FOR, in the words a reader of a capture needs. */
+const NEEDED_FOR: Readonly<Record<string, string>> = {
+  [HANDLING]: 'no car has a top speed, so no engine can be voiced',
+  [VEHICLE_DEFS]: 'no model name resolves to a handling id, so no engine can be voiced',
+  [VEHICLE_TABLE]: 'no car has an engine bank — every unit on the board is unvoiced',
+};
 
 /**
  * Fetch the index beside the pak and the event table from the game dir.
@@ -75,10 +98,23 @@ export async function loadAudio(
     fetchText(gameDir, HANDLING),
   ]);
 
+  // A file that did not answer is NAMED rather than turned into an empty map and forgotten. The three are
+  // one story — any one of them missing unvoices the whole fleet — but which one it was decides the fix.
+  const missing = (
+    [
+      [VEHICLE_TABLE, vehicles],
+      [VEHICLE_DEFS, defs],
+      [HANDLING, handling],
+    ] as const
+  )
+    .filter(([, text]) => text === null)
+    .map(([path]) => ({ path, what: NEEDED_FOR[path] ?? 'something this build wanted goes quiet' }));
+
   return {
     defs: defs === null ? new Map() : parseVehicleDefs(defs),
     handling: handling === null ? new Map() : parseHandling(handling),
     index,
+    missing,
     rows,
     vehicles: vehicles === null ? [] : parseVehicleAudioSettings(vehicles).rows,
   };

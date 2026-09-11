@@ -36,8 +36,26 @@ function serve(files: Record<string, string | Uint8Array>): string[] {
 
 const ENTRY = { banks: 1, file: 'audio.osaudio', sounds: 1, zones: 0 };
 
-/** What every "nothing to hear" case answers with. */
-const NOTHING = { defs: new Map(), handling: new Map(), index: null, rows: [], vehicles: [] };
+/** What a build with no audio field at all answers with: nothing asked for, so nothing to report missing. */
+const NOTHING = { defs: new Map(), handling: new Map(), index: null, missing: [], rows: [], vehicles: [] };
+
+/**
+ * The three tables a car needs, as they are reported when a server answers none of them.
+ *
+ * They are NAMED rather than silently becoming empty maps, which is what the first panel-audio flight
+ * (2026-09-11) cost: a 150-unit board sounded like an empty one and the only trace was `vehicles: 0`.
+ */
+const NO_VEHICLE_TABLES = [
+  {
+    path: 'data/gtasa_vehicleAudioSettings.cfg',
+    what: 'no car has an engine bank — every unit on the board is unvoiced',
+  },
+  { path: 'data/vehicles.ide', what: 'no model name resolves to a handling id, so no engine can be voiced' },
+  { path: 'data/handling.cfg', what: 'no car has a top speed, so no engine can be voiced' },
+];
+
+/** Nothing to hear, and every table named as absent. */
+const NOTHING_AND_SAYS_SO = { ...NOTHING, missing: NO_VEHICLE_TABLES };
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -67,7 +85,7 @@ describe('loadAudio', () => {
       // the state "this build has no index", and the console already knows how to be that.
       serve({ '/pak/audio.osaudio': new Uint8Array(64) });
 
-      await expect(loadAudio('/pak', '', ENTRY)).resolves.toEqual(NOTHING);
+      await expect(loadAudio('/pak', '', ENTRY)).resolves.toEqual(NOTHING_AND_SAYS_SO);
     });
 
     it('does not go looking for an event table on a pak-only deploy', async () => {
@@ -82,7 +100,7 @@ describe('loadAudio', () => {
     it('answers with no rows when fetch itself rejects', async () => {
       vi.stubGlobal('fetch', () => Promise.reject(new Error('offline')));
 
-      await expect(loadAudio('/pak', '/game', ENTRY)).resolves.toEqual(NOTHING);
+      await expect(loadAudio('/pak', '/game', ENTRY)).resolves.toEqual(NOTHING_AND_SAYS_SO);
     });
   });
 
@@ -118,6 +136,41 @@ describe('loadAudio', () => {
       expect(loaded.defs.get('copcarla')?.handlingId).toBe('COPCARLA');
       // Field 11 after the id: 200 km/h.
       expect(loaded.handling.get('COPCARLA')?.fields[11]).toBe('200.0');
+    });
+  });
+});
+
+describe('loadAudio missing tables', () => {
+  describe('negative cases', () => {
+    it('names ONLY the table that is actually absent, because which one it is decides the fix', () => {
+      // All three unvoice the whole fleet, so a single "the fleet is silent" line would be true and useless.
+      expect(NO_VEHICLE_TABLES.map((file) => file.path)).toEqual([
+        'data/gtasa_vehicleAudioSettings.cfg',
+        'data/vehicles.ide',
+        'data/handling.cfg',
+      ]);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('reports the handling table alone when only that one is missing', async () => {
+      serve({
+        '/game/data/gtasa_vehicleAudioSettings.cfg': 'admiral, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0',
+        '/game/data/vehicles.ide': '',
+      });
+
+      const loaded = await loadAudio('/pak', '/game', ENTRY);
+
+      expect(loaded.missing.map((file) => file.path)).toEqual(['data/handling.cfg']);
+    });
+
+    it('says what goes quiet, not only which path is gone', async () => {
+      vi.stubGlobal('fetch', () => Promise.reject(new Error('offline')));
+
+      const loaded = await loadAudio('/pak', '/game', ENTRY);
+
+      // A capture's reader is looking at `vehicles: 0` and needs the sentence, not the filename.
+      expect(loaded.missing[0]?.what).toContain('unvoiced');
     });
   });
 });

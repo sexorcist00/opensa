@@ -211,6 +211,31 @@ describe('DispatchAudio board events', () => {
   });
 
   describe('positive cases', () => {
+    it("measures the gap from the BOARD's clock, so the latency cannot be zero by construction", () => {
+      // 204/5-01's first flight filed `maxLatencyMs: 0` and the zero meant nothing: the event carried no
+      // arrival time, so the subtraction was `now - now`. The board stamps its own tick now, and the audio
+      // clock sees it one interval later — which is the gap the 50 ms budget is actually about.
+      const clock = clockHost();
+      const audio = new DispatchAudio(new URLSearchParams('cad=0'), {
+        clockHost: clock,
+        createContext: () => new FakeAudioContext(),
+        log: vi.fn(),
+      });
+      let ops = board();
+      audio.start(
+        () => EAR,
+        () => [],
+        () => ops,
+      );
+      clock.fire();
+
+      // The board changed 40 ms ago and the audio tick is only reaching it now.
+      ops = { ...board({ assigned: true }), now: 60 };
+      clock.fire(100);
+
+      expect(audio.report().panel.maxLatencyMs).toBe(40);
+    });
+
     it("plays the board's own change on the audio clock, on the map bus", () => {
       const clock = clockHost();
       const audio = new DispatchAudio(new URLSearchParams(), {
@@ -322,7 +347,7 @@ describe('DispatchAudio', () => {
       const audio = new DispatchAudio(new URLSearchParams(), { clockHost: clockHost(), log: vi.fn() });
 
       expect(audio.report()).toEqual({
-        absence: { names: 0, noIndex: false, noSource: false, packages: 0, reasons: [], sounds: 0 },
+        absence: { files: 0, names: 0, noIndex: false, noSource: false, packages: 0, reasons: [], sounds: 0 },
         ambience: { bed: null, changes: 0, fading: 0, layers: 0, level: 0, pending: 0, starts: 0, swaps: 0 },
         arm: 'on',
         availability: 'unsupported',

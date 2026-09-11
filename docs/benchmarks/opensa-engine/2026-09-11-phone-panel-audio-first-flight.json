@@ -1,0 +1,182 @@
+{
+  "note": "204/5-01's FIRST FLIGHT, AND IT IS A PARTIAL ROW -- filed before analysis, per this folder's standing rule. What it MEASURES: the panel path on a real phone, with the context actually running (`audio.availability` = running, checked first), 97.5 s of a 150-unit / 40-call board. What it CANNOT measure, and the reason is an instrument defect rather than a device limit: NO CAR IS VOICED. `audio.vehicles` is 0 and `units.unvoiced` is 150, because this pak (built 28-08-2026) carries none of `data/gtasa_vehicleAudioSettings.cfg`, `data/vehicles.ide`, `data/handling.cfg` -- and `loadAudio` turns each missing file into an empty map with NOTHING reported. So the world bus was empty all run, the pool never rose above 2 live voices out of 64, and the row's headline number (`refusedByBus.cad` = 0 UNDER LOAD) is true here and says nothing: the reserve was never asked for. The same goes for `peakSample`: 0.7688 is -2.29 dBFS, but of a single panel tone near its own full scale, NOT of the 64 summed voices 204/1-02's -4.8 dBFS arithmetic is about. Neither confirms nor refutes that prediction. `maxLatencyMs` is 0 BY CONSTRUCTION and not by speed: `map` events are raised locally with no arrival timestamp, and the CAD stand-in does not pass one either, so the 50 ms budget has no instrument yet. What IS readable and real: the audio clock's cost, the panel's own counts, the coalescing ratio, and the frame beside them.",
+  "app": "8eb70e3",
+  "build": "19:23 28-08-2026",
+  "date": "2026-09-11",
+  "district": "los-santos-centre",
+  "device": {
+    "adapter": "arm bifrost",
+    "css": "360x654",
+    "dpr": 2,
+    "featureLevel": "core",
+    "features": [
+      "core-features-and-limits",
+      "float32-filterable",
+      "indirect-first-instance",
+      "primitive-index",
+      "rg11b10ufloat-renderable",
+      "shader-f16",
+      "texture-component-swizzle",
+      "texture-compression-astc",
+      "texture-compression-astc-sliced-3d",
+      "texture-compression-etc2",
+      "texture-formats-tier1",
+      "texture-formats-tier2"
+    ],
+    "missing": [
+      "texture-compression-bc",
+      "timestamp-query"
+    ]
+  },
+  "howRun": {
+    "link": "board (units=150&calls=40&inventory=1&surface=720x640)",
+    "pak": "build/phone, built 19:23 28-08-2026, textures astc, no tiles.pmtiles",
+    "vehiclesConverted": "admiral,comet,infernus -- the pak refused the dispatch fleet, so no unit is DRAWN as a car either",
+    "gesture": "the context was running before any number was read; `audio.availability` is the first field to check and a capture taken at `waiting` measures a silent console rather than a quiet one",
+    "driven": "opened with map_open, left to run; no camera flight in this window"
+  },
+  "window": {
+    "ms": 97543.40000000596,
+    "frames": 5008
+  },
+  "frame": {
+    "fps": 63,
+    "dtP50Ms": 16,
+    "dtP95Ms": 34
+  },
+  "audio": {
+    "arm": "on",
+    "availability": "running",
+    "mix": "full",
+    "clock": {
+      "maxMs": 7.5,
+      "meanMs": 0.7017418041397803,
+      "rateHz": 10,
+      "ticks": 976
+    },
+    "panel": {
+      "byCategory": {
+        "cad": 1,
+        "map": 31,
+        "world": 0
+      },
+      "coalesced": 96,
+      "maxLatencyMs": 0,
+      "played": 32,
+      "refused": 0,
+      "unknown": []
+    },
+    "voices": {
+      "busGain": {
+        "cad": 1,
+        "map": 1,
+        "world": 1
+      },
+      "ceiling": 64,
+      "ducked": false,
+      "flooring": [],
+      "limiter": {
+        "reduction": -0.0001342038594884798,
+        "thresholdDb": -6
+      },
+      "live": 1,
+      "liveByBus": {
+        "cad": 0,
+        "map": 1,
+        "world": 0
+      },
+      "masterGain": 1,
+      "peak": 2,
+      "peakByBus": {
+        "cad": 1,
+        "map": 2,
+        "world": 0
+      },
+      "peakSample": 0.7688366174697876,
+      "refused": 0,
+      "refusedByBus": {
+        "cad": 0,
+        "map": 0,
+        "world": 0
+      },
+      "started": 32,
+      "steals": 0
+    },
+    "units": {
+      "engines": 0,
+      "sirens": 0,
+      "unvoiced": 150
+    },
+    "vehicles": 0,
+    "buffers": {
+      "bytes": 0,
+      "ceilingBytes": 67108864,
+      "entries": 0,
+      "evictions": 0,
+      "hits": 0,
+      "misses": 6,
+      "refused": 0
+    },
+    "absence": {
+      "names": 0,
+      "noIndex": false,
+      "noSource": false,
+      "packages": 0,
+      "reasons": [
+        "[audio] sound 373 is not in this index \u2014 nothing plays for it",
+        "[audio] sound 383 is not in this index \u2014 nothing plays for it",
+        "[audio] sound 543 is not in this index \u2014 nothing plays for it"
+      ],
+      "sounds": 3
+    },
+    "ambience": {
+      "bed": "AMB_DEFAULT",
+      "changes": 1,
+      "fading": 0,
+      "layers": 3,
+      "level": 1,
+      "pending": 0,
+      "starts": 0,
+      "swaps": 0
+    }
+  },
+  "cad": {
+    "assumed": 0,
+    "delivered": 1,
+    "failed": 0,
+    "online": true
+  },
+  "power": {
+    "charging": true,
+    "chargingChanged": false,
+    "levelEnd": 1,
+    "levelStart": 1,
+    "supported": true
+  },
+  "visibility": {
+    "hiddenMs": 1377.5999999940395,
+    "hiddenSpells": 1,
+    "visibleAtReport": true
+  },
+  "readable": {
+    "audioClockMeanMs": 0.7017418041397803,
+    "audioClockMaxMs": 7.5,
+    "audioClockBudgetMs": 2,
+    "audioClockVerdict": "mean 0.70 ms passes the 2 ms budget with room; max 7.5 ms blows it 3.7x. One tick in ~976 costing 7.5 ms is 0.75% of a second, so it is not a frame problem -- but the budget is stated per TICK and this run does not meet it. Which tick costs it is not in the report and would have to be found.",
+    "panelPlayed": 32,
+    "panelCoalesced": 96,
+    "coalescingRatio": "96 folded against 32 played -- 3 of every 4 raised events were a repeat inside the 900 ms per-name window. On a 150-unit board that is the feature working, not a fault.",
+    "peakSampleDbfs": -2.29,
+    "peakVoices": 2,
+    "peakVoicesCeiling": 64
+  },
+  "notMeasured": [
+    "refusedByBus.cad = 0 under load -- the load never existed (2 voices out of 64)",
+    "the output peak of a full mix -- 1/02's -4.8 dBFS prediction is untouched",
+    "event -> audible ms against 50 -- no event in this build carries an arrival timestamp",
+    "MB against 64 -- buffers.bytes is 0, because no car sound was ever fetched",
+    "the battery delta against boardsilent -- one half only; power.charging was TRUE all run, so a delta taken from it would have been worthless anyway",
+    "203/4-03's engine and siren numbers -- same cause"
+  ],
+  "verdict": "The flight was worth taking and the row is not the row. It found a SILENT absence instead: three data files the vehicle voice table needs are missing from this pak and nothing says so, which made a 150-unit board sound like an empty one while every field in the report stayed plausible. That is the exact failure shape this folder's rules are written about -- a complete, self-consistent capture of the wrong thing. Fix the instrument (report the missing files; carry an arrival timestamp), get a pak that carries the data, then re-fly the pair in one thermal window on battery."
+}

@@ -691,6 +691,7 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
     gameDir: opened?.source.gameDir ?? '',
     handling: opened?.audio.handling,
     index: opened?.audio.index ?? null,
+    missing: opened?.audio.missing ?? [],
     rows: opened?.audio.rows ?? [],
     vehicles: opened?.audio.vehicles,
   });

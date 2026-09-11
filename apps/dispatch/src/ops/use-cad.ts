@@ -120,13 +120,17 @@ export function useCad(liveOps: () => Operations): CadFeed {
       return;
     }
     const id = setInterval(() => {
+      // Stamped where the stand-in DECIDES to speak, so the number measures the path from the event to the
+      // speaker rather than nothing at all. A real CAD stamps it on the wire instead; either way the field
+      // has to come from somewhere earlier than the call, or it is zero by construction.
+      const raisedAtMs = performance.now();
       const said = mock.step(liveOps(), STEP_MS / 1_000);
       if (said) {
         // A CAD that is talking is a CAD that is answering, so the stand-in marks the seam up as it speaks.
         // It never fakes a DROP: `link_lost` is the loudest thing this console says, and a stand-in that
         // cried it would teach an operator to disbelieve the real one.
         link.setOnline(true);
-        link.deliver(said);
+        link.deliver(said, raisedAtMs);
       }
     }, STEP_MS);
 

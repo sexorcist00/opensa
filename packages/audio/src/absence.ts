@@ -18,6 +18,15 @@
 
 /** What a capture states about what could NOT be heard. */
 export interface AudioAbsenceReport {
+  /**
+   * Data files a consumer needed and this build does not serve — `data/handling.cfg` and its neighbours.
+   *
+   * **Added 2026-09-11, after the first panel-audio flight**, where a missing
+   * `gtasa_vehicleAudioSettings.cfg` made a 150-unit board sound like an empty one: every file was turned
+   * into an empty map, nothing was reported, and the capture stayed complete and plausible with
+   * `vehicles: 0` as the only trace. A reader had to already know what that number meant.
+   */
+  readonly files: number;
   /** Distinct sound names nothing in the index carries — a mod's own name, or a typo in the event table. */
   readonly names: number;
   /** True when there is no index at all: this build carries no `audio.osaudio`. */
@@ -40,8 +49,11 @@ const MAX_REASONS = 32;
 export class AudioAbsence {
   /** Whether anything at all was missing — the one question a surface asks before drawing an indicator. */
   get silentForAReason(): boolean {
-    return this.noIndex || this.noSource || this.names.size + this.packages.size + this.sounds.size > 0;
+    return (
+      this.noIndex || this.noSource || this.names.size + this.packages.size + this.sounds.size + this.files.size > 0
+    );
   }
+  private readonly files = new Set<string>();
   private readonly log: (message: string) => void;
   private readonly names = new Set<string>();
   private noIndex = false;
@@ -64,6 +76,20 @@ export class AudioAbsence {
     this.say('[audio] this build carries no audio index — the world is silent by construction, not by fault');
   }
 
+  /**
+   * A data file a consumer asked for and this build does not serve.
+   *
+   * @param what what goes quiet without it, in words — the count alone cannot say that a missing table
+   *   means every car on the board is unvoiced.
+   */
+  missingFile(path: string, what: string): void {
+    if (this.files.has(path)) {
+      return;
+    }
+    this.files.add(path);
+    this.say(`[audio] '${path}' is not served — ${what}`);
+  }
+
   /** A package that could not be read. */
   missingPackage(name: string): void {
     if (this.packages.has(name)) {
@@ -84,6 +110,7 @@ export class AudioAbsence {
 
   report(): AudioAbsenceReport {
     return {
+      files: this.files.size,
       names: this.names.size,
       noIndex: this.noIndex,
       noSource: this.noSource,

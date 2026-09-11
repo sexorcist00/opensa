@@ -175,11 +175,16 @@ export class DispatchAudio {
     );
     const context = this.host.audioContext;
     this.pool = context ? new VoicePool(context) : null;
-    this.clock = new AudioClock(options.clockHost ?? browserClockHost());
+    const clockHost = options.clockHost ?? browserClockHost();
+    this.clock = new AudioClock(clockHost);
     this.buffers = new AudioCache<AudioBufferLike>({ bytesOf: (value): number => value.length * 4 });
     this.table = AudioEventTable.empty(this.absence);
     this.ambience = new Ambience(this.ambienceHost(options.random));
     this.panel = new PanelEvents({
+      // ONE clock for the whole console. The panel measures `now - atMs`, and `atMs` comes from the board's
+      // own tick — so the two must be the same clock or the latency is a difference between two origins.
+      // In a browser both are `performance.now()`; injecting it is what lets a test drive time by hand.
+      now: () => clockHost.now(),
       pool: this.pool,
       random: options.random,
       // Built once, on load: a panel sound is wanted within 50 ms of its event and nothing on that path may
@@ -246,9 +251,14 @@ export class DispatchAudio {
     gameDir: string;
     handling?: ReadonlyMap<string, HandlingEntry>;
     index: null | OsaudioIndex;
+    /** Files the loader asked for and this build does not serve — each said once, with what goes quiet. */
+    missing?: readonly { readonly path: string; readonly what: string }[];
     rows: readonly AudioEventRow[];
     vehicles?: readonly VehicleAudioRow[];
   }): void {
+    for (const file of options.missing ?? []) {
+      this.absence.missingFile(file.path, file.what);
+    }
     this.table = AudioEventTable.resolve(options.rows, options.index, this.absence);
     this.vehicles = VehicleVoiceTable.resolve(
       options.vehicles ?? [],
@@ -373,7 +383,11 @@ export class DispatchAudio {
       const board = boardOf?.();
       if (board) {
         for (const name of boardEvents(this.lastBoard, board)) {
-          this.panel.event(name);
+          // Stamped with the BOARD's own clock, not this tick's. The event happened when the board changed;
+          // the audio clock sees it up to its own interval later, and that gap is exactly what the 50 ms
+          // budget is about. Passing nothing would make the latency zero by construction rather than by
+          // speed — a number that cannot fail, which is worse than no number (204/5-01's first flight).
+          this.panel.event(name, board.now);
         }
         this.lastBoard = board;
       }
