@@ -59,26 +59,26 @@ deliver.
 | Name | Raised when | Floored | In PCAD today |
 | --- | --- | --- | --- |
 | `panic_button` | a unit presses panic | **✓** | `panic_button` |
-| `link_lost` | the WebSocket drops | **✓** | — **new** |
-| `link_back` | it comes back | | — **new** |
+| `link_lost` | the WebSocket drops | **✓** | added by [PR #13](https://github.com/sexorcist00/pcad/pull/13) |
+| `link_back` | it comes back | | added by PR #13 — and not on the FIRST connection, on both sides: connecting is not recovering |
 | `assist_request` | a unit asks for assistance | | `assist_request` |
 | `alpr_hit` | a plate read matches | | `alpr_hit` |
 | `simplex_request` | a simplex exchange is offered | | `simplex_request` |
 | `simplex_accepted` | …accepted | | `simplex_accepted` |
 | `simplex_declined` | …declined | | `simplex_declined` |
-| `bolo_new` | a BOLO is posted | | — **new** |
+| `bolo_new` | a BOLO is posted | | added by PR #13 |
 | `notification` | anything else the plugin says | | `notification` |
 
 ### `map` — the console's
 
 | Name | Raised when | In PCAD today |
 | --- | --- | --- |
-| `call_created_p1` / `_p2` / `_p3` | a call appears, **priority-coded** | `call_created`, one sound for all three |
+| `call_created_p1` / `_p2` / `_p3` | a call appears, **priority-coded** | split by PR #13; where several arrive at once the MOST URGENT decides, and PCAD's band 4 folds into p3 |
 | `incident_created` | an incident is opened | `incident_created` |
 | `unit_assigned` | a unit is committed to a call | — |
 | `unit_arrived` | a unit reaches its scene | — |
 | `call_closed` | a call clears | — |
-| `unit_stale` | a unit stops reporting (the backend marks one at 300 s) | — **new** |
+| `unit_stale` | a unit stops reporting (the backend marks one at 300 s) | added by PR #13 — one notification per unit, naming which |
 
 **Where the console gets them: a DIFF of two boards, not a stream**
 ([`board-events.ts`](../../apps/dispatch/src/world/board-events.ts), 204/3-01). The console renders a board
@@ -95,13 +95,17 @@ consequences a reader of this table needs:
 
 **Why the priority split.** [DESIGN.md](../../apps/dispatch/DESIGN.md) encodes a call's priority three ways
 in the visuals and says *this is the rule for any state the console adds later*; one chime for P1 and P3
-alike is a channel that throws the priority away. PCAD already ships the assets for it —
-`priority_start` / `priority_middle` / `priority_end` — and plays only the first, wired to `assist_request`.
+alike is a channel that throws the priority away. PCAD already shipped the assets for it —
+`priority_start` / `priority_middle` / `priority_end` — and played only the first, wired to `assist_request`;
+[PR #13](https://github.com/sexorcist00/pcad/pull/13) splits them and moves `assist_request` to a sound of
+its own. **That mapping is a placeholder and says so**: nobody has listened to those three in these roles,
+and the only evidence they are three stingers rather than three parts of one phrase is that their formats
+differ (1.25 s stereo / 0.58 s mono / 2.05 s stereo), which is inference and not an ear.
 
 ## 4. The message carries the name
 
-**A sound is chosen by an explicit field and never by matching the notification's text.** PCAD resolves it
-today by searching the title:
+**A sound is chosen by an explicit field and never by matching the notification's text.** PCAD resolved it
+by searching the title until [PR #13](https://github.com/sexorcist00/pcad/pull/13):
 
 ```lua
 if title_lc:find("assistance request", 1, true) then return "assist_request" end
@@ -111,13 +115,19 @@ Reword that title, translate it, or fix a typo in it and the sound stops — **s
 notification still appearing exactly as before. So the contract is a field:
 
 ```json
-{ "title": "Assistance Request", "body": "…", "sound": "assist_request" }
+{ "title": "Assistance Request", "message": "…", "sound_trigger": "assist_request" }
 ```
+
+**The field is `sound_trigger` because PCAD already puts that name on the wire** — its client reads
+`payload.sound_trigger` and has since before this contract was written. Inventing `sound` here would have
+been a second name for one thing, which is the failure this document exists to prevent; the same goes for
+`message` rather than `body`. What 204/4 changed on that side is not the NAME but the wiring: the backend's
+generic handler was dropping the field, and the client fell back to searching the title.
 
 | The mistake | What happens | What says so |
 | --- | --- | --- |
-| No `sound` field | No sound; the notification still shows | Nothing today. A surface MAY fall back to `notification` and should say it did |
-| A `sound` no build knows | Silence for that event | One line per distinct name, counted in the report's absence |
+| No `sound_trigger` field | No sound; the notification still shows | Nothing today. A surface MAY fall back to `notification` and should say it did |
+| A `sound_trigger` no build knows | Silence for that event | One line per distinct name, counted in the report's absence |
 | A name in the wrong category | It plays, on the wrong bus — so it may duck the world when it should not, or be suppressed when it should not be | Nothing. **This is the silent one**, and the reason the table above is the single place either repository reads |
 
 **What the console does with a message that names nothing** (204/3-02,

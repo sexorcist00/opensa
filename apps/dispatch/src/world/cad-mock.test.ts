@@ -60,8 +60,8 @@ describe('CadMock', () => {
 
       const said = mock.step(board([unit('12')]), 1);
 
-      expect(said?.sound).toBe('assist_request');
-      expect(said?.body).toContain('1-ADAM-12');
+      expect(said?.sound_trigger).toBe('assist_request');
+      expect(said?.message).toContain('1-ADAM-12');
     });
 
     it('only ever names sounds the contract carries on the cad bus', () => {
@@ -69,8 +69,8 @@ describe('CadMock', () => {
       const seen = new Set<string>();
       for (let draw = 0; draw < 32; draw += 1) {
         const said = new CadMock(scripted(0, 0, draw / 32)).step(board([unit('12')]), MOCK_MEAN_SECONDS);
-        if (said?.sound !== undefined) {
-          seen.add(said.sound);
+        if (said?.sound_trigger !== undefined) {
+          seen.add(said.sound_trigger);
         }
       }
 
@@ -82,7 +82,7 @@ describe('CadMock', () => {
 
     it('always carries the sound field, which is what the contract asks the real CAD for', () => {
       for (let draw = 0; draw < 16; draw += 1) {
-        expect(new CadMock(scripted(0, 0, draw / 16)).step(board([unit('12')]), 1)?.sound).toBeDefined();
+        expect(new CadMock(scripted(0, 0, draw / 16)).step(board([unit('12')]), 1)?.sound_trigger).toBeDefined();
       }
     });
   });

@@ -1,3 +1,4 @@
+/* eslint-disable camelcase -- the WIRE's own field names, matching PCAD's payload verbatim. */
 import { describe, expect, it } from 'vitest';
 
 import { ASSUMED_SOUND, CadLink, cadSound } from './cad-link';
@@ -22,8 +23,8 @@ describe('cadSound', () => {
     it('treats an empty or blank field as absent rather than as a name nothing knows', () => {
       // A CAD that sends `""` has not adopted the field; reporting that as an unknown NAME would put a
       // wiring problem in the vocabulary column, where nobody would look for it.
-      expect(cadSound({ sound: '', title: 'x' }).assumed).toBe(true);
-      expect(cadSound({ sound: '   ', title: 'x' }).assumed).toBe(true);
+      expect(cadSound({ sound_trigger: '', title: 'x' }).assumed).toBe(true);
+      expect(cadSound({ sound_trigger: '   ', title: 'x' }).assumed).toBe(true);
     });
 
     it('never reads the title — the whole point of the field', () => {
@@ -35,7 +36,7 @@ describe('cadSound', () => {
 
   describe('positive cases', () => {
     it('plays the name the message carries', () => {
-      expect(cadSound({ sound: 'panic_button', title: 'Panic Button' })).toEqual({
+      expect(cadSound({ sound_trigger: 'panic_button', title: 'Panic Button' })).toEqual({
         assumed: false,
         name: 'panic_button',
       });
@@ -87,7 +88,7 @@ describe('CadLink', () => {
         drawn.push(name);
       });
 
-      link.deliver({ sound: 'panic_button', title: 'Panic Button' });
+      link.deliver({ sound_trigger: 'panic_button', title: 'Panic Button' });
 
       expect(drawn).toEqual(['panic_button']);
       expect(link.report().failed).toBe(1);
@@ -96,7 +97,7 @@ describe('CadLink', () => {
     it('counts a message that named no sound, so an old CAD is visible in a capture', () => {
       const { link, played } = linked();
 
-      link.deliver({ sound: 'panic_button', title: 'Panic Button' });
+      link.deliver({ sound_trigger: 'panic_button', title: 'Panic Button' });
       link.deliver({ title: 'Assistance Request' });
 
       expect(played).toEqual(['panic_button', ASSUMED_SOUND]);

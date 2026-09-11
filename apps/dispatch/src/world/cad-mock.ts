@@ -104,7 +104,8 @@ export function cadArm(params: URLSearchParams): CadArm {
 }
 
 function message(title: string, body: string, sound: string): CadMessage {
-  return { body, sound, title };
+  // eslint-disable-next-line camelcase -- the wire's own field name, as PCAD already sends it.
+  return { message: body, sound_trigger: sound, title };
 }
 
 /** The weighted draw, walked rather than indexed so the weights above read as the table they are. */

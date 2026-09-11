@@ -43,11 +43,14 @@ export interface CadLinkReport {
   readonly online: boolean | null;
 }
 
-/** A message from the CAD, in the contract's shape. Anything else it carries is not this layer's business. */
+/**
+ * A message from the CAD, in the shape PCAD already puts on the wire. Anything else it carries is not this
+ * layer's business.
+ */
 export interface CadMessage {
-  readonly body?: string;
+  readonly message?: string;
   /** The event name, from the contract's table. Absent is a CAD that has not adopted the field yet. */
-  readonly sound?: string;
+  readonly sound_trigger?: string;
   readonly title: string;
 }
 
@@ -134,7 +137,7 @@ export class CadLink {
 
 /** Which sound a message asks for, and whether it actually asked. */
 export function cadSound(message: CadMessage): CadSound {
-  const named = message.sound?.trim() ?? '';
+  const named = message.sound_trigger?.trim() ?? '';
 
   return named === '' ? { assumed: true, name: ASSUMED_SOUND } : { assumed: false, name: named };
 }
