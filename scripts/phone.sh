@@ -235,6 +235,12 @@ if [ "$REBUILD" = 1 ] || [ ! -f "$OUT/pak/manifest.json" ]; then
   # `resume.json`; this script drives `opensa-pack` directly and does not get it.) So the recipe is stamped
   # beside the journal here, and a resume over a changed one is refused with the difference named.
   CKPT="$OUT/.pack-checkpoints"
+  # The stamp lives BESIDE the journal, never inside it (2026-09-11). `clearChunkCheckpoints` is an
+  # `rm -rf` of the whole directory, and the pack runs it at the start of every convert that is not a
+  # resume — so a stamp written in there was deleted by the run it was meant to describe. Every later run
+  # then found a journal with no stamp, called it pre-stamp, dropped it and welded from scratch: resume has
+  # never once worked here, and the loop was self-sustaining because each run destroyed the next one's
+  # evidence. Four cells cost 40 s of it; the full map would cost 46 minutes per retry.
   RECIPE_NOW="GAME=$(readlink -f "$GAME" 2>/dev/null || echo "$GAME")
 RECT=$RECT
 TEXTURES=$TEXTURES
@@ -246,19 +252,23 @@ VEHICLES=$([ "$MODELS" = 0 ] && echo '-' || echo "$VEHICLES")
 PEDS=$([ "$MODELS" = 0 ] && echo '-' || echo "$PEDS")"
   args=(--game "$GAME" --out "$OUT" --textures "$TEXTURES" --max-texture 256 --rect "$RECT" --no-ao --platforms mobile
         --checkpoints "$CKPT")
+  RECIPE_FILE="$OUT/.pack-recipe"
+  [ "$REBUILD" = 1 ] && rm -f "$RECIPE_FILE"
   if [ -d "$CKPT" ] && [ "$REBUILD" != 1 ]; then
-    if [ ! -f "$CKPT/.recipe" ]; then
-      # A journal from before the stamp existed. Its recipe is unknowable, so it cannot be resumed — but
-      # refusing and demanding REBUILD=1 costs the same convert as dropping it and says something alarming
-      # for what is really just an upgrade. Drop it, say so, convert.
-      say "the journal in $CKPT predates the recipe stamp — starting this convert fresh (once)"
+    if [ ! -f "$RECIPE_FILE" ]; then
+      # A journal with no recipe beside it: written before the stamp existed, or by a run whose stamp the
+      # pack deleted (which is every run before 2026-09-11 — the stamp used to live INSIDE `$CKPT`, and the
+      # pack `rm -rf`s that directory at the start of every non-resume convert). Its recipe is unknowable
+      # either way, so it cannot be resumed — but refusing and demanding REBUILD=1 costs the same convert as
+      # dropping it and says something alarming for what is really just an upgrade. Drop it, say so, convert.
+      say "the journal in $CKPT has no recipe beside it — starting this convert fresh (once)"
       rm -rf "$CKPT"
-    elif [ "$(cat "$CKPT/.recipe")" = "$RECIPE_NOW" ]; then
+    elif [ "$(cat "$RECIPE_FILE")" = "$RECIPE_NOW" ]; then
       say "resuming the last convert from $CKPT (REBUILD=1 starts over)"
       args+=(--resume)
     else
       echo "resume refused: the journal in $CKPT was written for a different recipe." >&2
-      echo "  it holds:  $(tr '\n' ' ' <"$CKPT/.recipe")" >&2
+      echo "  it holds:  $(tr '\n' ' ' <"$RECIPE_FILE")" >&2
       echo "  you asked: $(echo "$RECIPE_NOW" | tr '\n' ' ')" >&2
       echo >&2
       echo "Resuming across that would weld the old chunks into the new pak, and no set of flags would" >&2
@@ -267,7 +277,7 @@ PEDS=$([ "$MODELS" = 0 ] && echo '-' || echo "$PEDS")"
       exit 1
     fi
   fi
-  mkdir -p "$CKPT" && printf '%s' "$RECIPE_NOW" >"$CKPT/.recipe"
+  mkdir -p "$OUT" && printf '%s' "$RECIPE_NOW" >"$RECIPE_FILE"
   [ "$TEXTURES" = astc ] && [ "$ASTC_THREADS" != 0 ] && args+=(--astc-threads "$ASTC_THREADS")
   # Said out loud because it is the slow setting and the log otherwise looks stuck: the encode is the LAST
   # stage, and on this device it is the one that has to run without spawning a single worker isolate.

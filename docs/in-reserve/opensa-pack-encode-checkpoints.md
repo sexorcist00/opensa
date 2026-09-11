@@ -54,6 +54,22 @@ map objects share one world dictionary — which extrapolates the full 576-cell 
 and ~20 hours** of continuous, unresumable encode. That is the number this card is about, and it is now
 arithmetic from a measurement rather than an estimate.
 
+## A neighbour that WAS broken, and is fixed (2026-09-11)
+
+This card is about the ENCODE having no checkpoints. The WELD has had them since the beginning — and they
+had never once worked through `scripts/phone.sh`.
+
+The script stamped its recipe at `$OUT/.pack-checkpoints/.recipe`, inside the journal directory. But
+`clearChunkCheckpoints` is an `rm -rf` of that whole directory, and the pack runs it at the start of every
+convert that is not a resume — so each run deleted the stamp it had just written. Every later run then found
+a journal with no stamp, called it pre-stamp, dropped it and welded from scratch. **The loop was
+self-sustaining: each run destroyed the evidence the next one needed.** Five converts in a row re-welded
+four cells for nothing before the message was read instead of skimmed.
+
+The stamp lives BESIDE the journal now (`$OUT/.pack-recipe`), where the pack does not reach. For four cells
+this was 40 s a retry; on the full map it would be 46 minutes a retry, which is the number that makes it
+belong in this card's neighbourhood at all.
+
 ## Where the trigger is checked
 
 `scripts/phone.sh`, in the branch that reports a failed convert: when `TEXTURES=astc` it already tells the
