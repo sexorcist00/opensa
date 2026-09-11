@@ -40,6 +40,7 @@ export type {
   StereoPannerLike,
 } from './audio-host.interface';
 export { type AudioEvent, AudioEventTable } from './event-table';
+export { COALESCE_MS, FLOORED, PANEL_CATEGORY, type PanelEventReport, PanelEvents, VARY } from './panel-events';
 export { PanelSounds, type PanelSoundsReport, type SoundSource, TONE_RATE } from './panel-sounds';
 export {
   attenuation,

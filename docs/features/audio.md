@@ -45,6 +45,10 @@ yet. [The chain](../plans/203-audio/readme.md) is the order it was built in and
 - **A synthesised floor under every panel sound** (204/2-02): eighteen tones, pure and deterministic, no
   bytes and nothing to 404. A deployment that ships the authored set sounds like PCAD; one that cannot still
   alerts, and the report says which layer answered.
+- **The panel's event API** (204/2-03, 2-04): eighteen names on the bus their category owns, resident so
+  nothing fetches on the path, latency measured from when the EVENT happened rather than from the speaker,
+  a 900 ms per-name coalescing window and a 3 % detune so a burst is one tone and a count rather than a
+  machine gun.
 - **Absence is a reported state, never a throw**: no Web Audio in the environment is `unsupported`, one line
   in the log, and a host every caller can go on using.
 
