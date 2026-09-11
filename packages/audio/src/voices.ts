@@ -18,6 +18,7 @@
  * is stopped or stolen. Nothing polls.
  */
 import type {
+  AnalyserLike,
   AudioBufferLike,
   AudioBufferSourceLike,
   AudioContextLike,
@@ -71,6 +72,24 @@ export interface VoicePoolReport {
   readonly masterGain: number;
   /** The most that were ever live at once — the number that says whether the ceiling is near. */
   readonly peak: number;
+  /**
+   * The most that were ever live at once on each bus.
+   *
+   * `peak` alone cannot say whether a reserve was ever needed: sixty-four voices at once is an ordinary
+   * city, and the question 1/01's reserves are judged on is how many of them were ALERTS.
+   */
+  readonly peakByBus: Readonly<Record<AudioBus, number>>;
+  /**
+   * The loudest SAMPLE that reached the speakers, 0..1, since the pool started.
+   *
+   * **Measured rather than predicted** (204/5-01). 1/02 chose the limiter's -6 dBFS threshold on arithmetic
+   * — 64 uncorrelated voices sum as about 8x, which lands near -4.8 dBFS after 20:1 — and that is a
+   * prediction about a signal nobody had played. This is the number that confirms or refutes it, and the
+   * limiter's own `reduction` cannot: reduction is about what went IN.
+   *
+   * It only moves while {@link sampleOutput} is called, which the console does on its audio clock.
+   */
+  readonly peakSample: number;
   /** Sounds turned away because every live voice was already louder. */
   readonly refused: number;
   /**
@@ -161,6 +180,14 @@ export const MAP_RESERVE = 2;
  */
 export const LIMITER_THRESHOLD_DB = -6;
 
+/**
+ * How many samples one peak read copies.
+ *
+ * 2048 is Web Audio's own default window and about 43 ms at 48 kHz. Larger would see more of the signal per
+ * tick and cost a bigger copy; the peak is a level rather than a waveform, so more samples buy very little.
+ */
+export const PEAK_WINDOW = 2048;
+
 /** The highest ratio Web Audio allows. A limiter wants a wall, not a slope. */
 export const LIMITER_RATIO = 20;
 
@@ -244,6 +271,8 @@ interface MutableVoice {
 
 /** Holds the live voices and decides who keeps a slot. */
 export class VoicePool {
+  /** The output tap, after the limiter — see {@link sampleOutput}. */
+  private readonly analyser: AnalyserLike;
   /** One gain a bus, between every voice on it and the master. */
   private readonly buses: Readonly<Record<AudioBus, GainLike>>;
   /** What the OPERATOR set each bus to, before any duck. The node carries `level x duck`. */
@@ -258,8 +287,12 @@ export class VoicePool {
   private readonly master: GainLike;
   private nextId = 1;
   private peak = 0;
+  private readonly peakPerBus: Record<AudioBus, number> = { cad: 0, map: 0, world: 0 };
+  private peakSample = 0;
   private refused = 0;
   private readonly refusedPerBus: Record<AudioBus, number> = { cad: 0, map: 0, world: 0 };
+  /** Reused across reads so a 10 Hz tap allocates nothing. */
+  private readonly samples: Float32Array;
   private started = 0;
   private steals = 0;
   private readonly voices = new Map<number, LiveVoice>();
@@ -278,6 +311,12 @@ export class VoicePool {
     this.limiter.release.value = LIMITER_RELEASE_SECONDS;
     this.master.connect(this.limiter);
     this.limiter.connect(context.destination);
+    // The tap is AFTER the limiter, because the question is what actually left the graph. It is a second
+    // destination for the same signal rather than a link in the chain, so nothing downstream changes.
+    this.analyser = context.createAnalyser();
+    this.analyser.fftSize = PEAK_WINDOW;
+    this.limiter.connect(this.analyser);
+    this.samples = new Float32Array(PEAK_WINDOW);
     // Built here rather than on demand so a bus always exists to be ducked or levelled, even before anything
     // has ever played on it — 1/03 and 1/04 both reach for one that may still be empty.
     const buses = {} as Record<AudioBus, GainLike>;
@@ -315,6 +354,7 @@ export class VoicePool {
     this.voices.set(id, live);
     this.started += 1;
     this.peak = Math.max(this.peak, this.voices.size);
+    this.peakPerBus[bus] = Math.max(this.peakPerBus[bus], this.countOn(bus));
     this.applyDuck();
 
     return live.handle;
@@ -333,11 +373,32 @@ export class VoicePool {
       liveByBus: { cad: this.countOn('cad'), map: this.countOn('map'), world: this.countOn('world') },
       masterGain: this.master.gain.value,
       peak: this.peak,
+      peakByBus: { ...this.peakPerBus },
+      peakSample: this.peakSample,
       refused: this.refused,
       refusedByBus: { ...this.refusedPerBus },
       started: this.started,
       steals: this.steals,
     };
+  }
+
+  /** Move the ear. Every live positional voice is re-gained and re-panned from where it stands. */
+  /**
+   * Read the output and remember the loudest sample seen.
+   *
+   * **Called by whoever owns a clock, not by the pool** — a pool that scheduled its own timer would be a
+   * second clock in a package that has exactly one, and the console already ticks ten times a second. A
+   * window of {@link PEAK_WINDOW} samples at 10 Hz sees about 4 % of the signal at 48 kHz, which is the
+   * honest limit of this number: it finds the level a mix sits at, and it can miss a single transient.
+   */
+  sampleOutput(): void {
+    this.analyser.getFloatTimeDomainData(this.samples);
+    for (const sample of this.samples) {
+      const level = Math.abs(sample);
+      if (level > this.peakSample) {
+        this.peakSample = level;
+      }
+    }
   }
 
   /**
@@ -381,7 +442,6 @@ export class VoicePool {
     param.linearRampToValueAtTime(target, now + seconds);
   }
 
-  /** Move the ear. Every live positional voice is re-gained and re-panned from where it stands. */
   setListener(listener: AudioListener): void {
     this.listener = listener;
     for (const voice of this.voices.values()) {

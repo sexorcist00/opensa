@@ -598,3 +598,106 @@ describe('VoicePool alert floor', () => {
     });
   });
 });
+
+describe('VoicePool output peak', () => {
+  describe('negative cases', () => {
+    it('reports no peak before anything has been read — a level nobody measured is not zero, it is absent', () => {
+      const pool = new VoicePool(new FakeAudioContext());
+
+      expect(pool.report().peakSample).toBe(0);
+    });
+
+    it('reads silence as silence rather than as a peak nobody could trace', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+
+      pool.sampleOutput();
+
+      expect(pool.report().peakSample).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it('holds the loudest sample seen, and measures MAGNITUDE rather than value', () => {
+      // A waveform's worst excursion is as often negative as positive, and a peak that only looked at the
+      // positive half would report a clipping mix as a quiet one.
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      const analyser = context.analysers[0];
+      if (!analyser) {
+        throw new Error('the pool built no output tap');
+      }
+
+      analyser.samples = new Float32Array([0.2, -0.81, 0.4]);
+      pool.sampleOutput();
+
+      expect(pool.report().peakSample).toBeCloseTo(0.81, 5);
+    });
+
+    it('never forgets a peak a later quiet read would hide', () => {
+      // The number 1/02's arithmetic is judged on is the worst the mix ever reached, not where it is now.
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      const analyser = context.analysers[0];
+      if (!analyser) {
+        throw new Error('the pool built no output tap');
+      }
+
+      analyser.samples = new Float32Array([0.9]);
+      pool.sampleOutput();
+      analyser.samples = new Float32Array([0.01]);
+      pool.sampleOutput();
+
+      expect(pool.report().peakSample).toBeCloseTo(0.9, 5);
+    });
+
+    it('taps AFTER the limiter, so the number is what left the graph', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      const analyser = context.analysers[0];
+
+      // The compressor feeds it; the master does not. A tap before the limiter would report a peak the
+      // speakers never saw, which is the opposite of the question 5/01 asks.
+      expect(context.compressors[0]?.connectedTo).toContain(analyser);
+      expect(masterGain(context)?.connectedTo).not.toContain(analyser);
+      void pool;
+    });
+  });
+});
+
+describe('VoicePool peak per bus', () => {
+  describe('negative cases', () => {
+    it('starts every bus at zero, including ones nothing ever played on', () => {
+      const pool = new VoicePool(new FakeAudioContext());
+
+      expect(pool.report().peakByBus).toEqual({ cad: 0, map: 0, world: 0 });
+    });
+  });
+
+  describe('positive cases', () => {
+    it('counts each bus SEPARATELY, which is the only way a reserve can be judged', () => {
+      // Sixty-four voices at once is an ordinary city; the question 1/01's reserves are judged on is how
+      // many of them were alerts, and a single total cannot answer it.
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+
+      pool.play({ buffer: buffer(context), bus: 'world', position: null });
+      pool.play({ buffer: buffer(context), bus: 'world', position: null });
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+
+      expect(pool.report().peakByBus).toEqual({ cad: 1, map: 0, world: 2 });
+    });
+
+    it('remembers a bus’s high-water mark after its voices have gone', () => {
+      const context = new FakeAudioContext();
+      const pool = new VoicePool(context);
+      const first = pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+      pool.play({ buffer: buffer(context), bus: 'cad', position: null });
+
+      first?.stop();
+
+      expect(pool.report().peakByBus.cad).toBe(2);
+      expect(pool.report().liveByBus.cad).toBe(1);
+    });
+  });
+});

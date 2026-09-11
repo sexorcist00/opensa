@@ -10,6 +10,7 @@
  * every node it made, so a test can ask what a voice was connected to and what its gain ended up at.
  */
 import type {
+  AnalyserLike,
   AudioBufferLike,
   AudioBufferSourceLike,
   AudioContextLike,
@@ -19,6 +20,40 @@ import type {
   GainLike,
   StereoPannerLike,
 } from '../audio-host.interface';
+
+/** What every fake node shares: where it was connected, and whether it was let go. */
+export class FakeNode implements AudioNodeLike {
+  readonly connectedTo: AudioNodeLike[] = [];
+  disconnected = false;
+
+  connect(destination: AudioNodeLike): unknown {
+    this.connectedTo.push(destination);
+
+    return destination;
+  }
+
+  disconnect(): void {
+    this.disconnected = true;
+  }
+}
+
+/**
+ * The output tap. `samples` is what the next read returns, so a test plays a signal by setting it.
+ *
+ * Defaults to silence rather than to noise: a peak that appeared without anything having been played would
+ * be a number nobody could trace.
+ */
+export class FakeAnalyser extends FakeNode implements AnalyserLike {
+  fftSize = 2048;
+  samples: Float32Array = new Float32Array(0);
+  get frequencyBinCount(): number {
+    return this.fftSize / 2;
+  }
+
+  getFloatTimeDomainData(array: Float32Array): void {
+    array.set(this.samples.subarray(0, array.length));
+  }
+}
 
 /** A buffer that keeps what was copied into it, so a test can check WHICH samples were played. */
 export class FakeAudioBuffer implements AudioBufferLike {
@@ -38,22 +73,6 @@ export class FakeAudioBuffer implements AudioBufferLike {
 
   copyToChannel(source: Float32Array, channelNumber: number): void {
     this.channels[channelNumber]?.set(source.subarray(0, this.length));
-  }
-}
-
-/** What every fake node shares: where it was connected, and whether it was let go. */
-export class FakeNode implements AudioNodeLike {
-  readonly connectedTo: AudioNodeLike[] = [];
-  disconnected = false;
-
-  connect(destination: AudioNodeLike): unknown {
-    this.connectedTo.push(destination);
-
-    return destination;
-  }
-
-  disconnect(): void {
-    this.disconnected = true;
   }
 }
 
@@ -130,6 +149,8 @@ export class FakeStereoPanner extends FakeNode implements StereoPannerLike {
 
 /** The context itself. `refuseResume` is how a test plays the browser turning a gesture down. */
 export class FakeAudioContext implements AudioContextLike {
+  /** Every output tap ever made. The pool makes one. */
+  readonly analysers: FakeAnalyser[] = [];
   /** Every buffer ever built. The tone floor builds one a name. */
   readonly buffers: FakeAudioBuffer[] = [];
   /** Every limiter ever built. The pool builds exactly one. */
@@ -152,6 +173,13 @@ export class FakeAudioContext implements AudioContextLike {
     this.moveTo('closed');
 
     return Promise.resolve();
+  }
+
+  createAnalyser(): AnalyserLike {
+    const analyser = new FakeAnalyser();
+    this.analysers.push(analyser);
+
+    return analyser;
   }
 
   createBuffer(numberOfChannels: number, length: number, sampleRate: number): AudioBufferLike {

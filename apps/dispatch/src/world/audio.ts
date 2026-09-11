@@ -356,6 +356,9 @@ export class DispatchAudio {
     this.clock.start((gapSeconds) => {
       const listener = listenerOf();
       pool.setListener(listener);
+      // Read what actually left the graph (204/5-01). On THIS clock rather than a timer of the pool's own:
+      // a package with one clock may not grow a second, and ten reads a second is what a level needs.
+      pool.sampleOutput();
       // The zone lookup is 155 point tests (203/4-01) and it runs on the AUDIO clock, ten a second — not on
       // the frame, which the render gate takes to zero at rest.
       this.ambience.update(audioZoneAt(this.index?.zones ?? [], listener.position), listener.position, gapSeconds);

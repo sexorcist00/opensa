@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type {
+  AnalyserLike,
   AudioBufferSourceLike,
   AudioContextLike,
   DynamicsCompressorLike,
   GainLike,
   StereoPannerLike,
 } from './audio-host.interface';
+
+export type AnalyserConforms = MustSatisfy<AnalyserLike, AnalyserNode>;
 
 export type BufferSourceConforms = MustSatisfy<AudioBufferSourceLike, AudioBufferSourceNode>;
 

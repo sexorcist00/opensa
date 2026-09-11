@@ -4,6 +4,23 @@
  */
 
 /**
+ * A tap on the signal, for reading what actually came out.
+ *
+ * **The only way to measure the OUTPUT peak** (204/5-01). `DynamicsCompressorNode.reduction` says how hard
+ * the limiter is working, which is a number about the input; the row 1/02 owes is about the samples that
+ * reached the speakers, and the arithmetic there — 64 voices summing to about -4.8 dBFS — is a prediction
+ * nobody has checked against a device.
+ *
+ * `fftSize` is declared because the buffer length follows it, and a smaller window is a cheaper copy: the
+ * peak does not care how many bins a transform would have, only how many samples are read per tick.
+ */
+export interface AnalyserLike extends AudioNodeLike {
+  fftSize: number;
+  readonly frequencyBinCount: number;
+  getFloatTimeDomainData(array: Float32Array): void;
+}
+
+/**
  * What a surface may honestly say about sound.
  *
  * **Four states and no more**, because an indicator that cannot be read at a glance is worse than none. The
@@ -53,6 +70,7 @@ export interface AudioBufferSourceLike extends AudioNodeLike {
 export interface AudioContextLike {
   addEventListener(type: 'statechange', listener: () => void): void;
   close(): Promise<void>;
+  createAnalyser(): AnalyserLike;
   createBuffer(numberOfChannels: number, length: number, sampleRate: number): AudioBufferLike;
   createBufferSource(): AudioBufferSourceLike;
   createDynamicsCompressor(): DynamicsCompressorLike;
