@@ -80,6 +80,19 @@ deliver.
 | `call_closed` | a call clears | — |
 | `unit_stale` | a unit stops reporting (the backend marks one at 300 s) | — **new** |
 
+**Where the console gets them: a DIFF of two boards, not a stream**
+([`board-events.ts`](../../apps/dispatch/src/world/board-events.ts), 204/3-01). The console renders a board
+it does not own, so there is nothing to subscribe to; it keeps the last snapshot and compares. Three
+consequences a reader of this table needs:
+
+- **The first board raises nothing.** Everything on it is already there rather than newly arrived, and a
+  console that announced its whole roster at open is one somebody mutes in the first minute.
+- **`incident_created` is not raised by the console.** Its domain has one concept — an `Incident` with a
+  priority — so a new one is a new CALL, and the console raises the priority-coded name. PCAD's own
+  `incident_created` stays in the vocabulary because PCAD raises it; a console hearing it from PCAD plays it.
+- **`unit_stale` is not raised yet**, because staleness is not in the snapshot: the backend marks a unit at
+  300 s and the board carries no such field. It arrives with the field, not before.
+
 **Why the priority split.** [DESIGN.md](../../apps/dispatch/DESIGN.md) encodes a call's priority three ways
 in the visuals and says *this is the rule for any state the console adds later*; one chime for P1 and P3
 alike is a channel that throws the priority away. PCAD already ships the assets for it —

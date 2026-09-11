@@ -3,6 +3,8 @@ import type { AudioClockHost, AudioListener } from '@opensa/audio';
 import { FakeAudioContext } from '@opensa/audio/test/fake-context';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { Operations } from '../ops/types';
+
 import { audioArm, DispatchAudio, MIXES } from './audio';
 
 /** Timers a test drives by hand. `fire(ms)` moves the clock first, so the tick's gap is the test's own. */
@@ -108,6 +110,89 @@ describe('DispatchAudio ambience', () => {
   });
 });
 
+/** A board with one pending call and one available unit — the shape a diff is taken against. */
+function board(over: { readonly assigned?: boolean } = {}): Operations {
+  return {
+    incidents: [
+      {
+        assigned: [],
+        at: [0, 0],
+        code: '10-50',
+        id: 'i1',
+        opened: 0,
+        place: 'Ganton',
+        priority: 1,
+        remaining: 10,
+        status: 'pending',
+        title: 'Traffic collision',
+      },
+    ],
+    log: [],
+    now: 0,
+    units: [
+      {
+        at: [0, 0],
+        callsign: '1-ADAM-12',
+        elevation: 0,
+        heading: 0,
+        id: 'u1',
+        incident: over.assigned === true ? 'i1' : null,
+        kind: 'patrol',
+        model: 'copcarla',
+        speed: 0,
+        status: over.assigned === true ? 'enRoute' : 'available',
+        target: null,
+      },
+    ],
+  };
+}
+
+describe('DispatchAudio board events', () => {
+  describe('negative cases', () => {
+    it('raises nothing on the tick that FIRST sees a board', () => {
+      const clock = clockHost();
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clock,
+        createContext: () => new FakeAudioContext(),
+        log: vi.fn(),
+      });
+
+      audio.start(
+        () => EAR,
+        () => [],
+        () => board(),
+      );
+      clock.fire();
+
+      expect(audio.report().panel.played).toBe(0);
+    });
+  });
+
+  describe('positive cases', () => {
+    it("plays the board's own change on the audio clock, on the map bus", () => {
+      const clock = clockHost();
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clock,
+        createContext: () => new FakeAudioContext(),
+        log: vi.fn(),
+      });
+      let ops = board();
+      audio.start(
+        () => EAR,
+        () => [],
+        () => ops,
+      );
+      clock.fire();
+
+      ops = board({ assigned: true });
+      clock.fire(100);
+
+      expect(audio.report().panel.byCategory.map).toBe(1);
+      expect(audio.report().panel.unknown).toEqual([]);
+    });
+  });
+});
+
 describe('audioArm', () => {
   describe('negative cases', () => {
     it('treats anything but the exact string 0 as ON — a typo may not silently measure a silent run', () => {
@@ -203,6 +288,14 @@ describe('DispatchAudio', () => {
         clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
         events: 0,
         mix: 'full' as const,
+        panel: {
+          byCategory: { cad: 0, map: 0, world: 0 },
+          coalesced: 0,
+          maxLatencyMs: 0,
+          played: 0,
+          refused: 0,
+          unknown: [],
+        },
         resumesRefused: 0,
         units: { engines: 0, sirens: 0, unvoiced: 0 },
         vehicles: 0,

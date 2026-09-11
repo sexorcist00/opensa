@@ -698,6 +698,8 @@ export async function bootDispatch(options: BootOptions): Promise<DispatchHandle
       // a city nobody is panning still has an engine.
     },
     () => options.ops().units,
+    // The same snapshot the board renders from, diffed on the audio clock into `map` events (204/3-01).
+    () => options.ops(),
   );
   // The bounds are the world's, not the camera's: how far it may zoom out and how shallow it may tilt both
   // come from how much world there is around the focus (201/7-02).

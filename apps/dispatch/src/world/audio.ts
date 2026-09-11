@@ -30,6 +30,7 @@ import type {
   AudioContextLike,
   AudioListener,
   GestureTarget,
+  PanelEventReport,
   Voice,
   VoicePoolReport,
 } from '@opensa/audio';
@@ -49,15 +50,18 @@ import {
   AudioHost,
   audioZoneAt,
   browserClockHost,
+  PanelEvents,
+  PanelSounds,
   VehicleVoiceTable,
   VoicePool,
 } from '@opensa/audio';
 import { AudioCache } from '@opensa/loaders/audio-cache';
 import { openAudioSource } from '@opensa/loaders/audio-source';
 
-import type { Unit } from '../ops/types';
+import type { Operations, Unit } from '../ops/types';
 import type { UnitAudioReport, WarmSound } from './unit-audio';
 
+import { boardEvents } from './board-events';
 import { UnitAudio } from './unit-audio';
 
 /** Whether this run makes sound at all. `off` is `?audio=0`, spelled the way a filed row spells it. */
@@ -81,6 +85,8 @@ export interface DispatchAudioReport {
   readonly events: number;
   /** The mix the operator left it on. Carried whether or not there is a pool. */
   readonly mix: MixName;
+  /** The panel's own vocabulary: what played, what was folded, and the worst event → audible gap. */
+  readonly panel: PanelEventReport;
   /** Gestures the browser turned down. Non-zero with `waiting` means the wiring, not the operator. */
   readonly resumesRefused: number;
   /** What the board's own cars sound like — engines running, sirens wailing, models this build cannot voice. */
@@ -131,7 +137,10 @@ export class DispatchAudio {
   private readonly clock: AudioClock;
   private readonly host: AudioHost;
   private index: null | OsaudioIndex = null;
+  /** The board as the last tick saw it, so a diff has something to diff against. */
+  private lastBoard: null | Operations = null;
   private mix: MixName = 'full';
+  private readonly panel: PanelEvents;
   private readonly pending = new Set<number>();
   private readonly pool: null | VoicePool;
   private source: AudioSource | null = null;
@@ -170,6 +179,13 @@ export class DispatchAudio {
     this.buffers = new AudioCache<AudioBufferLike>({ bytesOf: (value): number => value.length * 4 });
     this.table = AudioEventTable.empty(this.absence);
     this.ambience = new Ambience(this.ambienceHost(options.random));
+    this.panel = new PanelEvents({
+      pool: this.pool,
+      random: options.random,
+      // Built once, on load: a panel sound is wanted within 50 ms of its event and nothing on that path may
+      // fetch or decode. With no context there is nothing to build buffers on, and the set is empty.
+      sounds: context ? PanelSounds.resolve(context) : PanelSounds.empty(),
+    });
     this.setMix(storedMix(this.storage));
     this.units =
       this.pool === null
@@ -199,6 +215,15 @@ export class DispatchAudio {
     this.stop();
     this.buffers.clear();
     await this.host.dispose();
+  }
+
+  /**
+   * Raise one panel event by name, from whatever owns it.
+   *
+   * @param atMs when the event HAPPENED, if it crossed a wire. Absent, now.
+   */
+  event(name: string, atMs?: number): void {
+    this.panel.event(name, atMs);
   }
 
   /**
@@ -279,6 +304,7 @@ export class DispatchAudio {
       clock: this.clock.report(),
       events: this.table.size,
       mix: this.mix,
+      panel: this.panel.report(),
       resumesRefused: this.host.state.resumesRefused,
       units: this.units?.report() ?? { engines: 0, sirens: 0, unvoiced: 0 },
       vehicles: this.vehicles.size,
@@ -306,8 +332,15 @@ export class DispatchAudio {
   /**
    * Start the audio tick. `listenerOf` is read on the clock's schedule rather than the frame's, so a still
    * map keeps its ear where the camera is.
+   *
+   * `boardOf` is the console's own board: read on the same clock and DIFFED, which is where `map` events
+   * come from. Absent, the board raises nothing and the panel still answers direct calls to `event`.
    */
-  start(listenerOf: () => AudioListener, unitsOf: () => readonly Unit[] = (): readonly Unit[] => []): void {
+  start(
+    listenerOf: () => AudioListener,
+    unitsOf: () => readonly Unit[] = (): readonly Unit[] => [],
+    boardOf?: () => Operations,
+  ): void {
     if (this.pool === null) {
       return;
     }
@@ -319,6 +352,15 @@ export class DispatchAudio {
       // the frame, which the render gate takes to zero at rest.
       this.ambience.update(audioZoneAt(this.index?.zones ?? [], listener.position), listener.position, gapSeconds);
       this.units?.update(unitsOf(), listener.position, gapSeconds);
+      // The board is diffed HERE rather than where it is stepped: the console renders a board it does not
+      // own, and on the audio clock it sees every snapshot whether or not a frame was drawn for it.
+      const board = boardOf?.();
+      if (board) {
+        for (const name of boardEvents(this.lastBoard, board)) {
+          this.panel.event(name);
+        }
+        this.lastBoard = board;
+      }
     });
   }
 
