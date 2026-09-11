@@ -63,6 +63,7 @@ const CONTEXT = {
     arm: 'on' as const,
     availability: 'waiting' as const,
     buffers: { bytes: 0, ceilingBytes: 67_108_864, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },
+    cad: { assumed: 0, delivered: 0, online: null },
     clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
     events: 0,
     mix: 'full' as const,

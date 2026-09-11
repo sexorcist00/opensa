@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { Operations } from '../ops/types';
 
-import { audioArm, DispatchAudio, MIXES } from './audio';
+import { audioArm, cadArm, DispatchAudio, MIXES } from './audio';
 
 /** Timers a test drives by hand. `fire(ms)` moves the clock first, so the tick's gap is the test's own. */
 function clockHost(): AudioClockHost & { fire(afterMs?: number): void } {
@@ -147,6 +147,75 @@ function board(over: { readonly assigned?: boolean } = {}): Operations {
   };
 }
 
+describe('cadArm', () => {
+  describe('negative cases', () => {
+    it('treats anything but the exact string 0 as ON', () => {
+      for (const value of ['', '1', 'off', 'false', '00']) {
+        expect(cadArm(new URLSearchParams(`cad=${value}`))).toBe('on');
+      }
+    });
+  });
+
+  describe('positive cases', () => {
+    it('is on when absent, and off for `?cad=0`', () => {
+      expect(cadArm(new URLSearchParams())).toBe('on');
+      expect(cadArm(new URLSearchParams('cad=0'))).toBe('off');
+    });
+  });
+});
+
+describe('DispatchAudio cad seam', () => {
+  describe('negative cases', () => {
+    it('`?cad=0` removes the stand-in and leaves the seam working — which is what PCAD arriving looks like', () => {
+      const clock = clockHost();
+      const audio = new DispatchAudio(new URLSearchParams('cad=0'), {
+        clockHost: clock,
+        createContext: () => new FakeAudioContext(),
+        // A draw of 0 speaks on every tick, so an armed mock could not possibly stay quiet here.
+        log: vi.fn(),
+        random: () => 0,
+      });
+      const ops = board();
+
+      audio.start(
+        () => EAR,
+        () => [],
+        () => ops,
+      );
+      clock.fire();
+      clock.fire(1_000);
+      audio.cad.deliver({ sound: 'panic_button', title: 'Panic Button' });
+
+      expect(audio.report().cad).toEqual({ assumed: 0, delivered: 1, online: null });
+    });
+  });
+
+  describe('positive cases', () => {
+    it('lets the stand-in speak through the same seam, and marks the link up as it does', () => {
+      const clock = clockHost();
+      const audio = new DispatchAudio(new URLSearchParams(), {
+        clockHost: clock,
+        createContext: () => new FakeAudioContext(),
+        log: vi.fn(),
+        random: () => 0,
+      });
+      const ops = board();
+
+      audio.start(
+        () => EAR,
+        () => [],
+        () => ops,
+      );
+      clock.fire();
+      clock.fire(1_000);
+
+      expect(audio.report().cad).toMatchObject({ assumed: 0, online: true });
+      expect(audio.report().cad.delivered).toBeGreaterThan(0);
+      expect(audio.report().panel.byCategory.cad).toBeGreaterThan(0);
+    });
+  });
+});
+
 describe('DispatchAudio board events', () => {
   describe('negative cases', () => {
     it('raises nothing on the tick that FIRST sees a board', () => {
@@ -285,6 +354,7 @@ describe('DispatchAudio', () => {
         arm: 'on',
         availability: 'unsupported',
         buffers: { bytes: 0, ceilingBytes: 67_108_864, entries: 0, evictions: 0, hits: 0, misses: 0, refused: 0 },
+        cad: { assumed: 0, delivered: 0, online: null },
         clock: { maxMs: 0, meanMs: 0, rateHz: 10, ticks: 0 },
         events: 0,
         mix: 'full' as const,

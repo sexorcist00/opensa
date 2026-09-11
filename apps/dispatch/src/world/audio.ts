@@ -59,9 +59,12 @@ import { AudioCache } from '@opensa/loaders/audio-cache';
 import { openAudioSource } from '@opensa/loaders/audio-source';
 
 import type { Operations, Unit } from '../ops/types';
+import type { CadLinkReport } from './cad-link';
 import type { UnitAudioReport, WarmSound } from './unit-audio';
 
 import { boardEvents } from './board-events';
+import { CadLink } from './cad-link';
+import { CadMock } from './cad-mock';
 import { UnitAudio } from './unit-audio';
 
 /** Whether this run makes sound at all. `off` is `?audio=0`, spelled the way a filed row spells it. */
@@ -78,6 +81,8 @@ export interface DispatchAudioReport {
   readonly availability: AudioAvailability;
   /** The decoded-buffer cache against its 64 MB ceiling — bytes, entries, evictions, hits, misses. */
   readonly buffers: AudioCacheReport;
+  /** What arrived over the CAD seam, and whether a CAD is answering at all. */
+  readonly cad: CadLinkReport;
   /** The audio tick's own cost — the 2 ms budget's number, beside the rate it was taken at. */
   readonly clock: AudioClockReport;
   /** How many named events resolved against this build's index. Zero with an index present is a table
@@ -130,6 +135,8 @@ const MIX_STORAGE_KEY = 'opensa.dispatch.audio.mix';
 
 /** Holds the console's audio for the life of the page. */
 export class DispatchAudio {
+  /** The console's end of the CAD seam. Public: whatever holds the connection delivers through it. */
+  readonly cad: CadLink;
   private readonly absence: AudioAbsence;
   private readonly ambience: Ambience;
   private readonly arm: AudioArm;
@@ -140,6 +147,8 @@ export class DispatchAudio {
   /** The board as the last tick saw it, so a diff has something to diff against. */
   private lastBoard: null | Operations = null;
   private mix: MixName = 'full';
+  /** The stand-in for a CAD nobody has connected yet, or null when the arm is off. */
+  private readonly mock: CadMock | null;
   private readonly panel: PanelEvents;
   private readonly pending = new Set<number>();
   private readonly pool: null | VoicePool;
@@ -186,6 +195,12 @@ export class DispatchAudio {
       // fetch or decode. With no context there is nothing to build buffers on, and the set is empty.
       sounds: context ? PanelSounds.resolve(context) : PanelSounds.empty(),
     });
+    this.cad = new CadLink({
+      event: (name, atMs): void => {
+        this.panel.event(name, atMs);
+      },
+    });
+    this.mock = cadArm(params) === 'on' ? new CadMock(options.random) : null;
     this.setMix(storedMix(this.storage));
     this.units =
       this.pool === null
@@ -301,6 +316,7 @@ export class DispatchAudio {
       arm: this.arm,
       availability: this.host.state.availability,
       buffers: this.buffers.report(),
+      cad: this.cad.report(),
       clock: this.clock.report(),
       events: this.table.size,
       mix: this.mix,
@@ -360,6 +376,16 @@ export class DispatchAudio {
           this.panel.event(name);
         }
         this.lastBoard = board;
+        // The stand-in speaks through the SAME seam a CAD will, so switching it off changes nothing here.
+        const said = this.mock?.step(board, gapSeconds);
+        if (said) {
+          // A CAD that is talking is a CAD that is answering, so the stand-in marks the seam up as it
+          // speaks — which makes `online` true in a capture rather than merely unknown. It never fakes a
+          // DROP: `link_lost` is the loudest thing this console says, and a stand-in that cried it would
+          // teach an operator to disbelieve the real one.
+          this.cad.setOnline(true);
+          this.cad.deliver(said);
+        }
       }
     });
   }
@@ -511,6 +537,18 @@ export class DispatchAudio {
  */
 export function audioArm(params: URLSearchParams): AudioArm {
   return params.get('audio') === '0' ? 'off' : 'on';
+}
+
+/**
+ * Read the arm out of `?cad=`.
+ *
+ * Absent is `on`, and that is a statement with an expiry date: until PCAD carries the contract's `sound`
+ * field there is no CAD to connect to, so a console opened with nothing on the `cad` bus would report a
+ * budget nobody exercised. `?cad=0` removes the stand-in and leaves the seam exactly as it is — which is
+ * also what the day PCAD arrives looks like.
+ */
+export function cadArm(params: URLSearchParams): AudioArm {
+  return params.get('cad') === '0' ? 'off' : 'on';
 }
 
 /**

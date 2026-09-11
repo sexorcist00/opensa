@@ -120,6 +120,19 @@ notification still appearing exactly as before. So the contract is a field:
 | A `sound` no build knows | Silence for that event | One line per distinct name, counted in the report's absence |
 | A name in the wrong category | It plays, on the wrong bus — so it may duck the world when it should not, or be suppressed when it should not be | Nothing. **This is the silent one**, and the reason the table above is the single place either repository reads |
 
+**What the console does with a message that names nothing** (204/3-02,
+[`cad-link.ts`](../../apps/dispatch/src/world/cad-link.ts)): it plays `notification` and **counts it**
+(`audio.cad.assumed`), because otherwise *the CAD stopped naming its sounds* and *the CAD went quiet* look
+identical from here — and the first of those is the worse one, since everything still chimes and every event
+now chimes the SAME. An empty or blank field counts as absent rather than as an unknown NAME: a CAD that
+sends `""` has not adopted the field, and filing that under the vocabulary column would put a wiring problem
+where nobody looks for it.
+
+**`link_lost` and `link_back` are derived, not sent** — a dropped link cannot send anything — and neither is
+said until a CAD has connected **once**. A console that has never had a CAD is not a console whose CAD is
+down, and a state claimed before anyone answered is a claim rather than a reading (the lesson
+[the agent link](../../apps/dispatch/src/world/agent-link.ts) already paid for).
+
 ## 5. The sound set, and where it came from
 
 **Provenance, recorded because it is written nowhere else and in six months there is nobody left to ask.**
