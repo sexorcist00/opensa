@@ -731,6 +731,18 @@ async function encodeTextureArrays(
   const started = Date.now();
   let doneTexels = 0;
   for (const [index, array] of arrays.entries()) {
+    // **Say what is about to be encoded, BEFORE encoding it** (2026-09-11). The line below reports an array
+    // that COMPLETED, which is exactly the event that stops happening when a run goes quiet — so three
+    // converts in a row stalled at "array 4 of 20" and nothing said whether the encoder was grinding on one
+    // enormous array or had hung. A stall now names its own array and its size, and the two readings stop
+    // looking alike. It costs one log line per array on a stage measured in minutes.
+    if (encoder !== null) {
+      const { height, layers, width } = array.meta;
+      log(
+        `astc: array ${index + 1}/${arrays.length} starting — ${(texelsOf(array.meta) / 1e6).toFixed(1)} M ` +
+          `texels, ${layers} layers at ${width}x${height}`,
+      );
+    }
     const bytes = encoder === null ? array.bytes : await encoder.ostex(array.bytes);
     const meta = encoder === null ? array.meta : { ...array.meta, format: OstexFormat.ASTC4x4 };
     inputs.push(wireCompress({ bytes, key: `array-${array.ref}`, kind: 'texture', meta }));
