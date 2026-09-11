@@ -71,15 +71,23 @@ TEXTURES="${TEXTURES:-astc}"
 # was the whole bug (fixed 2026-08-09, `threads` is now required so a third call site cannot inherit a
 # default). With it fixed the encode ran: 1.1 M texels in 12.8 s, single-threaded. The setting stays at 1
 # because it is what has been proven on this device; the cost is speed only (astcenc's pool measured 2.38x one
-# thread on 2026-08-07, bit-identical either way). `ASTC_THREADS=0` restores one-per-core for a machine that
-# can afford it.
+# thread on 2026-08-07, bit-identical either way).
 #
-# WORTH RETRYING, and nobody has: the three deaths were caused by the bug FIXED on 2026-08-09, not by the
-# thread count surviving it. `2` has not been tried since. The pool measured 2.38x one thread and is
-# bit-identical, so it is a free 2x if the address space allows — pair it with a smaller HEAP (the isolates
-# need room the 4096 MB reservation is holding) and a separate OUT, so a failed experiment costs nothing:
+# RETRIED 2026-09-11, AND THE ANSWER IS NO: `2` STALLS THE ENCODE ON THIS DEVICE. The note here used to say
+# this was worth retrying because the three deaths came from the bug fixed on 2026-08-09 rather than from the
+# thread count surviving it. It was — and the retry settles it against the pool. Two runs on the pinned
+# district, `HEAP=1536` in BOTH, differing in this one knob:
 #
-#   HEAP=1536 ASTC_THREADS=2 REBUILD=1 OUT=./build/phone-ls-t2 npm run phone
+#   threads=2 — weld 45.5s, then `encoding texture arrays` and NOT ONE array line for over half an hour.
+#               Alive the whole time: the process never died, it just stopped making progress.
+#   threads=1 — weld 42.2s, first array at 30s, 20 arrays / 18.3 M texels, eta ~1226s falling as it went.
+#
+# The equal weld times are what make it clean: the smaller heap costs nothing before the encode, so the
+# stall belongs to the pool and not to the reservation. **The 2.38x measured on 2026-08-07 is not reachable
+# here** — it was measured where the isolates have room, and this phone is not that machine.
+#
+# `ASTC_THREADS=0` restores one-per-core for a machine that can afford it; on THIS device 1 is required
+# rather than merely proven.
 ASTC_THREADS="${ASTC_THREADS:-1}"
 # The default is a SUBSET, because converting the roster costs hours on a phone and a field run needs a
 # handful of models. `all` restores the full convert. The player's model is added below whatever is asked

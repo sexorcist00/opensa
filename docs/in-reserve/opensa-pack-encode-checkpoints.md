@@ -40,6 +40,20 @@ thread on this device without the isolate blow-up that forced `--astc-threads 1`
 being killed (the EMUI settings and the Android 12+ phantom-process limit are in
 [termux.md](../development/termux.md)).
 
+**THE FIRST OF THOSE WAS TESTED 2026-09-11 AND IS NOT AVAILABLE.** `ASTC_THREADS=2` was the retry
+`phone.sh` had been asking for since 08-25, and it does not blow up — it STALLS: the weld finishes in the
+same 45 s as the single-threaded run and then `encoding texture arrays` prints not one array line for over
+half an hour, with the process alive throughout. The comparison is clean because both runs held
+`HEAP=1536` and differed in that one knob; the single-threaded half encoded its first array at 30 s. So the
+2.38x measured on a desktop in 2026-08-07 is not reachable here, and the escape this card offered through
+*more threads* is closed.
+
+**And the same pair priced the trigger.** The pinned district is **18.3 M texels** and encodes in ~21
+minutes single-threaded. Texels grow SUBLINEARLY in cells — 4 cells 18.3 M against 16 cells 56.5 M, because
+map objects share one world dictionary — which extrapolates the full 576-cell map to roughly **1.0 G texels
+and ~20 hours** of continuous, unresumable encode. That is the number this card is about, and it is now
+arithmetic from a measurement rather than an estimate.
+
 ## Where the trigger is checked
 
 `scripts/phone.sh`, in the branch that reports a failed convert: when `TEXTURES=astc` it already tells the
