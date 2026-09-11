@@ -8,6 +8,10 @@ REPORTED.
 
 Plan: [203 — audio](../plans/203-audio/readme.md).
 
+**This file is the GAME's sounds** — San Andreas' authored data, read as the author meant it. The dispatch
+panel's own vocabulary, which two applications share and neither game owns, is
+[panel-audio.md](./panel-audio.md).
+
 ---
 
 ## 1. `data/audio-events.dat` — the event table
