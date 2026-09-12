@@ -6,8 +6,8 @@ non-commercial fan project** — contributions are welcome.
 
 ## Ways to contribute
 
-- **Bugs / ideas** — open an issue on **this** repository (a repro, screenshot, or world coordinates
-  help a lot). Note that issues are currently disabled here; enable them, or name a contact instead.
+- **Bugs / ideas** — open an [issue](https://github.com/sexorcist00/opensa/issues) on this fork (a repro,
+  screenshot, or world coordinates help a lot). Upstream's tracker cannot act on this fork's bugs.
 - **Code / docs** — open a pull request (see the workflow below).
 - **Write-ups** — dev notes are welcome.
 

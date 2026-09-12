@@ -32,7 +32,7 @@ conventions. First-time asset setup: [docs/development/getting-started.md](./doc
 ## License
 
 Copyright (c) 2026 Aleksandrov Sergey — upstream OpenSA
-Copyright (c) 2026 <YOUR NAME> — changes in this fork
+Copyright (c) 2026 sexorcist00 — changes in this fork
 
 The OpenSA source code is licensed under the **GNU Affero General Public License v3.0**
 (AGPL-3.0). You may use, modify and redistribute it under the terms of that license; if
@@ -57,6 +57,6 @@ copy, or redistribute their games — it's an alternative way to run a copy you 
   with — not as branding.
 
 If you are a rights holder and believe anything in **this repository** infringes your rights, please
-contact its maintainer at <YOUR CONTACT — an address you read; issues are disabled here>, and it will
+open an issue at <https://github.com/sexorcist00/opensa/issues>, and it will
 be reviewed in good faith and, where appropriate, the material **removed promptly**. For the upstream
 project, see <https://github.com/AlexSergey/opensa>.
