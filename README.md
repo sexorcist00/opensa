@@ -3,9 +3,12 @@
 </p>
 
 <p align="center">
-  <a href="https://opensa.cc"><img src="https://img.shields.io/badge/site-opensa.cc-2a7ae2" alt="Website" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-2a7ae2" alt="License: AGPL-3.0" /></a>
 </p>
+
+> **This is a modified fork of [AlexSergey/opensa](https://github.com/AlexSergey/opensa),
+> forked 2026-08-04 and modified since.** It is not the upstream project and is not maintained
+> by it. Upstream's website, demo, trailer and blog are not this repository's.
 
 An open-source, from-scratch, high-performance **game engine, built compatible with RenderWare** — the engine
 behind GTA San Andreas. Bring your own game files (or a total-conversion mod) and it streams the real world,
@@ -21,24 +24,6 @@ through — the goals, and the rules that keep them honest, are in
 
 > Unofficial, non-commercial fan project. Not affiliated with Rockstar Games or Take-Two.
 
-<p align="center">
-  <a href="https://opensa.cc"><img src="https://img.shields.io/badge/%E2%96%B6%20Play%20the%20Demo-opensa.cc-F55C07?style=for-the-badge" alt="Play the demo" /></a>
-</p>
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=eA1gVWzANRU&amp;list=PLB21jFrZE9wA" title="Watch the OpenSA 0.4.0 trailer">
-    <img src="https://img.youtube.com/vi/eA1gVWzANRU/maxresdefault.jpg" alt="OpenSA — an open-source game engine compatible with RenderWare, in the browser — 0.4.0 trailer" width="640" />
-  </a>
-</p>
-
-## Blog
-
-Dev notes and progress - in [`/blog`](./blog).
-
-- 2026-06-18 - [I ran GTA San Andreas on my own engine in the browser - solo with Claude, in 3 weeks](./blog/1-i-ran-gta-san-andreas-on-my-own-engine-in-the-browser-solo-with-claude-in-3-weeks.md)
-- 2026-07-08 - [How I built a perfect GTA San Andreas map with my own engine](./blog/2-how-i-built-a-perfect-gta-san-andreas-map-with-my-own-engine.md)
-- 2026-08-03 - [An AAA engine for GTA San Andreas in the browser - and rewriting Three.js](./blog/3-an-aaa-engine-for-gta-san-andreas-in-the-browser-and-rewriting-threejs.md)
-
 ## Contributing
 
 Contributions are welcome - see **[CONTRIBUTING.md](./CONTRIBUTING.md)** for setup, the dev workflow, and
@@ -46,7 +31,8 @@ conventions. First-time asset setup: [docs/development/getting-started.md](./doc
 
 ## License
 
-Copyright (c) 2026 Aleksandrov Sergey
+Copyright (c) 2026 Aleksandrov Sergey — upstream OpenSA
+Copyright (c) 2026 <YOUR NAME> — changes in this fork
 
 The OpenSA source code is licensed under the **GNU Affero General Public License v3.0**
 (AGPL-3.0). You may use, modify and redistribute it under the terms of that license; if
@@ -69,10 +55,8 @@ copy, or redistribute their games — it's an alternative way to run a copy you 
 - "Grand Theft Auto", "GTA", "San Andreas", RenderWare, and related names, logos and trademarks belong to
   their respective owners. They are used here **only descriptively**, to state what the engine is compatible
   with — not as branding.
-- The public demo at [opensa.cc](https://opensa.cc) may load community **mod** content; all such content
-  remains the property of its respective authors.
 
-If you are a rights holder and believe anything here infringes your rights, please open an issue at
-<https://github.com/AlexSergey/opensa/issues> or email the maintainer, Aleksandrov Sergey, at
-<gooddev.sergey@gmail.com>, and we will review it in good faith and, where appropriate, **remove the material
-promptly**.
+If you are a rights holder and believe anything in **this repository** infringes your rights, please
+contact its maintainer at <YOUR CONTACT — an address you read; issues are disabled here>, and it will
+be reviewed in good faith and, where appropriate, the material **removed promptly**. For the upstream
+project, see <https://github.com/AlexSergey/opensa>.
