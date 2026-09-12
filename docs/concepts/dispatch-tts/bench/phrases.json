@@ -1,0 +1,47 @@
+{
+  "note": "Russian source is what a dispatcher types today. The English line is the LITERAL translation plus speech normalisation - the register decided with the user on 2026-09-06: nothing is added that the operator did not say. In production this line comes from the translator model; here it is written by hand so the bench measures the VOICE rather than the translator.",
+  "phrases": [
+    {
+      "id": "assign",
+      "ru": "1-Адам-12, ответьте на угол Гроув-стрит и Мэйн, драка.",
+      "en": "One Adam Twelve, respond to Grove Street and Main, fight in progress.",
+      "level": "routine",
+      "why": "callsign and address normalisation - the digits must be spoken, not read as a number"
+    },
+    {
+      "id": "shots",
+      "ru": "ОТКРЫТ ОГОНЬ ПО ОФИЦЕРУ, ВСЕ СВОБОДНЫЕ НА ИДЛВУД!",
+      "en": "Shots fired at an officer! All available units, Idlewood!",
+      "level": "emergency",
+      "why": "the caps case - the operator's own explicit shout signal"
+    },
+    {
+      "id": "roger",
+      "ru": "Принял, буду через две минуты.",
+      "en": "Ten four, en route, two minutes out.",
+      "level": "routine",
+      "why": "the dictionary case - short, constant, said fifty times a shift, so it is baked once and never paid for again"
+    },
+    {
+      "id": "backup",
+      "ru": "Диспетчер, запросите подкрепление, подозреваемый вооружён.",
+      "en": "Dispatch, requesting backup, suspect is armed.",
+      "level": "urgent",
+      "why": "urgent without caps - only the classifier can raise this one"
+    },
+    {
+      "id": "code4",
+      "ru": "Всем постам, код 4, обстановка под контролем.",
+      "en": "All units, code four, situation under control.",
+      "level": "routine",
+      "why": "a numeric code that must survive translation intact"
+    },
+    {
+      "id": "pursuit",
+      "ru": "Преследование, серый Sultan, движется на север по Мулхолланд.",
+      "en": "In pursuit, gray Sultan, northbound on Mulholland.",
+      "level": "urgent",
+      "why": "a model name the translator must NOT translate"
+    }
+  ]
+}

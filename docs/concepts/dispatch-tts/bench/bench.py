@@ -1,0 +1,430 @@
+"""Listening bench for the dispatch radio voice.
+
+Runs the same six radio transmissions through every backend that is installed and
+writes a pair of files for each - the raw synthesis and the same audio through the
+radio chain that the backend would bake in production. The point is a verdict by
+ear, per this project's rule that better must be demonstrated rather than assumed.
+
+Usage:
+    python bench.py --out ./out --models-dir /path/holding/kokoro-v1.0.onnx
+
+Backends are skipped, loudly, when their package is missing. Nothing here talks to
+a paid API: every model runs locally, which is also the cheapest half of the
+concept's cost question.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+try:
+    import soundfile as sf
+except ImportError:  # the phone path writes wav through dsp instead
+    sf = None
+
+try:
+    from scipy import signal
+except ImportError:
+    signal = None
+
+# The radio chain. Values are the ones a real land-mobile radio imposes: the
+# channel is band-limited to the telephone band, heavily compressed, and every
+# transmission is topped and tailed by the PTT click and the roger beep.
+BAND_LOW_HZ = 300.0
+BAND_HIGH_HZ = 3400.0
+NOISE_FLOOR_DBFS = -46.0
+ROGER_BEEP_HZ = 1800.0
+ROGER_BEEP_MS = 90.0
+CLICK_MS = 18.0
+# Long enough to resolve a third-octave curve down to 100 Hz at 24 kHz.
+FIR_TAPS = 1023
+# A correction wider than this is boosting something that is not there.
+MAX_EQ_BOOST_DB = 24.0
+
+# Kokoro exposes speed and nothing else - no emotion, no shouting. Raising the
+# rate is the whole of what this backend can do with an urgency level, and saying
+# so is the point of measuring it next to a backend that can do more.
+LEVEL_SPEED = {"routine": 1.0, "urgent": 1.12, "emergency": 1.22}
+
+DISPATCH_VOICES = ["af_heart", "af_bella", "am_onyx", "am_michael", "bm_george"]
+
+# Chatterbox does have an urgency lever: exaggeration drives how hard the delivery is
+# pushed, and lowering cfg_weight with it keeps the pace from collapsing. These are the
+# values the 2026-09-06 bench was judged on.
+LEVEL_CHATTERBOX = {
+    "routine": (0.4, 0.5),
+    "urgent": (0.8, 0.4),
+    "emergency": (1.4, 0.3),
+}
+
+
+@dataclass(frozen=True)
+class Phrase:
+    id: str
+    ru: str
+    en: str
+    level: str
+
+
+def _db_to_amp(db: float) -> float:
+    return float(10.0 ** (db / 20.0))
+
+
+def _normalise(audio: np.ndarray, peak_dbfs: float = -1.0) -> np.ndarray:
+    peak = float(np.max(np.abs(audio))) or 1.0
+    return audio * (_db_to_amp(peak_dbfs) / peak)
+
+# --- so the measuring half runs on a phone -----------------------------------
+# Termux ships numpy but scipy is a build adventure and soundfile wants libsndfile.
+# When they are present nothing changes and every earlier measurement stays valid;
+# when they are not, dsp.py provides numpy-only equivalents. Its Welch is identical
+# to scipy's to 0.000 dB (dsp.py --selftest); its band-pass is an FIR standing in
+# for a Butterworth, which differs by ~0.4 dB in band and is labelled as such.
+import dsp
+
+HAVE_SCIPY = dsp.HAVE_SCIPY
+
+try:
+    import soundfile as _sf
+except ImportError:
+    _sf = None
+
+
+def read_audio(path) -> tuple[np.ndarray, int]:
+    if _sf is not None:
+        audio, rate = _sf.read(str(path), dtype="float32")
+        return (audio.mean(axis=1) if audio.ndim > 1 else audio), rate
+    return dsp.read_wav(path)
+
+
+def write_audio(path, audio: np.ndarray, rate: int) -> None:
+    if _sf is not None:
+        _sf.write(str(path), audio, rate)
+    else:
+        dsp.write_wav(path, audio, rate)
+
+
+def psd(x: np.ndarray, fs: int, nperseg: int):
+    if HAVE_SCIPY:
+        return signal.welch(x, fs=fs, nperseg=min(nperseg, len(x)))
+    return dsp.welch(x, fs, nperseg)
+
+
+def band_limit(x: np.ndarray, fs: int, low: float, high: float) -> np.ndarray:
+    """The channel filter. Butterworth where scipy exists, an FIR where it does not."""
+    if HAVE_SCIPY:
+        nyquist = fs / 2.0
+        sos = signal.butter(
+            4, [low / nyquist, min(high, nyquist - 1.0) / nyquist], btype="bandpass", output="sos"
+        )
+        return signal.sosfilt(sos, x)
+    return dsp.bandpass(x, fs, low, high)
+
+
+def shape_to(x: np.ndarray, fs: int, points_hz: np.ndarray, gains: np.ndarray) -> np.ndarray:
+    """Apply a measured response curve as a linear-phase FIR."""
+    if HAVE_SCIPY:
+        taps = signal.firwin2(FIR_TAPS, points_hz / (fs / 2.0), gains)
+        return signal.lfilter(taps, [1.0], x)
+    return dsp.apply_fir(x, dsp.fir_from_response(points_hz, gains, FIR_TAPS, fs))
+
+
+def third_octave_bands(sample_rate: int) -> np.ndarray:
+    """Third-octave centres from 100 Hz to just under Nyquist."""
+    top = sample_rate / 2 * 0.92
+    centres = [100.0]
+    while centres[-1] * 2 ** (1 / 3) < top:
+        centres.append(centres[-1] * 2 ** (1 / 3))
+    return np.array(centres)
+
+
+def third_octave_levels(audio: np.ndarray, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
+    """Third-octave band levels in dB, anchored so the 500-1000 Hz octave reads 0."""
+    freqs, psd_values = psd(audio, sample_rate, 4096)
+    centres = third_octave_bands(sample_rate)
+    levels = []
+    for c in centres:
+        sel = (freqs >= c / 2 ** (1 / 6)) & (freqs < c * 2 ** (1 / 6))
+        levels.append(float(psd_values[sel].mean()) if sel.any() else 0.0)
+    levels_db = 10.0 * np.log10(np.array(levels) + 1e-20)
+    anchor = (centres >= 500) & (centres <= 1000)
+    reference = float(levels_db[anchor].mean()) if anchor.any() else float(levels_db.max())
+    return centres, levels_db - reference
+
+
+def radio_chain(audio: np.ndarray, sample_rate: int, *, beep: bool) -> np.ndarray:
+    """Compress one transmission, then put the whole thing through the channel.
+
+    Order matters and it is the thing a first attempt gets wrong. A radio compresses at
+    the microphone and band-limits at the channel, so the FILTER IS LAST: distortion
+    products land outside 300-3400 Hz and the channel removes them. Filtering first and
+    compressing after leaves those harmonics in the output - measurably (chain_fit.py
+    read a 12 kHz edge off a chain that was supposed to stop at 3400) and audibly, as a
+    fizz around consonants that no radio has.
+    """
+    # The transmitter's side: PTT click, the voice, the roger beep - all at line level.
+    click_len = int(sample_rate * CLICK_MS / 1000.0)
+    click = np.random.default_rng(1).normal(0.0, 0.35, click_len)
+    click *= np.linspace(1.0, 0.0, click_len) ** 2
+
+    parts = [click, _normalise(audio, peak_dbfs=-3.0)]
+    if beep:
+        beep_len = int(sample_rate * ROGER_BEEP_MS / 1000.0)
+        t = np.arange(beep_len) / sample_rate
+        envelope = np.minimum(1.0, np.minimum(t, (beep_len / sample_rate) - t) * 200.0)
+        parts.append(np.sin(2.0 * np.pi * ROGER_BEEP_HZ * t) * 0.25 * envelope)
+    transmission = np.concatenate(parts)
+
+    # Soft-knee compression, the way a cheap limiter behaves.
+    transmission = np.tanh(transmission * 3.2)
+
+    # Then the channel: band-limit everything, and add the channel's own floor inside it.
+    voice = band_limit(transmission, sample_rate, BAND_LOW_HZ, BAND_HIGH_HZ)
+    noise = np.random.default_rng(0).normal(0.0, _db_to_amp(NOISE_FLOOR_DBFS), voice.shape)
+    voice = voice + band_limit(noise, sample_rate, BAND_LOW_HZ, BAND_HIGH_HZ)
+
+    return _normalise(voice)
+
+
+def radio_chain_from_profile(audio: np.ndarray, sample_rate: int, profile: dict, *, beep: bool) -> np.ndarray:
+    """Put a transmission through a channel MEASURED from a real recording.
+
+    `profile` is the `chain` block chain_fit.py writes: a third-octave target curve plus
+    the tape's noise floor and crest factor. The curve is turned into a linear-phase FIR,
+    which is why this can match a channel that no Butterworth describes - a real radio's
+    response is not a textbook filter and does not have to be treated as one.
+
+    The constants in this file stay as the fallback for when no tape is available.
+    """
+    bands = np.array(profile["bands_hz"], dtype=float)
+    target = np.array(profile["levels_db"], dtype=float)
+    nyquist = sample_rate / 2.0
+
+    # The tape's curve is the product of its channel AND its speaker. Applying it as a
+    # filter to a different speaker multiplies that speaker's own roll-off in a second
+    # time - measurably, 7.4 dB of mean error and 21 dB at 2 kHz. What the filter must
+    # carry is the DIFFERENCE: where this input already sits, and where the tape sits.
+    source_bands, source = third_octave_levels(audio, sample_rate)
+    if len(source) != len(target):
+        source = np.interp(bands, source_bands, source)
+    correction = np.clip(target - source, -MAX_EQ_BOOST_DB, MAX_EQ_BOOST_DB)
+
+    inside = bands < nyquist * 0.98
+    points = np.concatenate([[0.0], bands[inside], [nyquist]])
+    gains = np.concatenate([[0.0], 10 ** (correction[inside] / 20.0), [0.0]])
+
+    click_len = int(sample_rate * CLICK_MS / 1000.0)
+    click = np.random.default_rng(1).normal(0.0, 0.35, click_len)
+    click *= np.linspace(1.0, 0.0, click_len) ** 2
+
+    parts = [click, _normalise(audio, peak_dbfs=-3.0)]
+    beep_hz = profile.get("ROGER_BEEP_HZ") or ROGER_BEEP_HZ
+    if beep:
+        beep_len = int(sample_rate * ROGER_BEEP_MS / 1000.0)
+        t = np.arange(beep_len) / sample_rate
+        envelope = np.minimum(1.0, np.minimum(t, (beep_len / sample_rate) - t) * 200.0)
+        parts.append(np.sin(2.0 * np.pi * beep_hz * t) * 0.25 * envelope)
+    transmission = np.concatenate(parts)
+
+    # Drive until the crest factor matches the tape's, rather than at a guessed amount.
+    target_crest = profile.get("target_crest_factor_db")
+    drive = 3.2
+    if target_crest:
+        for _ in range(12):
+            candidate = np.tanh(transmission * drive)
+            peak = float(np.max(np.abs(candidate))) or 1e-9
+            rms = float(np.sqrt(np.mean(candidate ** 2))) or 1e-9
+            crest = 20 * np.log10(peak / rms)
+            if abs(crest - target_crest) < 0.3:
+                break
+            drive *= 1.35 if crest > target_crest else 1 / 1.35
+    transmission = np.tanh(transmission * drive)
+
+    voice = shape_to(transmission, sample_rate, points, gains)
+
+    floor = profile.get("NOISE_FLOOR_DBFS", NOISE_FLOOR_DBFS)
+    noise = np.random.default_rng(0).normal(0.0, _db_to_amp(floor), voice.shape)
+    voice = voice + shape_to(noise, sample_rate, points, gains)
+
+    return _normalise(voice)
+
+
+def load_phrases(path: Path) -> list[Phrase]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return [Phrase(p["id"], p["ru"], p["en"], p["level"]) for p in raw["phrases"]]
+
+
+def run_kokoro(phrases: list[Phrase], out_dir: Path, models_dir: Path) -> list[dict]:
+    try:
+        from kokoro_onnx import Kokoro
+    except ImportError:
+        print("[skip] kokoro-onnx is not installed")
+        return []
+
+    model = models_dir / "kokoro-v1.0.onnx"
+    voices = models_dir / "voices-v1.0.bin"
+    if not model.exists() or not voices.exists():
+        print(f"[skip] kokoro weights not found in {models_dir}")
+        return []
+
+    kokoro = Kokoro(str(model), str(voices))
+    rows: list[dict] = []
+
+    for voice in DISPATCH_VOICES:
+        for phrase in phrases:
+            started = time.perf_counter()
+            audio, sample_rate = kokoro.create(
+                phrase.en, voice=voice, speed=LEVEL_SPEED[phrase.level], lang="en-us"
+            )
+            synth_ms = (time.perf_counter() - started) * 1000.0
+
+            stem = f"kokoro-{voice}-{phrase.id}"
+            sf.write(out_dir / f"{stem}-clean.wav", audio, sample_rate)
+
+            started = time.perf_counter()
+            processed = radio_chain(audio, sample_rate, beep=phrase.level != "emergency")
+            chain_ms = (time.perf_counter() - started) * 1000.0
+            sf.write(out_dir / f"{stem}-radio.wav", processed, sample_rate)
+
+            rows.append(
+                {
+                    "backend": "kokoro-82M",
+                    "voice": voice,
+                    "phrase": phrase.id,
+                    "level": phrase.level,
+                    "chars": len(phrase.en),
+                    "audio_ms": round(len(audio) / sample_rate * 1000.0, 1),
+                    "synth_ms": round(synth_ms, 1),
+                    "chain_ms": round(chain_ms, 1),
+                    "realtime_factor": round((len(audio) / sample_rate * 1000.0) / synth_ms, 2),
+                }
+            )
+            print(f"  {stem}: {synth_ms:6.0f} ms synth, {chain_ms:5.1f} ms chain")
+
+    return rows
+
+
+def run_chatterbox(
+    phrases: list[Phrase], out_dir: Path, reference: Path | None = None
+) -> list[dict]:
+    """The backend that can shout, and clone a consenting player from a few seconds.
+
+    Measured on CPU it is 22-34 s for a four-second line - a realtime factor near 0.15,
+    which is why the concept puts it behind a GPU rather than beside Kokoro on the box
+    the Node backend already runs on.
+    """
+    try:
+        from chatterbox.tts import ChatterboxTTS
+    except ImportError:
+        print("[skip] chatterbox-tts is not installed")
+        return []
+
+    model = ChatterboxTTS.from_pretrained(device="cpu")
+    rows: list[dict] = []
+
+    for phrase in phrases:
+        exaggeration, cfg_weight = LEVEL_CHATTERBOX[phrase.level]
+        started = time.perf_counter()
+        wav = model.generate(
+            phrase.en,
+            exaggeration=exaggeration,
+            cfg_weight=cfg_weight,
+            **({"audio_prompt_path": str(reference)} if reference else {}),
+        )
+        synth_ms = (time.perf_counter() - started) * 1000.0
+        audio = wav.squeeze(0).numpy()
+
+        voice = reference.stem if reference else "default"
+        stem = f"chatterbox-{voice}-{phrase.id}"
+        sf.write(out_dir / f"{stem}-clean.wav", audio, model.sr)
+        sf.write(
+            out_dir / f"{stem}-radio.wav",
+            radio_chain(audio, model.sr, beep=phrase.level != "emergency"),
+            model.sr,
+        )
+
+        rows.append(
+            {
+                "backend": "chatterbox-0.5B",
+                "voice": voice,
+                "phrase": phrase.id,
+                "level": phrase.level,
+                "chars": len(phrase.en),
+                "audio_ms": round(len(audio) / model.sr * 1000.0, 1),
+                "synth_ms": round(synth_ms, 1),
+                "exaggeration": exaggeration,
+                "realtime_factor": round((len(audio) / model.sr * 1000.0) / synth_ms, 2),
+            }
+        )
+        print(f"  {stem}: {synth_ms / 1000.0:5.1f} s synth for {len(audio) / model.sr:.1f} s of audio")
+
+    return rows
+
+
+def build_montages(out_dir: Path, rows: list[dict], phrases: list[Phrase]) -> None:
+    """One file per voice holding every transmission, so a voice is judged as a shift.
+
+    A voice that is pleasant on one line and wrong on the next is the failure this
+    catches, and it only shows up when the clips are heard back to back the way an
+    operator would hear them.
+    """
+    gap_seconds = 0.45
+    order = [phrase.id for phrase in phrases]
+
+    for voice in sorted({row["voice"] for row in rows}):
+        clips: list[np.ndarray] = []
+        sample_rate = 24000
+        for phrase_id in order:
+            path = out_dir / f"kokoro-{voice}-{phrase_id}-radio.wav"
+            if not path.exists():
+                continue
+            audio, sample_rate = sf.read(path)
+            gap = np.random.default_rng(2).normal(
+                0.0, _db_to_amp(NOISE_FLOOR_DBFS), int(sample_rate * gap_seconds)
+            )
+            clips.extend([audio, gap])
+        if clips:
+            sf.write(out_dir / f"montage-{voice}.wav", np.concatenate(clips), sample_rate)
+            print(f"  montage-{voice}.wav")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, default=Path("out"))
+    parser.add_argument("--models-dir", type=Path, default=Path("."))
+    parser.add_argument("--phrases", type=Path, default=Path(__file__).parent / "phrases.json")
+    parser.add_argument(
+        "--chatterbox", action="store_true", help="also run Chatterbox (slow on CPU)"
+    )
+    parser.add_argument(
+        "--reference", type=Path, help="wav of a consenting speaker for Chatterbox to clone"
+    )
+    args = parser.parse_args()
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    phrases = load_phrases(args.phrases)
+    print(f"{len(phrases)} phrases -> {args.out}")
+
+    rows = run_kokoro(phrases, args.out, args.models_dir)
+    if args.chatterbox:
+        rows += run_chatterbox(phrases, args.out, args.reference)
+    if rows:
+        build_montages(args.out, rows, phrases)
+
+    (args.out / "timings.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    if rows:
+        synth = [r["synth_ms"] for r in rows]
+        print(
+            f"\n{len(rows)} clips: synth median {sorted(synth)[len(synth) // 2]:.0f} ms, "
+            f"min {min(synth):.0f}, max {max(synth):.0f}"
+        )
+
+
+if __name__ == "__main__":
+    main()
