@@ -715,13 +715,34 @@ function countRectCells(
   return count;
 }
 
+/** How often the ASTC pass says it is alive from inside one array. One line a minute on a stage of hours. */
+const HEARTBEAT_MS = 60_000;
+
 async function encodeTextureArrays(
   planner: TexturePlanner,
   astc: boolean,
   astcThreads: number,
   log: (message: string) => void,
 ): Promise<OspakInput[]> {
-  const encoder = astc ? createAstcEncoder({ threads: astcThreads }) : null;
+  // A heartbeat INSIDE an array, throttled to one line a minute. The per-array lines are the granularity
+  // the loop has; the encode of one array is not — on the phone a single 206-layer array was 74 % of the
+  // whole stage, so the log went quiet for over an hour with nothing to say whether the encoder was working.
+  // That is the exact reading Android's screen-off freeze produces, and it cost three wrong verdicts before
+  // the sizes were printed. A heartbeat costs one line a minute and makes silence mean frozen.
+  let beat = { at: 0, label: '', startedMs: 0 };
+  const encoder = astc
+    ? createAstcEncoder({
+        onLayer: (done, total) => {
+          const now = Date.now();
+          if (now - beat.at < HEARTBEAT_MS) {
+            return;
+          }
+          beat = { ...beat, at: now };
+          log(`astc: ${beat.label} layer ${done}/${total}, ${((now - beat.startedMs) / 1000).toFixed(0)}s in`);
+        },
+        threads: astcThreads,
+      })
+    : null;
   const inputs: OspakInput[] = [];
   const arrays = planner.build();
   // The ASTC pass is minutes long, single-threaded on a phone, and used to print ONE line before it and one
@@ -738,6 +759,7 @@ async function encodeTextureArrays(
     // looking alike. It costs one log line per array on a stage measured in minutes.
     if (encoder !== null) {
       const { height, layers, width } = array.meta;
+      beat = { at: Date.now(), label: `array ${index + 1}/${arrays.length}`, startedMs: Date.now() };
       log(
         `astc: array ${index + 1}/${arrays.length} starting — ${(texelsOf(array.meta) / 1e6).toFixed(1)} M ` +
           `texels, ${layers} layers at ${width}x${height}`,

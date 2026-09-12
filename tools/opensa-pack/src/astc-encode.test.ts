@@ -144,5 +144,27 @@ describe('createAstcEncoder', () => {
       expect(encoder.stats.texels).toBe(2 * (256 + 64 + 16));
       expect(encoder.stats.ms).toBeGreaterThanOrEqual(0);
     });
+
+    it('beats once per layer while the array is still encoding, so silence means frozen', async () => {
+      // The heartbeat exists to separate a grinding encoder from a frozen process, which on this target is
+      // the same log: one array of an ASTC stage can run for an hour behind a single opaque await. So the
+      // beat has to arrive DURING the call — a callback fired at the end would carry no such information.
+      // Read back the encoder's own running texel count at each beat: a callback fired after the array was
+      // finished would see the SAME (final) count four times, so this separates the two without a clock.
+      const layerTexels = 256 + 64 + 16;
+      const beats: { done: number; texels: number; total: number }[] = [];
+      const encoder = createAstcEncoder({
+        onLayer: (done, total) => beats.push({ done, texels: encoder.stats.texels, total }),
+        threads: 1,
+      });
+      await encoder.ostex(rgba8Array(16, 16, 4));
+
+      expect(beats).toEqual([
+        { done: 1, texels: layerTexels, total: 4 },
+        { done: 2, texels: 2 * layerTexels, total: 4 },
+        { done: 3, texels: 3 * layerTexels, total: 4 },
+        { done: 4, texels: 4 * layerTexels, total: 4 },
+      ]);
+    });
   });
 });

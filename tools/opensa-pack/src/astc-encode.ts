@@ -44,6 +44,16 @@ export interface AstcEncoder {
 }
 
 export interface AstcEncoderOptions {
+  /**
+   * Called after each LAYER of an array, so a call measured in tens of minutes has a heartbeat inside it.
+   *
+   * `ostex()` is one opaque await per array, and on the phone a single array can be three quarters of the
+   * whole stage — so the caller's per-array line went quiet for an hour and there was no way to tell a
+   * grinding encoder from a frozen process. Android freezes this container without erroring (a screen-off
+   * OEM freeze, `docs/development/termux.md`), which is exactly the reading a silent stage cannot separate
+   * from a slow one. With a heartbeat, silence means frozen.
+   */
+  onLayer?: (done: number, total: number) => void;
   /** astcenc effort preset, 0 (FASTEST) … 100 (EXHAUSTIVE). Default MEDIUM — measured 2026-08-07 as the knee:
    *  +3.1 dB over FAST for 1.35x the time, and THOROUGH buys another 0.3 dB for 1.4x again. */
   quality?: number;
@@ -105,6 +115,7 @@ export function createAstcEncoder(options: AstcEncoderOptions): AstcEncoder {
           stats.texels += layout.mipWidth * layout.mipHeight;
         }
         layers.push(mips);
+        options.onLayer?.(layer + 1, tex.layers.length);
       }
       stats.ms += Date.now() - started;
 

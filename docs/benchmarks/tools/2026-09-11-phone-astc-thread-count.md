@@ -141,3 +141,22 @@ stamp was moved out of the directory the pack deletes.
 The single-threaded half's **total** encode time, because the tunnel dropped mid-run — the eta was still
 falling (1 226 → 820 s) and an eta is not a measurement. A row claiming ~21 minutes would be quoting a
 prediction the encoder made about itself.
+
+## What the instrument still could not answer, and the heartbeat that closes it (2026-09-12)
+
+Array 5 then ran for roughly two hours against the eta's ~11 minutes, and **this file draws no conclusion
+from that** — a fourth explanation guessed from the same silent observation would be the same mistake a
+fourth time. The eta is texel-proportional, which assumes a constant cost per texel; whether that assumption
+holds across layer sides (64x64 through 256x256) has not been measured, and the run that would have measured
+it never finished.
+
+What is certain is the shape of the gap: the per-array lines are the finest granularity the loop had, and one
+array is 74 % of the stage — so a working encoder and a frozen process still produced the same log for over
+an hour. That is the same indistinguishability the previous correction was about, only one level down, and
+the screen-off freeze this device actually has (`docs/development/termux.md`) lands in exactly that blind
+spot.
+
+So the encoder now beats from **inside** an array: `astc: array 5/20 layer 96/206, 1 412s in`, one line a
+minute (`HEARTBEAT_MS`, `convert.ts`). Silence now means frozen, and the layer counter divided by the seconds
+gives the per-layer rate directly — which is the measurement that would settle the eta question without
+another whole run being spent on it.
