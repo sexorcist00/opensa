@@ -11,6 +11,7 @@ import { type ReactElement, useState } from 'react';
 import type { KeyBindings, MapCommand } from '../map/keymap';
 
 import { COMMAND_ORDER, keyOf, rebind, resetBindings } from '../map/keymap';
+import { SourceOffer } from './source-offer';
 import { RAMP, styles } from './styles';
 
 export function KeyHelp({
@@ -75,6 +76,8 @@ export function KeyHelp({
       >
         Reset to defaults
       </button>
+
+      <SourceOffer />
     </div>
   );
 }

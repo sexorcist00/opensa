@@ -953,6 +953,18 @@ export const styles = {
     padding: '9px 0',
     transition: PRESS,
   },
+  sourceLink: { color: COLORS.text, display: 'inline-block', padding: '2px 0' },
+  /** Where the pointer is coarse the offer is still a target, so it takes the same floor every control does. */
+  sourceLinkTouch: {
+    alignItems: 'center',
+    color: COLORS.text,
+    display: 'inline-flex',
+    minHeight: TOUCH_TARGET,
+    minWidth: TOUCH_TARGET,
+    padding: '2px 0',
+  },
+  /** The AGPL offer's own line, under the sheet it lives in — muted, because it is a notice, not a control. */
+  sourceOffer: { color: COLORS.muted, fontSize: 10, lineHeight: 1.4 },
   statusBar: {
     alignItems: 'center',
     background: RAMP.surface,

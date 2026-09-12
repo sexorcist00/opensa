@@ -246,16 +246,22 @@ Never edit generated code manually.
   blob hashes for content), and check the DIRECTION before merging anything — `main` is usually the newer
   side, and the branch is a stale ancestor whose "missing" work would be a regression if replayed.
 
-- **THIS REPOSITORY IS A FORK, AND UPSTREAM MOVES WITHOUT US. PULL IT AT THE START OF EVERY SESSION**, in
-  the same breath as the reading order above:
+- **THIS REPOSITORY IS A FORK, AND UPSTREAM IS CLOSED. THE FETCH BELOW NO LONGER RESOLVES — do not spend a
+  session re-running it.** Checked 2026-09-12: `https://github.com/AlexSergey/opensa` answers 404 to the web
+  and asks git for a username, so it is private or gone. **The last upstream commit merged here is
+  2026-08-22.** Whether a public line continues was asked of its author directly in
+  [PR #12](https://github.com/sexorcist00/opensa/pull/12) — merged 2026-09-12, and a merged thread still
+  takes comments, so **read it for his answer before deciding this rule is dead**, and restore the pull the
+  day it resolves:
 
   ```bash
-  git remote add upstream https://github.com/AlexSergey/opensa.git   # once per clone
+  git remote add upstream https://github.com/AlexSergey/opensa.git   # once per clone, WHEN IT IS BACK
   git fetch upstream main && git log --oneline main..upstream/main | head -30
   ```
 
-  `origin` is `sexorcist00/opensa`; the parent is **`AlexSergey/opensa`**, where the engine's own line of
-  work continues. Nothing tells you it moved — `git status` is clean, `origin/main` is up to date, and the
+  **The lesson below outlives the remote, which is why it stays.** `origin` is `sexorcist00/opensa`; the
+  parent is **`AlexSergey/opensa`**, where the engine's own line of work continued. Nothing tells you it
+  moved — `git status` is clean, `origin/main` is up to date, and the
   divergence only shows up when someone asks for it. The first time it was asked, 2026-08-08, upstream was
   **93 commits ahead** of the fork point while this side carried 57 of its own, and the cost of waiting was
   visible in the merge: a conflict in `docs/links.md` where upstream had already repointed a link this side
